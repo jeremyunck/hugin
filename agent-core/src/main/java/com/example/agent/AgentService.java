@@ -59,7 +59,9 @@ public class AgentService {
                 })
         );
 
-        log.debug("Agent chat: model={}, tools available={}", request.model(), toolDefinitions.size());
+        log.debug("Agent chat start: model={}, prompt=\"{}\"", request.model(), request.prompt());
+        log.debug("Tools available ({}): {}", toolDefinitions.size(),
+                toolDefinitions.stream().map(td -> td.function().name()).collect(Collectors.joining(", ")));
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.user(request.prompt()));
@@ -84,11 +86,17 @@ public class AgentService {
             // Handle tool calls regardless of finishReason — some models set
             // finish_reason to "stop" or leave it null even when tool_calls are present.
             if (assistantMsg.toolCalls() != null && !assistantMsg.toolCalls().isEmpty()) {
+                log.debug("Dispatching {} tool call(s): {}", assistantMsg.toolCalls().size(),
+                        assistantMsg.toolCalls().stream()
+                                .map(tc -> tc.function().name())
+                                .collect(Collectors.joining(", ")));
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     String toolResult = executeToolCall(toolCall, toolServerMap);
+                    log.debug("Tool '{}' result: {}", toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
             } else {
+                log.debug("Final answer (iteration {}): \"{}\"", i, assistantMsg.content());
                 return new AgentResponse(assistantMsg.content(), Collections.unmodifiableList(messages));
             }
         }
