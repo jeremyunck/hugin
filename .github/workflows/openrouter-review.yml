@@ -1,0 +1,21 @@
+name: OpenRouter PR Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jeremyunck/openrouter-review@v2
+        with:
+          open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
+          model: deepseek/deepseek-v4-flash
+          prompt: >
+            Keep your review under 200 words. Only highlight important findings
+            and risks — skip minor style issues, formatting, or anything
+            low-severity. Be direct and concise.
