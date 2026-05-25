@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -221,6 +222,43 @@ class AgentServiceTest {
         assertThat(result.response()).contains("Done.");
         assertThat(recordingTool.lastArgs).containsEntry("value", "ok");
         verify(toolProvider, never()).callTool(anyString(), anyString(), anyMap());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldPrependSystemPromptWhenToolsAvailable() {
+        // Given: a tool is available
+        var availableTool = new AvailableTool("get_time", "Get the current time",
+                Map.of("type", "object", "properties", Map.of()));
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithContent("12:00"));
+
+        // When
+        agentService.chat(new AgentRequest(PROMPT, MODEL));
+
+        // Then: first message is the tool system prompt
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        assertThat(captor.getValue().get(0).role()).isEqualTo("system");
+        assertThat(captor.getValue().get(0).content()).isEqualTo(AgentService.TOOL_SYSTEM_PROMPT);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldNotPrependSystemPromptWhenNoToolsAvailable() {
+        // Given: no tools at all
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithContent("Hi!"));
+
+        // When
+        agentService.chat(new AgentRequest(PROMPT, MODEL));
+
+        // Then: conversation starts directly with the user message
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        assertThat(captor.getValue().get(0).role()).isEqualTo("user");
     }
 
     // ---- helpers ----

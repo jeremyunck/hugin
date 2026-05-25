@@ -59,6 +59,7 @@ public class BashCommandTool implements LocalTool {
         Process process = builder.start();
         StringBuilder output = new StringBuilder();
         Thread reader = new Thread(() -> drain(process, output));
+        reader.setDaemon(true);
         reader.start();
 
         boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);

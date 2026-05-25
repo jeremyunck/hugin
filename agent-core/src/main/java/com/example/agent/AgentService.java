@@ -30,6 +30,15 @@ public class AgentService {
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
     static final int MAX_ITERATIONS = 10;
 
+    /** Prepended when any tools are advertised, to nudge models toward using them. */
+    static final String TOOL_SYSTEM_PROMPT = """
+            You are a helpful assistant with access to external tools. When a tool can help \
+            fulfil the user's request — for example reading, writing, or editing files, \
+            searching the codebase, or running shell commands — call the relevant tool instead \
+            of guessing or answering from memory. You may call tools several times in sequence, \
+            using each result to decide the next step. When you have gathered enough information, \
+            reply to the user directly. If no tool is relevant, simply answer normally.""";
+
     private final OpenAiClient llmClient;
     private final McpToolProvider toolProvider;
     private final LocalToolRegistry localTools;
@@ -81,6 +90,9 @@ public class AgentService {
                 model, toolDefinitions.size(), localTools.tools().size());
 
         List<ChatMessage> messages = new ArrayList<>();
+        if (!toolDefinitions.isEmpty()) {
+            messages.add(ChatMessage.system(TOOL_SYSTEM_PROMPT));
+        }
         messages.add(ChatMessage.user(request.prompt()));
 
         for (int i = 0; i < MAX_ITERATIONS; i++) {

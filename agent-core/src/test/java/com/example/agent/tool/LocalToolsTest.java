@@ -131,6 +131,24 @@ class LocalToolsTest {
     }
 
     @Test
+    void symlinkEscapingWorkspaceIsRejected() throws Exception {
+        Path outside = Files.createTempDirectory("outside-workspace");
+        Files.writeString(outside.resolve("secret.txt"), "top secret");
+        Path link = tmp.resolve("link");
+        try {
+            Files.createSymbolicLink(link, outside);
+        } catch (UnsupportedOperationException | java.io.IOException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "symlinks unsupported on this platform");
+        }
+
+        var read = new ReadFileTool(workspace, properties);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> read.execute(Map.of("path", "link/secret.txt")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside the workspace root");
+    }
+
+    @Test
     void disabledRegistryExposesNoTools() {
         var disabled = new LocalToolProperties(false, tmp.toString(), Duration.ofSeconds(10), 30_000);
         var emptyRegistry = new LocalToolRegistry(
