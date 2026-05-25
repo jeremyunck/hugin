@@ -261,7 +261,72 @@ class AgentServiceTest {
         assertThat(captor.getValue().get(0).role()).isEqualTo("user");
     }
 
+    @Test
+    void chatStreamDeliversTokensAndFinalAnswer() {
+        // Given: no tools; the streaming call emits two text fragments
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Consumer<String> onDelta = invocation.getArgument(3);
+                    onDelta.accept("Hel");
+                    onDelta.accept("lo!");
+                    return responseWithContent("Hello!");
+                });
+
+        var listener = new RecordingListener();
+
+        // When
+        AgentResponse result = agentService.chatStream(new AgentRequest(PROMPT, MODEL), listener);
+
+        // Then: tokens streamed in order and the final answer matches
+        assertThat(listener.tokens).containsExactly("Hel", "lo!");
+        assertThat(result.response()).isEqualTo("Hello!");
+        verify(llmClient, never()).chat(anyString(), anyList(), anyList());
+    }
+
+    @Test
+    void chatStreamReportsToolCallEvents() {
+        // Given: a tool, then a streaming tool call followed by a final answer
+        var availableTool = new AvailableTool("get_time", "Get the current time",
+                Map.of("type", "object", "properties", Map.of()));
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
+        when(toolProvider.callTool(eq("server1"), eq("get_time"), anyMap())).thenReturn("12:00");
+
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+                .thenReturn(responseWithToolCall("call_1", "get_time", "{}"))
+                .thenReturn(responseWithContent("The time is 12:00."));
+
+        var listener = new RecordingListener();
+
+        // When
+        AgentResponse result = agentService.chatStream(new AgentRequest(PROMPT, MODEL), listener);
+
+        // Then: tool-call lifecycle is reported and the loop produces the final answer
+        assertThat(listener.toolCalls).containsExactly("get_time");
+        assertThat(listener.toolResults).containsExactly("12:00");
+        assertThat(result.response()).contains("The time is 12:00");
+        verify(toolProvider, times(1)).callTool("server1", "get_time", Map.of());
+    }
+
     // ---- helpers ----
+
+    private static final class RecordingListener implements AgentStreamListener {
+        private final List<String> tokens = new java.util.ArrayList<>();
+        private final List<String> toolCalls = new java.util.ArrayList<>();
+        private final List<String> toolResults = new java.util.ArrayList<>();
+
+        @Override public void onContent(String delta) {
+            tokens.add(delta);
+        }
+
+        @Override public void onToolCall(String toolName, String arguments) {
+            toolCalls.add(toolName);
+        }
+
+        @Override public void onToolResult(String toolName, String result) {
+            toolResults.add(result);
+        }
+    }
 
     private static final class RecordingLocalTool implements LocalTool {
         private final String name;

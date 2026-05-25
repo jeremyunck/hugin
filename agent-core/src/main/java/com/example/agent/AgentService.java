@@ -62,12 +62,81 @@ public class AgentService {
     }
 
     public AgentResponse chat(AgentRequest request) {
+        return runLoop(request, NO_OP_LISTENER, false);
+    }
+
+    /**
+     * Streaming variant of {@link #chat}: assistant text is delivered token-by-token via
+     * {@code listener} as it arrives from the model, and tool calls are reported as the loop runs
+     * them. Returns the same {@link AgentResponse} (final answer plus full conversation history)
+     * once the loop completes.
+     */
+    public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener) {
+        return runLoop(request, listener, true);
+    }
+
+    private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream) {
         Instant deadline = Instant.now().plus(requestTimeout);
         String model = resolveModel(request.model());
 
         // Build flattened tool list and a reverse lookup: tool name → server name.
-        // Built-in local tools are advertised first and take precedence on name collisions.
         Map<String, String> toolServerMap = new LinkedHashMap<>();
+        List<ToolDefinition> toolDefinitions = collectTools(toolServerMap);
+
+        log.debug("Agent chat: model={}, tools available={} (local={}), stream={}",
+                model, toolDefinitions.size(), localTools.tools().size(), stream);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        if (!toolDefinitions.isEmpty()) {
+            messages.add(ChatMessage.system(TOOL_SYSTEM_PROMPT));
+        }
+        messages.add(ChatMessage.user(request.prompt()));
+
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            if (Instant.now().isAfter(deadline)) {
+                log.warn("Agent request timed out after {}", requestTimeout);
+                return new AgentResponse(
+                        "Request timed out after " + requestTimeout.toSeconds() + "s.",
+                        Collections.unmodifiableList(messages));
+            }
+
+            ChatResponse response = stream
+                    ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent)
+                    : llmClient.chat(model, messages, toolDefinitions);
+            ChatResponse.Choice choice = response.choices().get(0);
+            ChatMessage assistantMsg = choice.message();
+            messages.add(assistantMsg);
+
+            String finishReason = choice.finishReason();
+            log.debug("Iteration {}: finish_reason={}, has_tool_calls={}",
+                    i, finishReason, assistantMsg.toolCalls() != null);
+
+            // Handle tool calls regardless of finishReason — some models set
+            // finish_reason to "stop" or leave it null even when tool_calls are present.
+            if (assistantMsg.toolCalls() != null && !assistantMsg.toolCalls().isEmpty()) {
+                for (ToolCall toolCall : assistantMsg.toolCalls()) {
+                    listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
+                    String toolResult = executeToolCall(toolCall, toolServerMap);
+                    listener.onToolResult(toolCall.function().name(), toolResult);
+                    messages.add(ChatMessage.tool(toolCall.id(), toolResult));
+                }
+            } else {
+                return new AgentResponse(assistantMsg.content(), Collections.unmodifiableList(messages));
+            }
+        }
+
+        log.warn("Agent reached max iterations ({}) without a final answer", MAX_ITERATIONS);
+        return new AgentResponse(
+                "Reached the maximum number of tool-call iterations without a final answer.",
+                Collections.unmodifiableList(messages));
+    }
+
+    /**
+     * Flattens every built-in local tool plus all tools from every connected MCP server into one
+     * OpenAI-format list, filling {@code toolServerMap} with a tool name → server name lookup.
+     * Built-in local tools are advertised first and take precedence on name collisions.
+     */
+    private List<ToolDefinition> collectTools(Map<String, String> toolServerMap) {
         List<ToolDefinition> toolDefinitions = new ArrayList<>();
 
         for (LocalTool tool : localTools.tools()) {
@@ -85,50 +154,10 @@ public class AgentService {
                     toolDefinitions.add(ToolDefinition.from(tool));
                 })
         );
-
-        log.debug("Agent chat: model={}, tools available={} (local={})",
-                model, toolDefinitions.size(), localTools.tools().size());
-
-        List<ChatMessage> messages = new ArrayList<>();
-        if (!toolDefinitions.isEmpty()) {
-            messages.add(ChatMessage.system(TOOL_SYSTEM_PROMPT));
-        }
-        messages.add(ChatMessage.user(request.prompt()));
-
-        for (int i = 0; i < MAX_ITERATIONS; i++) {
-            if (Instant.now().isAfter(deadline)) {
-                log.warn("Agent request timed out after {}", requestTimeout);
-                return new AgentResponse(
-                        "Request timed out after " + requestTimeout.toSeconds() + "s.",
-                        Collections.unmodifiableList(messages));
-            }
-
-            ChatResponse response = llmClient.chat(model, messages, toolDefinitions);
-            ChatResponse.Choice choice = response.choices().get(0);
-            ChatMessage assistantMsg = choice.message();
-            messages.add(assistantMsg);
-
-            String finishReason = choice.finishReason();
-            log.debug("Iteration {}: finish_reason={}, has_tool_calls={}",
-                    i, finishReason, assistantMsg.toolCalls() != null);
-
-            // Handle tool calls regardless of finishReason — some models set
-            // finish_reason to "stop" or leave it null even when tool_calls are present.
-            if (assistantMsg.toolCalls() != null && !assistantMsg.toolCalls().isEmpty()) {
-                for (ToolCall toolCall : assistantMsg.toolCalls()) {
-                    String toolResult = executeToolCall(toolCall, toolServerMap);
-                    messages.add(ChatMessage.tool(toolCall.id(), toolResult));
-                }
-            } else {
-                return new AgentResponse(assistantMsg.content(), Collections.unmodifiableList(messages));
-            }
-        }
-
-        log.warn("Agent reached max iterations ({}) without a final answer", MAX_ITERATIONS);
-        return new AgentResponse(
-                "Reached the maximum number of tool-call iterations without a final answer.",
-                Collections.unmodifiableList(messages));
+        return toolDefinitions;
     }
+
+    private static final AgentStreamListener NO_OP_LISTENER = new AgentStreamListener() {};
 
     private String resolveModel(String requested) {
         if (requested != null && !requested.isBlank()) {

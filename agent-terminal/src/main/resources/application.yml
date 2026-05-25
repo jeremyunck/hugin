@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: agent-terminal
+  main:
+    # Console app — no web server, no banner, no startup logging noise.
+    web-application-type: none
+    banner-mode: "off"
+    log-startup-info: false
+
+terminal:
+  # Base URL of the running mcp-integration server (no trailing path).
+  server-url: ${AGENT_SERVER_URL:http://localhost:8080}
+  # Only needed if the server has agent.api-key configured; sent as the X-API-Key header.
+  api-key: ${AGENT_API_KEY:}
+  # Optional default model; blank lets the server fall back to llm.model.
+  model: ${AGENT_MODEL:}
+
+logging:
+  level:
+    root: WARN
+  pattern:
+    console: "%msg%n"

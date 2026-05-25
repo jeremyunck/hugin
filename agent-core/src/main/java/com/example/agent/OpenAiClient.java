@@ -3,7 +3,10 @@ package com.example.agent;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ChatRequest;
 import com.example.agent.model.ChatResponse;
+import com.example.agent.model.ChatStreamChunk;
+import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolDefinition;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -17,14 +20,22 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Thin HTTP wrapper around any OpenAI-schema chat-completions endpoint
@@ -33,6 +44,9 @@ import java.util.List;
  * <p>The active provider (Ollama, OpenRouter, etc.) and its base URL / API key come from
  * {@link LlmProperties}. When the provider supplies an API key it is sent as an
  * {@code Authorization: Bearer} header; otherwise no auth header is added.
+ *
+ * <p>{@link #chat} returns the full response in one shot; {@link #chatStream} consumes a
+ * Server-Sent Events stream ({@code stream: true}) and emits assistant text token-by-token.
  */
 @Component
 public class OpenAiClient {
@@ -41,8 +55,13 @@ public class OpenAiClient {
 
     private final RestClient restClient;
     private final URI endpoint;
+    private final ObjectMapper objectMapper;
+    private final HttpClient streamingHttpClient;
+    private final String apiKey;
 
-    public OpenAiClient(LlmProperties properties) {
+    public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+
         LlmProperties.Provider provider = properties.activeProvider();
         String baseUrl = provider.baseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
@@ -50,6 +69,7 @@ public class OpenAiClient {
                     "llm.providers." + properties.provider() + ".base-url must be set");
         }
         this.endpoint = URI.create(stripTrailingSlash(baseUrl) + "/chat/completions");
+        this.apiKey = provider.hasApiKey() ? provider.apiKey() : null;
 
         var httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -68,6 +88,13 @@ public class OpenAiClient {
         }
 
         this.restClient = builder.build();
+
+        // Separate client for streaming: no read timeout (SSE streams are long-lived) and no
+        // buffering interceptor, so chunks can be processed as they arrive.
+        this.streamingHttpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+
         log.info("OpenAiClient configured: provider={}, endpoint={}, auth={}",
                 properties.provider(), endpoint, provider.hasApiKey() ? "bearer" : "none");
     }
@@ -100,8 +127,160 @@ public class OpenAiClient {
                 .body(ChatResponse.class);
     }
 
+    /**
+     * Streams a chat-completions request ({@code stream: true}), invoking {@code onContentDelta}
+     * for each chunk of assistant text as it arrives, and returns the fully assembled response
+     * (content joined, tool-call argument fragments concatenated) once the stream ends.
+     *
+     * @param model          model name
+     * @param messages       conversation history
+     * @param tools          tool definitions to advertise; pass an empty list to omit tool calling
+     * @param onContentDelta receives each streamed text fragment in order
+     */
+    public ChatResponse chatStream(String model, List<ChatMessage> messages,
+                                   List<ToolDefinition> tools, Consumer<String> onContentDelta) {
+        boolean hasTools = tools != null && !tools.isEmpty();
+        ChatRequest request = new ChatRequest(
+                model,
+                messages,
+                hasTools ? tools : null,
+                hasTools ? "auto" : null,
+                true
+        );
+
+        log.debug("Sending streaming chat request: model={}, messages={}, tools={}",
+                model, messages.size(), hasTools ? tools.size() : 0);
+
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(request);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to serialize chat request", e);
+        }
+
+        var httpRequestBuilder = java.net.http.HttpRequest.newBuilder(endpoint)
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .POST(BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        if (apiKey != null) {
+            httpRequestBuilder.header("Authorization", "Bearer " + apiKey);
+        }
+
+        try {
+            HttpResponse<InputStream> response = streamingHttpClient.send(
+                    httpRequestBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() >= 400) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new IllegalStateException(
+                        "LLM streaming request failed (HTTP " + response.statusCode() + "): " + errorBody);
+            }
+
+            return parseStream(response.body(), onContentDelta);
+        } catch (IOException e) {
+            throw new IllegalStateException("LLM streaming request failed: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("LLM streaming request interrupted", e);
+        }
+    }
+
+    private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta) throws IOException {
+        StringBuilder content = new StringBuilder();
+        // Tool calls are keyed by their stream index so fragments can be merged in order.
+        Map<Integer, MutableToolCall> toolCalls = new LinkedHashMap<>();
+        String finishReason = null;
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) {
+                    continue; // ignore comments, event: lines, and blank separators
+                }
+                String data = line.substring("data:".length()).trim();
+                if (data.isEmpty()) {
+                    continue;
+                }
+                if ("[DONE]".equals(data)) {
+                    break;
+                }
+
+                ChatStreamChunk chunk;
+                try {
+                    chunk = objectMapper.readValue(data, ChatStreamChunk.class);
+                } catch (IOException e) {
+                    log.warn("Skipping unparseable stream chunk: {}", e.getMessage());
+                    continue;
+                }
+                if (chunk.choices() == null || chunk.choices().isEmpty()) {
+                    continue;
+                }
+
+                ChatStreamChunk.Choice choice = chunk.choices().get(0);
+                if (choice.finishReason() != null) {
+                    finishReason = choice.finishReason();
+                }
+                ChatStreamChunk.Delta delta = choice.delta();
+                if (delta == null) {
+                    continue;
+                }
+                if (delta.content() != null && !delta.content().isEmpty()) {
+                    content.append(delta.content());
+                    onContentDelta.accept(delta.content());
+                }
+                if (delta.toolCalls() != null) {
+                    for (ChatStreamChunk.ToolCallDelta tc : delta.toolCalls()) {
+                        toolCalls.computeIfAbsent(tc.index(), i -> new MutableToolCall()).merge(tc);
+                    }
+                }
+            }
+        }
+
+        List<ToolCall> assembledToolCalls = new ArrayList<>();
+        for (MutableToolCall tc : toolCalls.values()) {
+            assembledToolCalls.add(tc.toToolCall());
+        }
+
+        ChatMessage message = new ChatMessage(
+                "assistant",
+                content.isEmpty() ? null : content.toString(),
+                assembledToolCalls.isEmpty() ? null : assembledToolCalls,
+                null);
+        return new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));
+    }
+
     private static String stripTrailingSlash(String url) {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    /** Accumulates streamed fragments of a single tool call into a complete {@link ToolCall}. */
+    private static final class MutableToolCall {
+        private String id;
+        private String type = "function";
+        private String name;
+        private final StringBuilder arguments = new StringBuilder();
+
+        void merge(ChatStreamChunk.ToolCallDelta delta) {
+            if (delta.id() != null) {
+                id = delta.id();
+            }
+            if (delta.type() != null) {
+                type = delta.type();
+            }
+            if (delta.function() != null) {
+                if (delta.function().name() != null) {
+                    name = delta.function().name();
+                }
+                if (delta.function().arguments() != null) {
+                    arguments.append(delta.function().arguments());
+                }
+            }
+        }
+
+        ToolCall toToolCall() {
+            return new ToolCall(id, type, new ToolCall.FunctionCall(name, arguments.toString()));
+        }
     }
 
     /** Adds {@code Authorization: Bearer <key>} to every request (OpenRouter, OpenAI, etc.). */

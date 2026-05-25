@@ -69,19 +69,52 @@ mvn clean install
 
 ## Run
 
+Start the agent **server**:
+
 ```bash
 mvn -pl mcp-integration spring-boot:run
 ```
 
-The app starts on **port 8080**. `mcp-integration` is the only runnable module; `agent-core` and `mcp-client` are libraries.
+The server starts on **port 8080**. `agent-core` and `mcp-client` are libraries.
+
+## Terminal front-end
+
+`agent-terminal` is an interactive terminal client — think Claude Code. With the server running, start it in another shell:
+
+```bash
+mvn -pl agent-terminal spring-boot:run
+```
+
+Type a prompt and the answer **streams back token-by-token** in real time; tool calls the agent makes are shown inline. Built-in commands:
+
+- `/help` — show help
+- `/model [name]` — show or change the model used for new prompts
+- `/exit` (also `/quit`, `exit`, `quit`, or Ctrl-D) — quit
+
+Configure it via the `terminal` block in `agent-terminal/src/main/resources/application.yml` (or environment variables):
+
+| Key | Env var | Description | Default |
+| --- | --- | --- | --- |
+| `terminal.server-url` | `AGENT_SERVER_URL` | Base URL of the running server | `http://localhost:8080` |
+| `terminal.api-key` | `AGENT_API_KEY` | Sent as `X-API-Key`; needed only if the server sets `agent.api-key` | _(blank)_ |
+| `terminal.model` | `AGENT_MODEL` | Default model; blank lets the server pick `llm.model` | _(blank)_ |
 
 ## Usage
 
-Send a prompt to the agent:
+Send a prompt to the agent (non-streaming):
 
 ```bash
 curl -X POST http://localhost:8080/api/agent/chat \
   -H "Content-Type: application/json" \
+  -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
+```
+
+Or stream the response as Server-Sent Events (this is what the terminal uses):
+
+```bash
+curl -N -X POST http://localhost:8080/api/agent/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
   -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
 ```
 

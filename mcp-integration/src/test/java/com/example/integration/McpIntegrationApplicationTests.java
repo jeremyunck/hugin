@@ -101,6 +101,34 @@ class McpIntegrationApplicationTests {
     }
 
     @Test
+    void agentStreamEndpointEmitsSseEvents() {
+        // Given: no tools and a streaming LLM that emits two text fragments then a final answer
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chatStream(anyString(), anyList(), anyList(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Consumer<String> onDelta = invocation.getArgument(3);
+                    onDelta.accept("Hello");
+                    onDelta.accept(" world");
+                    return new ChatResponse(null, List.of(
+                            new ChatResponse.Choice(0, ChatMessage.assistant("Hello world"), "stop")));
+                });
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.TEXT_EVENT_STREAM));
+        var entity = new HttpEntity<>(Map.of("prompt", "hi", "model", "llama3.2"), headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/agent/stream", HttpMethod.POST, entity, String.class);
+
+        // Then: the body is a well-formed SSE stream the terminal client can parse
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody()).contains("event:token");
+        assertThat(response.getBody()).contains("\"text\":\"Hello\"");
+        assertThat(response.getBody()).contains("event:done");
+    }
+
+    @Test
     void agentEndpointCanBeCalledWithApiKeyWhenConfigured() throws Exception {
         // This test verifies the security filter works:
         // - the endpoint returns 401 when a wrong API key is sent
