@@ -37,7 +37,7 @@ llm:
     # Set OPENROUTER_API_KEY in the environment (sk-or-v1-...) and switch provider to "openrouter".
     openrouter:
       base-url: https://openrouter.ai/api/v1
-      api-key: ${OPENROUTER_API_KEY:}
+      api-key: ${OPEN_ROUTER_API_KEY:}
 
 conversation:
   memory:
