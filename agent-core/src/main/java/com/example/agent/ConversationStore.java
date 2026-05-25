@@ -20,6 +20,12 @@ public interface ConversationStore {
     /** Returns the stored messages for {@code sessionId}, oldest first, or an empty list if none. */
     List<ChatMessage> load(String sessionId);
 
-    /** Replaces the stored messages for {@code sessionId}. */
-    void save(String sessionId, List<ChatMessage> messages);
+    /**
+     * Atomically appends {@code newMessages} to the session's history and trims the result to the
+     * most recent {@code maxMessages}.
+     *
+     * <p>Atomicity matters: concurrent requests for the same session must not lose a turn through a
+     * read-modify-write race, so implementations perform the append-and-trim as a single update.
+     */
+    void append(String sessionId, List<ChatMessage> newMessages, int maxMessages);
 }

@@ -1,11 +1,14 @@
 package com.example.agent;
 
 import com.example.agent.model.ChatMessage;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,27 +29,44 @@ public class InMemoryConversationStore implements ConversationStore {
 
     private final Map<String, Entry> sessions = new ConcurrentHashMap<>();
     private final Duration ttl;
+    private final Clock clock;
 
+    @Autowired
     public InMemoryConversationStore(ConversationMemoryProperties properties) {
+        this(properties, Clock.systemUTC());
+    }
+
+    InMemoryConversationStore(ConversationMemoryProperties properties, Clock clock) {
         this.ttl = properties.ttl();
+        this.clock = clock;
     }
 
     @Override
     public List<ChatMessage> load(String sessionId) {
         purgeExpired();
         Entry entry = sessions.computeIfPresent(sessionId,
-                (id, e) -> new Entry(e.messages(), Instant.now()));
+                (id, e) -> new Entry(e.messages(), clock.instant()));
         return entry == null ? List.of() : entry.messages();
     }
 
     @Override
-    public void save(String sessionId, List<ChatMessage> messages) {
+    public void append(String sessionId, List<ChatMessage> newMessages, int maxMessages) {
         purgeExpired();
-        sessions.put(sessionId, new Entry(List.copyOf(messages), Instant.now()));
+        // compute holds the per-bin lock for the duration of the remapping, so the append-and-trim
+        // is atomic: two threads recording into the same session cannot lose each other's turns.
+        sessions.compute(sessionId, (id, existing) -> {
+            List<ChatMessage> merged =
+                    new ArrayList<>(existing == null ? List.of() : existing.messages());
+            merged.addAll(newMessages);
+            if (merged.size() > maxMessages) {
+                merged = merged.subList(merged.size() - maxMessages, merged.size());
+            }
+            return new Entry(List.copyOf(merged), clock.instant());
+        });
     }
 
     private void purgeExpired() {
-        Instant cutoff = Instant.now().minus(ttl);
+        Instant cutoff = clock.instant().minus(ttl);
         sessions.values().removeIf(e -> e.lastAccess().isBefore(cutoff));
     }
 }

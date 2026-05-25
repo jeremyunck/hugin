@@ -3,8 +3,16 @@ package com.example.agent;
 import com.example.agent.model.ChatMessage;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,12 +84,74 @@ class ConversationMemoryServiceTest {
     }
 
     @Test
-    void evictsExpiredSessions() throws InterruptedException {
-        var service = service(20, Duration.ofMillis(50));
+    void evictsExpiredSessions() {
+        var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
+        var props = new ConversationMemoryProperties(true, 20, Duration.ofMinutes(30));
+        var service = new ConversationMemoryService(new InMemoryConversationStore(props, clock), props);
+
         service.record("s", "hello", "hi");
         assertThat(service.history("s")).hasSize(2);
 
-        Thread.sleep(200);
+        clock.advance(Duration.ofMinutes(31));
         assertThat(service.history("s")).isEmpty();
+    }
+
+    @Test
+    void concurrentRecordsDoNotLoseTurns() throws InterruptedException {
+        int threads = 8;
+        int perThread = 50;
+        int total = threads * perThread;
+        // Window large enough to retain every turn, so a lost turn shows up as a missing message.
+        var service = service(total * 2, Duration.ofHours(1));
+
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        var start = new CountDownLatch(1);
+        var done = new CountDownLatch(threads);
+        for (int t = 0; t < threads; t++) {
+            final int id = t;
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    for (int i = 0; i < perThread; i++) {
+                        service.record("shared", "q-" + id + "-" + i, "a-" + id + "-" + i);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        start.countDown();
+        assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        // Each record appends two messages; with an atomic append none are lost under contention.
+        assertThat(service.history("shared")).hasSize(total * 2);
+    }
+
+    /** Hand-advanced clock so TTL eviction can be tested without wall-clock sleeps. */
+    private static final class MutableClock extends Clock {
+        private Instant now;
+
+        MutableClock(Instant start) {
+            this.now = start;
+        }
+
+        void advance(Duration delta) {
+            now = now.plus(delta);
+        }
+
+        @Override public Instant instant() {
+            return now;
+        }
+
+        @Override public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override public Clock withZone(ZoneId zone) {
+            return this;
+        }
     }
 }

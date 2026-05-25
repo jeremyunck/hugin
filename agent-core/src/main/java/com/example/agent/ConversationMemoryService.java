@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -63,16 +62,10 @@ public class ConversationMemoryService {
             return;
         }
         try {
-            List<ChatMessage> history = new ArrayList<>(store.load(sessionId));
-            history.add(ChatMessage.user(userPrompt));
-            history.add(ChatMessage.assistant(assistantAnswer));
-
-            int max = properties.maxMessages();
-            if (history.size() > max) {
-                history = new ArrayList<>(history.subList(history.size() - max, history.size()));
-            }
-            store.save(sessionId, history);
-            log.debug("Recorded turn for session {} ({} messages retained)", sessionId, history.size());
+            store.append(sessionId,
+                    List.of(ChatMessage.user(userPrompt), ChatMessage.assistant(assistantAnswer)),
+                    properties.maxMessages());
+            log.debug("Recorded turn for session {}", sessionId);
         } catch (Exception e) {
             log.warn("Conversation history store failed for session {}: {}", sessionId, e.getMessage());
         }
