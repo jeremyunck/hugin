@@ -1,6 +1,9 @@
 package com.example.agent;
 
 import com.example.agent.model.*;
+import com.example.agent.tool.LocalTool;
+import com.example.agent.tool.LocalToolProperties;
+import com.example.agent.tool.LocalToolRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,9 +44,15 @@ class AgentServiceTest {
 
     private AgentService agentService;
 
+    private static LocalToolRegistry registry(LocalTool... tools) {
+        return new LocalToolRegistry(List.of(tools),
+                new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000));
+    }
+
     @BeforeEach
     void setUp() {
-        agentService = new AgentService(llmClient, toolProvider, objectMapper, FIVE_MINUTES, DEFAULT_MODEL);
+        agentService = new AgentService(
+                llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL);
     }
 
     @Test
@@ -158,7 +167,7 @@ class AgentServiceTest {
     void shouldTimeoutBeforeMaxIterations() {
         // Given: a very short timeout and a tool call that blocks
         var shortTimeoutService = new AgentService(
-                llmClient, toolProvider, objectMapper, SHORT_TIMEOUT, DEFAULT_MODEL);
+                llmClient, toolProvider, registry(), objectMapper, SHORT_TIMEOUT, DEFAULT_MODEL);
 
         var availableTool = new AvailableTool("slow_tool", "Slow tool",
                 Map.of("type", "object", "properties", Map.of()));
@@ -193,7 +202,56 @@ class AgentServiceTest {
         verify(toolProvider, never()).callTool(anyString(), anyString(), anyMap());
     }
 
+    @Test
+    void shouldRouteToBuiltinLocalToolWithoutMcpServer() {
+        // Given: a built-in local tool and no MCP servers
+        var recordingTool = new RecordingLocalTool("local_echo", "echoed: ok");
+        var localService = new AgentService(
+                llmClient, toolProvider, registry(recordingTool), objectMapper, FIVE_MINUTES, DEFAULT_MODEL);
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithToolCall("call_1", "local_echo", "{\"value\":\"ok\"}"))
+                .thenReturn(responseWithContent("Done."));
+
+        // When
+        AgentResponse result = localService.chat(new AgentRequest(PROMPT, MODEL));
+
+        // Then: the local tool ran in-process and MCP routing was never attempted
+        assertThat(result.response()).contains("Done.");
+        assertThat(recordingTool.lastArgs).containsEntry("value", "ok");
+        verify(toolProvider, never()).callTool(anyString(), anyString(), anyMap());
+    }
+
     // ---- helpers ----
+
+    private static final class RecordingLocalTool implements LocalTool {
+        private final String name;
+        private final String result;
+        private Map<String, Object> lastArgs;
+
+        RecordingLocalTool(String name, String result) {
+            this.name = name;
+            this.result = result;
+        }
+
+        @Override public String name() {
+            return name;
+        }
+
+        @Override public String description() {
+            return "test tool";
+        }
+
+        @Override public Map<String, Object> inputSchema() {
+            return Map.of("type", "object", "properties", Map.of());
+        }
+
+        @Override public String execute(Map<String, Object> arguments) {
+            this.lastArgs = arguments;
+            return result;
+        }
+    }
 
     private static ChatResponse responseWithContent(String content) {
         return new ChatResponse("id", List.of(

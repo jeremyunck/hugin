@@ -39,6 +39,19 @@ agent:
   api-key:
   # Maximum wall-clock time allowed for a single agent request
   request-timeout: 5m
+  # Built-in local tools the agent can call directly (file read/write/edit, list, grep, shell).
+  # These run in-process and let the model edit code and run commands. They grant the agent
+  # filesystem and shell access, so disable them or scope workspace-root when that is a concern.
+  tools:
+    # Master switch for all built-in tools.
+    enabled: true
+    # Directory that file operations are confined to and the working dir for shell commands.
+    # Relative paths and '~/' are NOT expanded here; use an absolute path to pin the workspace.
+    workspace-root: .
+    # Wall-clock limit for a single run_bash command.
+    bash-timeout: 30s
+    # Cap on the size (characters) of any single tool result returned to the model.
+    max-output-chars: 30000
 
 logging:
   level:
