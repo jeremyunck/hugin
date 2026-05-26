@@ -39,6 +39,10 @@ public class SearchMcpAutoConfigurer {
         }
 
         McpServerDefinition def = switch (searchProperties.provider().toLowerCase()) {
+            case "none" -> {
+                log.info("Search MCP auto-configuration disabled (search.provider=none)");
+                yield null;
+            }
             case "openrouter" -> new McpServerDefinition(
                     "python3",
                     List.of(searchProperties.openrouterScript()),
@@ -52,6 +56,8 @@ public class SearchMcpAutoConfigurer {
                     null, null
             );
         };
+
+        if (def == null) return;
 
         log.info("Registering '{}' MCP server using provider '{}'", SERVER_NAME, searchProperties.provider());
         registry.connectTransient(SERVER_NAME, def);

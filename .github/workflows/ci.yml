@@ -40,22 +40,35 @@ jobs:
         continue-on-error: true
         run: mvn --batch-mode --no-transfer-progress clean
 
-  # Checks new/updated dependencies in the PR against the GitHub Advisory Database.
-  # Fails on critical-severity CVEs and posts a summary comment on the PR.
-  dependency-review:
+  # Scans Maven dependencies for known critical CVEs using Trivy.
+  # Works for all repos without requiring GitHub Advanced Security.
+  dependency-scan:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: critical
-          comment-summary-in-pr: always
+      - name: Install Trivy
+        run: |
+          TRIVY_VERSION="0.57.0"
+          wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -O /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+
+      - name: Scan for critical CVEs
+        run: |
+          /tmp/trivy fs . \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type library \
+            --severity CRITICAL \
+            --no-progress
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/trivy.tar.gz /tmp/trivy 2>/dev/null || true
 
   # Secret detection across all commits in the PR using the gitleaks CLI.
   # Uses the CLI directly (no action) to avoid any license requirements.

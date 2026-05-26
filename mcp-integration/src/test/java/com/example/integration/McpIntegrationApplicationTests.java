@@ -39,7 +39,9 @@ import static org.mockito.Mockito.when;
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         // Non-existent config file → no real MCP servers started during tests
-        "mcp.config-file=./nonexistent-test-servers.json"
+        "mcp.config-file=./nonexistent-test-servers.json",
+        // Disable the search MCP subprocess so no external processes are spawned during tests
+        "search.provider=none"
 })
 class McpIntegrationApplicationTests {
 
