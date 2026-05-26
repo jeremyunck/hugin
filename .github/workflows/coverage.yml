@@ -24,14 +24,6 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress clean verify
 
       - name: Post coverage report
-        uses: Madrapps/jacoco-report@v1.7.1
-        with:
-          paths: ${{ github.workspace }}/**/target/site/jacoco/jacoco.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: '📊 Test Coverage Report'
-          update-comment: true
-
-      - name: Post per-module coverage breakdown
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -50,7 +42,7 @@ jobs:
 
           xml_files = sorted(glob.glob(f"{workspace}/**/target/site/jacoco/jacoco.xml", recursive=True))
 
-          rows = []
+          module_rows = []
           overall_missed = 0
           overall_covered = 0
 
@@ -77,18 +69,21 @@ jobs:
               instr = counters.get('INSTRUCTION', (0, 0))
               overall_missed += instr[0]
               overall_covered += instr[1]
-              rows.append(f'| `{module}` | {pct("INSTRUCTION")} | {pct("LINE")} | {pct("BRANCH")} |')
+              module_rows.append(f'| `{module}` | {pct("INSTRUCTION")} | {pct("LINE")} | {pct("BRANCH")} |')
 
           total = overall_missed + overall_covered
           if total > 0:
               op = overall_covered / total * 100
-              overall_str = f'{"✅" if op >= 80 else ("⚠️" if op >= 60 else "❌")} {op:.0f}%'
+              overall_pct = f'{op:.0f}%'
+              overall_icon = '✅' if op >= 80 else ('⚠️' if op >= 60 else '❌')
+              overall_str = f'{overall_icon} {overall_pct}'
+              header = f'## 📊 Test Coverage Report — {overall_icon} {overall_pct}'
           else:
               overall_str = 'N/A'
+              header = '## 📊 Test Coverage Report'
 
-          dragon = r"""
-```
-               ___====-_  _-====___
+          FENCE = chr(96) * 3
+          dragon_inner = r"""               ___====-_  _-====___
          _--^^^#####//      \\#####^^^--_
       _-^##########// (    ) \\##########^-_
      -############//  |\^^/|  \\############-
@@ -101,19 +96,20 @@ ____###################\    /###################____
   ~~####################\/####################~~
      ~~##############  |  ~~##############~~
          ~~########    |    ########~~
-             ~~~~       |       ~~~~
-```
-"""
+             ~~~~       |       ~~~~"""
+          dragon = f'\n{FENCE}\n{dragon_inner}\n{FENCE}\n'
 
-          marker = '<!-- module-coverage-breakdown -->'
+          marker = '<!-- coverage-report -->'
           body = '\n'.join([
               marker,
+              header,
+              '',
               dragon,
               '## 📦 Coverage by Module',
               '',
               '| Module | Instructions | Lines | Branches |',
               '|--------|-------------|-------|----------|',
-              *rows,
+              *module_rows,
               f'| **Overall** | **{overall_str}** | | |',
               '',
               '_✅ ≥ 80% · ⚠️ 60–79% · ❌ < 60%_',
@@ -131,7 +127,10 @@ ____###################\    /###################____
           with urllib.request.urlopen(req) as resp:
               comments = json.loads(resp.read())
 
-          existing = next((c for c in comments if marker in c.get('body', '')), None)
+          existing = next(
+              (c for c in comments if marker in c.get('body', '') or '<!-- module-coverage-breakdown -->' in c.get('body', '')),
+              None
+          )
 
           payload = json.dumps({'body': body}).encode()
           if existing:
@@ -143,6 +142,6 @@ ____###################\    /###################____
           with urllib.request.urlopen(req) as resp:
               pass
 
-          print(f"Module coverage comment posted/updated for PR #{pr_number}")
+          print(f"Coverage comment posted/updated for PR #{pr_number}")
           print(body)
           PYEOF
