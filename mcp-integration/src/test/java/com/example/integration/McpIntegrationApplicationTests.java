@@ -1,12 +1,10 @@
 package com.example.integration;
 
-import com.example.agent.AgentService;
 import com.example.agent.McpToolProvider;
 import com.example.agent.OpenAiClient;
 import com.example.agent.model.AvailableTool;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ChatResponse;
-import com.example.agent.model.ToolCall;
 import com.example.mcpclient.model.McpServerDefinition;
 import com.example.mcpclient.model.McpServersConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,12 +12,15 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -28,9 +29,14 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
 @TestPropertySource(properties = {
         // Non-existent config file → no real MCP servers started during tests
         "mcp.config-file=./nonexistent-test-servers.json"
@@ -39,6 +45,9 @@ class McpIntegrationApplicationTests {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @MockBean
     private McpToolProvider toolProvider;
@@ -101,7 +110,7 @@ class McpIntegrationApplicationTests {
     }
 
     @Test
-    void agentStreamEndpointEmitsSseEvents() {
+    void agentStreamEndpointEmitsSseEvents() throws Exception {
         // Given: no tools and a streaming LLM that emits two text fragments then a final answer
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
         when(llmClient.chatStream(anyString(), anyList(), anyList(), any()))
@@ -113,19 +122,27 @@ class McpIntegrationApplicationTests {
                             new ChatResponse.Choice(0, ChatMessage.assistant("Hello world"), "stop")));
                 });
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(List.of(MediaType.TEXT_EVENT_STREAM));
-        var entity = new HttpEntity<>(Map.of("prompt", "hi", "model", "llama3.2"), headers);
+        // TestRestTemplate cannot read SSE/async responses (body arrives after headers on a
+        // background thread). MockMvc + asyncDispatch handles Spring's async dispatch correctly.
+        MvcResult mvcResult = mockMvc.perform(
+                        post("/api/agent/stream")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.TEXT_EVENT_STREAM)
+                                .content("{\"prompt\":\"hi\",\"model\":\"llama3.2\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                "/api/agent/stream", HttpMethod.POST, entity, String.class);
+        String body = mockMvc.perform(asyncDispatch(mvcResult))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         // Then: the body is a well-formed SSE stream the terminal client can parse
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).contains("event:token");
-        assertThat(response.getBody()).contains("\"text\":\"Hello\"");
-        assertThat(response.getBody()).contains("event:done");
+        assertThat(body).isNotNull();
+        assertThat(body).contains("event:token");
+        assertThat(body).contains("\"text\":\"Hello\"");
+        assertThat(body).contains("event:done");
     }
 
     @Test

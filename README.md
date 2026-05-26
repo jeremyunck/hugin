@@ -11,10 +11,10 @@ A Spring Boot AI agent that connects to [Model Context Protocol](https://modelco
     ollama pull llama3.2
     ollama serve            # exposes http://localhost:11434
     ```
-  - or a hosted provider like **OpenRouter** (set `OPENROUTER_API_KEY`).
+  - or a hosted provider like **[OpenRouter](https://openrouter.ai)** (recommended for cloud/CI environments — set `OPEN_ROUTER_API_KEY`).
 - Runtimes for the MCP servers you configure. The default `mcp-servers.json` uses:
-  - `npx` (Node.js) for the filesystem server
   - `uvx` ([uv](https://docs.astral.sh/uv/)) for the time server
+  - `python3` for the web search server (when `search.provider=openrouter`, the default)
 - **(Optional) Redis** — only needed if you enable [long-term memory](#long-term-memory). Any Redis 6+ works; no modules required.
 
 ## Configure MCP servers
@@ -135,20 +135,39 @@ The agent talks to any OpenAI-schema `/chat/completions` endpoint. Providers are
 
 ```yaml
 llm:
-  provider: ollama            # switch to "openrouter" to use OpenRouter
-  model: qwen-coder-3:latest  # default model for the active provider
+  provider: openrouter              # or "ollama" for a local instance
+  model: deepseek/deepseek-v4-flash # default model for the active provider
   providers:
     ollama:
       base-url: http://localhost:11434/v1   # no api-key → no auth header sent
     openrouter:
       base-url: https://openrouter.ai/api/v1
-      api-key: ${OPENROUTER_API_KEY:}        # sent as Authorization: Bearer <key>
+      api-key: ${OPEN_ROUTER_API_KEY:}       # sent as Authorization: Bearer <key>
 ```
 
 - **Ollama** has no `api-key`, so requests are sent without an `Authorization` header.
-- **OpenRouter** authenticates with an `Authorization: Bearer <api-key>` header ([OpenRouter auth docs](https://openrouter.ai/docs/api/reference/authentication)). Provide the key via the `OPENROUTER_API_KEY` environment variable and set `llm.provider: openrouter` (also pick an OpenRouter `model`, e.g. `deepseek/deepseek-chat`).
+- **OpenRouter** authenticates with an `Authorization: Bearer <api-key>` header ([OpenRouter auth docs](https://openrouter.ai/docs/api/reference/authentication)). Provide the key via the `OPEN_ROUTER_API_KEY` environment variable and set `llm.provider: openrouter` (also pick an OpenRouter `model`, e.g. `deepseek/deepseek-v4-flash`).
 
 To add another OpenAI-compatible provider, add an entry under `llm.providers` with its `base-url` and (optionally) `api-key`, then point `llm.provider` at it.
+
+## Web search
+
+A web search MCP server is registered automatically at startup. Configure it via `search.provider` in `application.yml`:
+
+```yaml
+search:
+  provider: openrouter   # or: duckduckgo
+  openrouter-script: ../openrouter-search-mcp.py
+```
+
+| Provider | How it works | Requirements |
+| --- | --- | --- |
+| `openrouter` *(default)* | Calls `perplexity/sonar` via OpenRouter for real-time web search. Reliable from cloud/server IPs. | `OPEN_ROUTER_API_KEY`, `python3` with `mcp` package (`pip install mcp`) |
+| `duckduckgo` | Launches `duckduckgo-mcp-server` via `uvx`. No API key needed, but DuckDuckGo applies bot detection that blocks most cloud IP ranges. Works well on local developer machines. | `uvx` |
+
+The `openrouter-search-mcp.py` script is in the repo root. The `openrouter-script` path is resolved relative to the working directory of `mcp-integration` at startup — the default `../openrouter-search-mcp.py` works when running with `mvn -pl mcp-integration spring-boot:run` from the repo root.
+
+If a `web-search` entry already exists in `mcp-servers.json`, that entry takes precedence and auto-configuration is skipped.
 
 ## Long-term memory
 
@@ -226,3 +245,5 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 | `embedding.api-key` | Optional; when set, sent as `Authorization: Bearer <key>` | `${OPENROUTER_API_KEY:}` |
 | `embedding.model` | Model used specifically for embedding text | `openai/text-embedding-3-small` |
 | `spring.data.redis.host` / `.port` | Redis connection (only used when `memory.enabled`) | `localhost` / `6379` |
+| `search.provider` | Web search MCP provider registered at startup: `openrouter` or `duckduckgo` (see [Web search](#web-search)) | `openrouter` |
+| `search.openrouter-script` | Path to `openrouter-search-mcp.py` (used when `provider=openrouter`) | `../openrouter-search-mcp.py` |

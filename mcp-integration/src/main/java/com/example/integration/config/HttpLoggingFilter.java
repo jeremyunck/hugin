@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -23,8 +25,20 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         ContentCachingRequestWrapper wrappedRequest = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
 
+        // SSE responses are written asynchronously on a background thread, after the filter chain
+        // has already returned. Wrapping them with ContentCachingResponseWrapper would buffer the
+        // async events and prevent them from reaching the client. Detect SSE requests upfront via
+        // the Accept header and bypass response caching entirely for those requests.
+        boolean isSse = MediaType.TEXT_EVENT_STREAM_VALUE.equals(request.getHeader(HttpHeaders.ACCEPT));
+        if (isSse) {
+            filterChain.doFilter(wrappedRequest, response);
+            logRequest(wrappedRequest);
+            log.debug("? {} {} status={}", request.getMethod(), request.getRequestURI(), response.getStatus());
+            return;
+        }
+
+        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
         try {
             filterChain.doFilter(wrappedRequest, wrappedResponse);
         } finally {
