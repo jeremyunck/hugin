@@ -41,7 +41,7 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress clean
 
   # Scans Maven dependencies for known critical CVEs using Trivy.
-  # Works for all repos without requiring GitHub Advanced Security.
+  # Uses the official install script so the correct binary is always fetched.
   dependency-scan:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -52,23 +52,17 @@ jobs:
 
       - name: Install Trivy
         run: |
-          TRIVY_VERSION="0.57.0"
-          wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            -O /tmp/trivy.tar.gz
-          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
 
       - name: Scan for critical CVEs
         run: |
-          /tmp/trivy fs . \
+          trivy fs . \
             --exit-code 1 \
             --ignore-unfixed \
             --vuln-type library \
             --severity CRITICAL \
-            --no-progress
-
-      - name: Cleanup
-        if: always()
-        run: rm -f /tmp/trivy.tar.gz /tmp/trivy 2>/dev/null || true
+            --quiet
 
   # Secret detection across all commits in the PR using the gitleaks CLI.
   # Uses the CLI directly (no action) to avoid any license requirements.
@@ -95,14 +89,12 @@ jobs:
             --log-opts="${BASE_SHA}..${HEAD_SHA}" \
             --redact --exit-code 1
 
-  # CodeQL SAST — analyzes Java source for security vulnerabilities.
-  # Requires GitHub Advanced Security (free for public repos).
-  codeql:
+  # SpotBugs SAST — analyzes compiled Java bytecode for security vulnerabilities.
+  # Uses the Maven plugin directly; no GitHub Advanced Security license required.
+  sast:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     permissions:
-      security-events: write
-      actions: read
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -113,19 +105,16 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: java
-          queries: security-and-quality
-
-      - name: Build for analysis
+      - name: Build project
         run: mvn --batch-mode --no-transfer-progress clean install -DskipTests
 
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: /language:java
+      - name: Run SpotBugs SAST
+        run: |
+          mvn --batch-mode --no-transfer-progress \
+            com.github.spotbugs:spotbugs-maven-plugin:4.8.6.4:check \
+            -Dspotbugs.effort=Default \
+            -Dspotbugs.threshold=High \
+            -Dspotbugs.failOnError=true
 
       - name: Cleanup build artifacts
         if: always()
