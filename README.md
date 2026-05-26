@@ -55,7 +55,7 @@ The client launches stdio servers as subprocesses and **does not inherit your sh
   "command": "node",
   "args": ["/path/to/ddg-mcp/dist/server.js"],
   "env": {
-    "OPENROUTER_API_KEY": "sk-or-v1-..."
+    "OPEN_ROUTER_API_KEY": "sk-or-v1-..."
   }
 }
 ```
@@ -186,7 +186,7 @@ Similarity search runs in-process (cosine similarity over the stored vectors), s
 2. **Provide an embedding endpoint.** Embeddings are generated through an OpenAI-schema `POST {base-url}/embeddings` call. The defaults target **OpenRouter**, so set your key:
 
    ```bash
-   export OPENROUTER_API_KEY=sk-or-v1-...
+   export OPEN_ROUTER_API_KEY=sk-or-v1-...
    ```
 
    (The embedding endpoint is configured independently of the chat LLM — you can embed via OpenRouter while chatting against a local Ollama model.)
@@ -211,7 +211,7 @@ memory:
 
 embedding:
   base-url: ${EMBEDDING_BASE_URL:https://openrouter.ai/api/v1}
-  api-key: ${OPENROUTER_API_KEY:}    # sent as Authorization: Bearer <key> when set
+  api-key: ${OPEN_ROUTER_API_KEY:}    # sent as Authorization: Bearer <key> when set
   model: ${EMBEDDING_MODEL:openai/text-embedding-3-small}   # model used specifically for embeddings
 
 spring:
@@ -242,7 +242,7 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 | `memory.min-score` | Minimum cosine similarity (0..1) to recall a memory; `0` disables the threshold | `0.75` |
 | `memory.max-entries` | Cap on stored memories; oldest are evicted past this | `1000` |
 | `embedding.base-url` | OpenAI-schema embeddings API root (before `/embeddings`) | `https://openrouter.ai/api/v1` |
-| `embedding.api-key` | Optional; when set, sent as `Authorization: Bearer <key>` | `${OPENROUTER_API_KEY:}` |
+| `embedding.api-key` | Optional; when set, sent as `Authorization: Bearer <key>` | `${OPEN_ROUTER_API_KEY:}` |
 | `embedding.model` | Model used specifically for embedding text | `openai/text-embedding-3-small` |
 | `spring.data.redis.host` / `.port` | Redis connection (only used when `memory.enabled`) | `localhost` / `6379` |
 | `search.provider` | Web search MCP provider registered at startup: `openrouter` or `duckduckgo` (see [Web search](#web-search)) | `openrouter` |

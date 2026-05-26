@@ -67,7 +67,7 @@ off the public network (gateway / network policy) until that's addressed.
 
 - **Env var name inconsistency.** `OPEN_ROUTER_API_KEY` is used by the LLM
   provider, web search, the Python script, and CI; but the embedding endpoint
-  (long-term memory) reads `OPENROUTER_API_KEY`. Standardize on one name before
+  (long-term memory) reads `OPEN_ROUTER_API_KEY`. Standardize on one name before
   shipping so a single secret covers everything. Low-risk follow-up, but it will
   bite anyone enabling memory.
 - **No healthcheck endpoint.** There's no `spring-boot-starter-actuator`

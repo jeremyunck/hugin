@@ -46,7 +46,7 @@ llm:
     ollama:
       base-url: http://localhost:11434/v1
     # OpenRouter — authenticates with an Authorization: Bearer <api-key> header.
-    # Set OPENROUTER_API_KEY in the environment (sk-or-v1-...) and switch provider to "openrouter".
+    # Set OPEN_ROUTER_API_KEY in the environment (sk-or-v1-...) and switch provider to "openrouter".
     openrouter:
       base-url: https://openrouter.ai/api/v1
       api-key: ${OPEN_ROUTER_API_KEY:}
@@ -82,7 +82,7 @@ embedding:
   # OpenAI-schema embeddings endpoint (POST <base-url>/embeddings) used to vectorise memory text.
   # Defaults to OpenRouter; authenticates with Authorization: Bearer <api-key> when a key is set.
   base-url: ${EMBEDDING_BASE_URL:https://openrouter.ai/api/v1}
-  api-key: ${OPENROUTER_API_KEY:}
+  api-key: ${OPEN_ROUTER_API_KEY:}
   # Model used specifically for embedding text (independent of the chat llm.model above).
   model: ${EMBEDDING_MODEL:openai/text-embedding-3-small}
 

@@ -20,10 +20,10 @@ mvn -pl agent-core test -Dtest=AgentServiceTest#methodName
 Two modules have a main class: `mcp-integration` (`McpClientApplication`, the agent **server** on port 8080) and `agent-terminal` (`AgentTerminalApplication`, the terminal **client**). `agent-core` and `mcp-client` are libraries. The terminal connects to a running server, so start `mcp-integration` first.
 
 ### Runtime prerequisites
-- **An OpenAI-schema LLM endpoint** with a tool-calling model, selected via `llm.provider` in `mcp-integration/src/main/resources/application.yml`. Default is local **Ollama** at `http://localhost:11434/v1` (e.g. `llama3.2`, `mistral-nemo`); the `openrouter` provider is also configured and uses an API key (`OPENROUTER_API_KEY`).
+- **An OpenAI-schema LLM endpoint** with a tool-calling model, selected via `llm.provider` in `mcp-integration/src/main/resources/application.yml`. Default is local **Ollama** at `http://localhost:11434/v1` (e.g. `llama3.2`, `mistral-nemo`); the `openrouter` provider is also configured and uses an API key (`OPEN_ROUTER_API_KEY`).
 - **MCP server runtimes**: the default `mcp-servers.json` launches stdio servers via `npx` (filesystem) and `uvx` (time), so Node/npm and uv must be on PATH for those to connect.
 - **Redis** — only when long-term memory is enabled (`memory.enabled=true`); connection from `spring.data.redis.*` (`REDIS_HOST`/`REDIS_PORT`). Not needed for the default config or for short-term conversation memory (which is in-process).
-- **An embeddings endpoint** — only when `memory.enabled=true`; an OpenAI-schema `/embeddings` API configured under `embedding.*` (defaults to OpenRouter, needs `OPENROUTER_API_KEY`).
+- **An embeddings endpoint** — only when `memory.enabled=true`; an OpenAI-schema `/embeddings` API configured under `embedding.*` (defaults to OpenRouter, needs `OPEN_ROUTER_API_KEY`).
 
 ## Architecture
 
