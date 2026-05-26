@@ -65,6 +65,11 @@ public class GrepSearchTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String patternText = requiredString(arguments, "pattern");
         String requested = optionalString(arguments, "path", ".");
         String glob = optionalString(arguments, "glob", null);
@@ -79,7 +84,8 @@ public class GrepSearchTool implements LocalTool {
             return "Error: invalid regular expression: " + e.getMessage();
         }
 
-        Path base = workspace.resolve(requested);
+        Workspace ws = ctx.workspace();
+        Path base = ws.resolve(requested);
         if (!Files.exists(base)) {
             return "Error: path does not exist: " + requested;
         }
@@ -90,12 +96,12 @@ public class GrepSearchTool implements LocalTool {
 
         List<String> results = new ArrayList<>();
         if (Files.isRegularFile(base)) {
-            searchFile(base, pattern, globMatcher, results, maxResults);
+            searchFile(ws, base, pattern, globMatcher, results, maxResults);
         } else {
             try (Stream<Path> walk = Files.walk(base)) {
                 walk.filter(Files::isRegularFile)
                         .filter(p -> isNotSkipped(base, p))
-                        .forEach(p -> searchFile(p, pattern, globMatcher, results, maxResults));
+                        .forEach(p -> searchFile(ws, p, pattern, globMatcher, results, maxResults));
             } catch (UncheckedIOException ignored) {
                 // best-effort walk; individual unreadable files are skipped below
             }
@@ -110,7 +116,7 @@ public class GrepSearchTool implements LocalTool {
         return truncated ? body + "\n... [truncated at " + maxResults + " matches]" : body;
     }
 
-    private void searchFile(Path file, Pattern pattern, PathMatcher globMatcher,
+    private static void searchFile(Workspace ws, Path file, Pattern pattern, PathMatcher globMatcher,
                             List<String> results, int maxResults) {
         if (results.size() > maxResults) {
             return;
@@ -125,7 +131,7 @@ public class GrepSearchTool implements LocalTool {
         } catch (IOException e) {
             return; // binary or unreadable file — skip
         }
-        String relative = workspace.relativize(file);
+        String relative = ws.relativize(file);
         for (int i = 0; i < lines.size() && results.size() <= maxResults; i++) {
             if (pattern.matcher(lines.get(i)).find()) {
                 results.add(relative + ":" + (i + 1) + ": " + lines.get(i).strip());

@@ -21,10 +21,20 @@ public interface LocalTool {
     Map<String, Object> inputSchema();
 
     /**
-     * Executes the tool and returns a plain-text result fed back to the model.
-     * Thrown exceptions are caught by the agent loop and surfaced to the model.
+     * Executes the tool with the default (global) workspace.
+     * Implementations call {@link #execute(Map, ToolContext)} internally; test stubs
+     * may override only this method and the default {@code execute(args, ctx)} will delegate here.
      */
     String execute(Map<String, Object> arguments) throws Exception;
+
+    /**
+     * Executes the tool with the workspace resolved from {@code ctx}.
+     * Built-in tool implementations override this to support per-agent workspaces; the default
+     * delegates to {@link #execute(Map)} so that test stubs and legacy code continue to work.
+     */
+    default String execute(Map<String, Object> arguments, ToolContext ctx) throws Exception {
+        return execute(arguments);
+    }
 
     /** Returns a required string argument, failing if absent or blank. */
     default String requiredString(Map<String, Object> args, String key) {

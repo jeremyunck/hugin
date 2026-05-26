@@ -50,10 +50,15 @@ public class BashCommandTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException, InterruptedException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException, InterruptedException {
         String command = requiredString(arguments, "command");
 
         ProcessBuilder builder = new ProcessBuilder("sh", "-c", command);
-        builder.directory(workspace.root().toFile());
+        builder.directory(ctx.workspace().root().toFile());
         builder.redirectErrorStream(true);
 
         Process process = builder.start();

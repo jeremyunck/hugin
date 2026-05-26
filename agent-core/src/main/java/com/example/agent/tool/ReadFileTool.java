@@ -44,8 +44,13 @@ public class ReadFileTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = requiredString(arguments, "path");
-        Path file = workspace.resolve(requested);
+        Path file = ctx.workspace().resolve(requested);
 
         if (!Files.exists(file)) {
             return "Error: file does not exist: " + requested;

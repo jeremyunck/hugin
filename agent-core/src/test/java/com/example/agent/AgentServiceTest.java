@@ -4,6 +4,8 @@ import com.example.agent.model.*;
 import com.example.agent.tool.LocalTool;
 import com.example.agent.tool.LocalToolProperties;
 import com.example.agent.tool.LocalToolRegistry;
+import com.example.agent.tool.Workspace;
+import com.example.agent.tool.WorkspaceRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +58,12 @@ class AgentServiceTest {
     void setUp() {
         agentService = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
-                Optional.empty(), Optional.empty());
+                defaultRegistry(), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    private static WorkspaceRegistry defaultRegistry() {
+        var props = new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000);
+        return new WorkspaceRegistry(new Workspace(props));
     }
 
     @Test
@@ -172,7 +179,7 @@ class AgentServiceTest {
         // Given: a very short timeout and a tool call that blocks
         var shortTimeoutService = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, SHORT_TIMEOUT, DEFAULT_MODEL,
-                Optional.empty(), Optional.empty());
+                defaultRegistry(), Optional.empty(), Optional.empty(), Optional.empty());
 
         var availableTool = new AvailableTool("slow_tool", "Slow tool",
                 Map.of("type", "object", "properties", Map.of()));
@@ -213,7 +220,7 @@ class AgentServiceTest {
         var recordingTool = new RecordingLocalTool("local_echo", "echoed: ok");
         var localService = new AgentService(
                 llmClient, toolProvider, registry(recordingTool), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
-                Optional.empty(), Optional.empty());
+                defaultRegistry(), Optional.empty(), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
 
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
@@ -324,7 +331,7 @@ class AgentServiceTest {
                 0.9)));
         var service = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
-                Optional.of(memory), Optional.empty());
+                defaultRegistry(), Optional.of(memory), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(responseWithContent("Final answer."));
@@ -354,7 +361,7 @@ class AgentServiceTest {
         when(memory.recall(PROMPT)).thenReturn(List.of());
         var service = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
-                Optional.of(memory), Optional.empty());
+                defaultRegistry(), Optional.of(memory), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(responseWithContent("Hi!"));
@@ -377,7 +384,7 @@ class AgentServiceTest {
                 ChatMessage.assistant("Nice to meet you, Ada.")));
         var service = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
-                Optional.empty(), Optional.of(conversation));
+                defaultRegistry(), Optional.empty(), Optional.of(conversation), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(responseWithContent("Your name is Ada."));

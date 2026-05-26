@@ -2,6 +2,48 @@
 
 A Spring Boot AI agent that connects to [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers and lets an OpenAI-schema LLM use their tools to answer prompts. The LLM backend is pluggable — point it at a local [Ollama](https://ollama.com) instance or a hosted provider such as [OpenRouter](https://openrouter.ai) (see [LLM provider](#llm-provider)).
 
+## Raspberry Pi install (Ollama-style)
+
+The quickest way to run the agent as a persistent appliance — on a Raspberry Pi or any Debian/Ubuntu machine — is the interactive installer. It mirrors the Ollama experience: one install command, then a single `mcp-agent` command to chat.
+
+```bash
+# 1. Clone the repo (if you haven't already)
+git clone https://github.com/jeremyunck/mcp-client.git && cd mcp-client
+
+# 2. Run the interactive installer once
+./install.sh
+```
+
+The installer will:
+- Install Java 21 (Temurin), git, Maven, and Python 3 if missing
+- Prompt for your **OpenRouter API key** (required — used for LLM + web search)
+- Prompt for a **Redis host** for long-term memory (leave blank to skip)
+- Build the fat jars, create `~/.mcp-agent/`, and register a **systemd service** that starts on boot
+
+From then on, one command opens the chat:
+
+```bash
+mcp-agent        # starts the service if needed, waits for health, opens terminal
+```
+
+The agent server is always available on **`:8080`** for direct API access too:
+
+```bash
+curl -X POST http://localhost:8080/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What can you do?"}'
+```
+
+Other `mcp-agent` subcommands:
+
+| Command | Description |
+|---|---|
+| `mcp-agent serve` | Run the server in the foreground (no systemd) |
+| `mcp-agent start / stop / restart / status` | Manage the background service |
+| `mcp-agent logs` | Stream service logs (`journalctl -f`) |
+| `mcp-agent config` | Re-prompt for API key / Redis, restart service |
+| `mcp-agent uninstall` | Remove service + launcher (prompts before deleting `~/.mcp-agent`) |
+
 ## Prerequisites
 
 - **Java 21** and **Maven**

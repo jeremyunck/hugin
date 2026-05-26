@@ -92,6 +92,21 @@ agent:
   api-key:
   # Maximum wall-clock time allowed for a single agent request
   request-timeout: 5m
+  # Base-of-operations directory for the agent server (install.sh sets this to ~/.mcp-agent).
+  # Used by SystemFactsService for disk-space reporting and by CloudAgentService for agent directories.
+  home: ${AGENT_HOME:.}
+  # Cloud-agent feature: each POST /api/agents clones a repository and runs the agent loop against it.
+  cloud:
+    # Enable the /api/agents endpoints and repo-cloning feature.
+    enabled: ${CLOUD_AGENTS_ENABLED:false}
+    # Cap on concurrent cloud-agent tasks.
+    max-concurrent: 3
+    # GitHub personal-access token used for git clone/push; keep blank to use only public repos.
+    github-token: ${GITHUB_TOKEN:}
+    # Prefix for the branch created in each cloned repository: <prefix>/<slug>-<short-id>.
+    branch-prefix: agent
+    # Delete the cloned working tree automatically when the agent loop finishes.
+    cleanup-on-complete: false
   # Built-in local tools the agent can call directly (file read/write/edit, list, grep, shell).
   # These run in-process and let the model edit code and run commands. They grant the agent
   # filesystem and shell access, so disable them or scope workspace-root when that is a concern.

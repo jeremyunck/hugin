@@ -46,9 +46,15 @@ public class WriteFileTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = requiredString(arguments, "path");
         String content = presentString(arguments, "content");
-        Path file = workspace.resolve(requested);
+        Workspace ws = ctx.workspace();
+        Path file = ws.resolve(requested);
 
         if (Files.isDirectory(file)) {
             return "Error: path is a directory, not a file: " + requested;
@@ -59,6 +65,6 @@ public class WriteFileTool implements LocalTool {
             Files.createDirectories(parent);
         }
         Files.writeString(file, content);
-        return "Wrote " + content.length() + " characters to " + workspace.relativize(file);
+        return "Wrote " + content.length() + " characters to " + ws.relativize(file);
     }
 }

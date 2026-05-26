@@ -51,9 +51,14 @@ public class ListFilesTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = optionalString(arguments, "path", ".");
         boolean recursive = optionalBoolean(arguments, "recursive", false);
-        Path dir = workspace.resolve(requested);
+        Path dir = ctx.workspace().resolve(requested);
 
         if (!Files.exists(dir)) {
             return "Error: directory does not exist: " + requested;

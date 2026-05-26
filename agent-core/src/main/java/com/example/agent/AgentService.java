@@ -3,6 +3,8 @@ package com.example.agent;
 import com.example.agent.model.*;
 import com.example.agent.tool.LocalTool;
 import com.example.agent.tool.LocalToolRegistry;
+import com.example.agent.tool.ToolContext;
+import com.example.agent.tool.WorkspaceRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -50,8 +52,10 @@ public class AgentService {
     private final ObjectMapper objectMapper;
     private final Duration requestTimeout;
     private final String defaultModel;
+    private final WorkspaceRegistry workspaceRegistry;
     private final Optional<MemoryService> memoryService;
     private final Optional<ConversationMemoryService> conversationMemory;
+    private final Optional<SystemFactsService> systemFactsService;
 
     public AgentService(
             OpenAiClient llmClient,
@@ -60,16 +64,20 @@ public class AgentService {
             ObjectMapper objectMapper,
             @Value("${agent.request-timeout:5m}") Duration requestTimeout,
             @Value("${llm.model:}") String defaultModel,
+            WorkspaceRegistry workspaceRegistry,
             Optional<MemoryService> memoryService,
-            Optional<ConversationMemoryService> conversationMemory) {
+            Optional<ConversationMemoryService> conversationMemory,
+            Optional<SystemFactsService> systemFactsService) {
         this.llmClient = llmClient;
         this.toolProvider = toolProvider;
         this.localTools = localTools;
         this.objectMapper = objectMapper;
         this.requestTimeout = requestTimeout;
         this.defaultModel = defaultModel;
+        this.workspaceRegistry = workspaceRegistry;
         this.memoryService = memoryService;
         this.conversationMemory = conversationMemory;
+        this.systemFactsService = systemFactsService;
     }
 
     public AgentResponse chat(AgentRequest request) {
@@ -98,6 +106,12 @@ public class AgentService {
                 model, toolDefinitions.size(), localTools.tools().size(), stream);
 
         List<ChatMessage> messages = new ArrayList<>();
+        systemFactsService.ifPresent(sfs -> {
+            String summary = sfs.summary();
+            if (!summary.isBlank()) {
+                messages.add(ChatMessage.system(summary));
+            }
+        });
         if (!toolDefinitions.isEmpty()) {
             messages.add(ChatMessage.system(TOOL_SYSTEM_PROMPT));
         }
@@ -135,7 +149,7 @@ public class AgentService {
             if (assistantMsg.toolCalls() != null && !assistantMsg.toolCalls().isEmpty()) {
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
-                    String toolResult = executeToolCall(toolCall, toolServerMap);
+                    String toolResult = executeToolCall(toolCall, toolServerMap, request.sessionId());
                     listener.onToolResult(toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -197,15 +211,16 @@ public class AgentService {
         return defaultModel;
     }
 
-    private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap) {
+    private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap, String sessionId) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
         LocalTool localTool = localTools.find(toolName);
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
+            ToolContext ctx = new ToolContext(workspaceRegistry.resolve(sessionId));
             try {
-                return localTool.execute(args);
+                return localTool.execute(args, ctx);
             } catch (Exception e) {
                 String msg = "Tool call failed: " + e.getMessage();
                 log.error(msg, e);

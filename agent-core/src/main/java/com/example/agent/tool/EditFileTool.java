@@ -53,10 +53,16 @@ public class EditFileTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException {
+        return execute(arguments, new ToolContext(workspace));
+    }
+
+    @Override
+    public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = requiredString(arguments, "path");
         String oldString = presentString(arguments, "old_string");
         String newString = presentString(arguments, "new_string");
         boolean replaceAll = optionalBoolean(arguments, "replace_all", false);
+        Workspace ws = ctx.workspace();
 
         if (oldString.isEmpty()) {
             return "Error: old_string must not be empty.";
@@ -65,7 +71,7 @@ public class EditFileTool implements LocalTool {
             return "Error: old_string and new_string are identical; nothing to change.";
         }
 
-        Path file = workspace.resolve(requested);
+        Path file = ws.resolve(requested);
         if (!Files.exists(file)) {
             return "Error: file does not exist: " + requested;
         }
@@ -89,7 +95,7 @@ public class EditFileTool implements LocalTool {
         Files.writeString(file, updated);
 
         int replaced = replaceAll ? occurrences : 1;
-        return "Edited " + workspace.relativize(file) + " (" + replaced
+        return "Edited " + ws.relativize(file) + " (" + replaced
                 + (replaced == 1 ? " replacement)." : " replacements).");
     }
 
