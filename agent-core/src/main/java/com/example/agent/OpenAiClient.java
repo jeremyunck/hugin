@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 /**
@@ -119,12 +120,12 @@ public class OpenAiClient {
         log.debug("Sending chat request: model={}, messages={}, tools={}",
                 model, messages.size(), hasTools ? tools.size() : 0);
 
-        return restClient.post()
+        return withRetry(() -> restClient.post()
                 .uri(endpoint)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(ChatResponse.class);
+                .body(ChatResponse.class));
     }
 
     /**
@@ -166,23 +167,46 @@ public class OpenAiClient {
             httpRequestBuilder.header("Authorization", "Bearer " + apiKey);
         }
 
-        try {
-            HttpResponse<InputStream> response = streamingHttpClient.send(
-                    httpRequestBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() >= 400) {
-                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-                throw new IllegalStateException(
-                        "LLM streaming request failed (HTTP " + response.statusCode() + "): " + errorBody);
+        var httpRequest = httpRequestBuilder.build();
+        Exception lastErr = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                long delay = RETRY_DELAYS_MS[attempt - 1];
+                log.warn("Rate limited (429), retrying stream in {}ms (attempt {}/{})", delay, attempt, MAX_RETRIES);
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted during retry backoff", ie);
+                }
             }
+            try {
+                HttpResponse<InputStream> response = streamingHttpClient.send(
+                        httpRequest, HttpResponse.BodyHandlers.ofInputStream());
 
-            return parseStream(response.body(), onContentDelta);
-        } catch (IOException e) {
-            throw new IllegalStateException("LLM streaming request failed: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("LLM streaming request interrupted", e);
+                if (response.statusCode() == 429 && attempt < MAX_RETRIES) {
+                    String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                    lastErr = new IllegalStateException(
+                            "LLM streaming request rate limited (HTTP 429): " + errorBody);
+                    continue;
+                }
+                if (response.statusCode() >= 400) {
+                    String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                    throw new IllegalStateException(
+                            "LLM streaming request failed (HTTP " + response.statusCode() + "): " + errorBody);
+                }
+
+                return parseStream(response.body(), onContentDelta);
+            } catch (IllegalStateException e) {
+                throw e;
+            } catch (IOException e) {
+                throw new IllegalStateException("LLM streaming request failed: " + e.getMessage(), e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("LLM streaming request interrupted", e);
+            }
         }
+        throw new IllegalStateException("Rate limited: max streaming retries exceeded", lastErr);
     }
 
     private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta) throws IOException {
@@ -248,6 +272,47 @@ public class OpenAiClient {
                 assembledToolCalls.isEmpty() ? null : assembledToolCalls,
                 null);
         return new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Retry helpers
+    // -------------------------------------------------------------------------
+
+    private static final int MAX_RETRIES = 4;
+    private static final long[] RETRY_DELAYS_MS = {2000, 4000, 8000, 16000};
+
+    /**
+     * Wraps an LLM request in retry logic with exponential backoff.
+     * Retries only on 429 (rate limit) responses.
+     */
+    private <T> T withRetry(Callable<T> action) {
+        RuntimeException lastErr = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                long delay = RETRY_DELAYS_MS[attempt - 1];
+                log.warn("Rate limited (429), retrying in {}ms (attempt {}/{})", delay, attempt, MAX_RETRIES);
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted during retry backoff", ie);
+                }
+            }
+            try {
+                return action.call();
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                if (e.getStatusCode().value() == 429 && attempt < MAX_RETRIES) {
+                    lastErr = e;
+                } else {
+                    throw e;
+                }
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException("LLM request failed: " + e.getMessage(), e);
+            }
+        }
+        throw new IllegalStateException("Rate limited: max retries exceeded", lastErr);
     }
 
     private static String stripTrailingSlash(String url) {
