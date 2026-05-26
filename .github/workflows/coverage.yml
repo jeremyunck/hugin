@@ -75,7 +75,10 @@ jobs:
           lp_tot = pct(totals["LINE"][0], totals["LINE"][1])
           bp_tot = pct(totals["BRANCH"][0], totals["BRANCH"][1])
 
+          MARKER = "<!-- mcp-coverage-report -->"
+
           lines = [
+              MARKER,
               "## 📊 Test Coverage Report",
               "",
               f"| Module | Instruction | Line | Branch | Lines (hit/total) |",
@@ -101,7 +104,7 @@ jobs:
           token = os.environ["GH_TOKEN"]
           url = f"https://api.github.com/repos/{repo}/issues/{pr}/comments"
 
-          # Delete previous coverage comment if one exists
+          # Delete previous coverage comment if one exists (matched by hidden marker only)
           req = urllib.request.Request(url, headers={
               "Authorization": f"Bearer {token}",
               "Accept": "application/vnd.github+json",
@@ -109,7 +112,7 @@ jobs:
           })
           existing = json.loads(urllib.request.urlopen(req).read())
           for c in existing:
-              if c.get("user", {}).get("login") == "github-actions[bot]" and "Coverage Report" in c.get("body", ""):
+              if MARKER in c.get("body", ""):
                   del_url = f"https://api.github.com/repos/{repo}/issues/comments/{c['id']}"
                   urllib.request.urlopen(urllib.request.Request(del_url, method="DELETE", headers={
                       "Authorization": f"Bearer {token}",
