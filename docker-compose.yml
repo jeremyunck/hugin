@@ -1,0 +1,36 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Required: OpenRouter API key (single key covers LLM, web search, and embeddings)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}
+      # Optional: protect /api/agent/** with X-API-Key header authentication
+      AGENT_API_KEY: ${AGENT_API_KEY:-}
+      # Local tools (file read/write, shell). Disabled by default; enable only when needed
+      # and mount a writable volume at /workspace if you turn this on.
+      AGENT_TOOLS_ENABLED: ${AGENT_TOOLS_ENABLED:-false}
+      # Redis host — used only when MEMORY_ENABLED=true (memory compose profile)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Long-term semantic memory. Enabled automatically by the memory profile below.
+      MEMORY_ENABLED: ${MEMORY_ENABLED:-false}
+    volumes:
+      # Writable workspace for local tools. Ignored when AGENT_TOOLS_ENABLED=false.
+      - workspace:/workspace
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    profiles: [memory]
+    restart: unless-stopped
+
+volumes:
+  workspace:

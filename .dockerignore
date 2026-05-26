@@ -1,0 +1,13 @@
+.git/
+**/target/
+**/.idea/
+**/*.iml
+**/.classpath
+**/.project
+**/.settings/
+**/node_modules/
+mcp-servers.json
+docker-compose.yml
+docs/
+*.md
+.dockerignore

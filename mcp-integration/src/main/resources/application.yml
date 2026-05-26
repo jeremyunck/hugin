@@ -1,6 +1,17 @@
 server:
   port: 8080
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
 spring:
   application:
     name: mcp-client
@@ -49,7 +60,7 @@ llm:
     # Set OPEN_ROUTER_API_KEY in the environment (sk-or-v1-...) and switch provider to "openrouter".
     openrouter:
       base-url: https://openrouter.ai/api/v1
-      api-key: ${OPEN_ROUTER_API_KEY:}
+      api-key: ${OPENROUTER_API_KEY:}
 
 conversation:
   memory:

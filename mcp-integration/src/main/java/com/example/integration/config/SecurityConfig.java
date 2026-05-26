@@ -25,6 +25,15 @@ public class SecurityConfig {
 
     @Bean
     @Order(1)
+    public SecurityFilterChain actuatorFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/actuator/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(csrf -> csrf.disable());
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain swaggerFilterChain(HttpSecurity http) throws Exception {
         http.securityMatcher("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
@@ -33,7 +42,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Order(2)
+    @Order(3)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             @Value("${agent.api-key:}") String apiKey) throws Exception {
