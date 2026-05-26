@@ -40,8 +40,8 @@ jobs:
         continue-on-error: true
         run: mvn --batch-mode --no-transfer-progress clean
 
-  # Scans Maven dependencies for known critical CVEs using Trivy via the official action.
-  # Uses aquasecurity/trivy-action to avoid fragile binary downloads.
+  # Scans Maven dependencies for known critical CVEs using Trivy.
+  # Uses the official install script so the correct binary is always fetched.
   dependency-scan:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -50,16 +50,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+
       - name: Scan for critical CVEs
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          vuln-type: library
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
+        run: |
+          trivy fs . \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type library \
+            --severity CRITICAL \
+            --quiet
 
   # Secret detection across all commits in the PR using the gitleaks CLI.
   # Uses the CLI directly (no action) to avoid any license requirements.
