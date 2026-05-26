@@ -15,14 +15,14 @@ foundation to build cloud agents on later.
 ## 1. Goal & target UX (the "Ollama experience")
 
 Ollama's appeal is two commands: an installer (`curl … | sh`) and a runner
-(`ollama run <model>`) that *just works* — it transparently starts a background
-service and drops you into a chat. We want the same shape:
+(`ollama serve`) that *just works* — it transparently starts a background
+service. We want the same shape:
 
 ```bash
 # 1. One-time interactive install (clones, builds, prompts for secrets, installs a service)
 ./install.sh
 
-# 2. One command to use it from then on — starts the service if needed, opens the chat
+# 2. One command to use it from then on — starts the service if needed, prints API usage
 mcp-agent
 ```
 
@@ -32,11 +32,9 @@ After install:
   background **systemd service**, started on boot. This is the equivalent of
   `ollama serve`.
 - **`mcp-agent`** is a launcher on `PATH`. With no arguments it ensures the
-  service is up, waits for health, then opens the **terminal interface**
-  (`agent-terminal`). This is the equivalent of `ollama run`.
-- Because the server is always listening on `:8080`, the user can equally **hit
-  the HTTP API directly** (`POST /api/agent/chat` or the streaming
-  `/api/agent/stream`) — the terminal is just one client of a running service.
+  service is up, waits for health, then prints how to hit the HTTP API.
+- Because the server is always listening on `:8080`, the user **hits the HTTP
+  API directly** (`POST /api/agent/chat` or the streaming `/api/agent/stream`).
 
 The installer prompts for exactly two things, per the new requirements:
 
@@ -50,8 +48,8 @@ The installer prompts for exactly two things, per the new requirements:
 These shape everything below:
 
 1. **Native install, not Docker, for the Pi.** Docker is **not needed** for this
-   path and adds cost we don't want on a Pi: image build/pull time, a second
-   memory-hungry layer, and an awkward path for the interactive stdin terminal.
+   path and adds cost we don't want on a Pi: image build/pull time and a second
+   memory-hungry layer.
    The default LLM is **remote OpenRouter over HTTPS**, so there is no heavy
    local model to containerize — the only runtime dependencies are a **JRE 21**
    and **python3** (for web search). A native install + a systemd service is
@@ -104,7 +102,6 @@ cleanly later:
 $AGENT_HOME/
   bin/
     mcp-integration.jar      # the agent server fat jar
-    agent-terminal.jar       # the terminal client fat jar
     openrouter-search-mcp.py # bundled web-search MCP server script
   config/
     application.yml          # absolute-path overrides (additional-location)
@@ -199,11 +196,10 @@ Steps, in order:
    Copy `openrouter-search-mcp.py` into `$AGENT_HOME/bin/`. The service launcher
    prepends `$AGENT_HOME/venv/bin` to `PATH` so the JVM's child process resolves
    `python3` with `mcp` installed.
-8. **Build the fat jars** (default path) and copy them into `bin/`:
+8. **Build the fat jar** (default path) and copy it into `bin/`:
    ```bash
-   mvn -pl mcp-integration,agent-terminal -am clean package -DskipTests
+   mvn -pl mcp-integration -am clean package -DskipTests
    cp mcp-integration/target/mcp-integration-*.jar "$AGENT_HOME/bin/mcp-integration.jar"
-   cp agent-terminal/target/agent-terminal-*.jar   "$AGENT_HOME/bin/agent-terminal.jar"
    ```
    On low-RAM Pis, cap the build heap (`MAVEN_OPTS="-Xmx512m"`) or use the
    prebuilt-release path (§10).
@@ -215,7 +211,7 @@ Steps, in order:
     print next steps:
     ```
     Installed. The agent server is running on http://localhost:8080
-    Start chatting:        mcp-agent
+    Check it's up:         mcp-agent
     Hit the API directly:  curl -X POST http://localhost:8080/api/agent/chat ...
     Service status/logs:   mcp-agent status   |   mcp-agent logs
     Reconfigure:           mcp-agent config
@@ -228,24 +224,22 @@ Subcommands:
 
 | Command | Behavior |
 | --- | --- |
-| `mcp-agent` / `mcp-agent run` | Ensure the service is active (`systemctl start mcp-agent` if not), poll `/actuator/health` until ready (timeout ~30s), then `exec java -jar $AGENT_HOME/bin/agent-terminal.jar`. Opens the chat interface. |
+| `mcp-agent` / `mcp-agent run` | Ensure the service is active (`systemctl start mcp-agent` if not), poll `/actuator/health` until ready (timeout ~30s), then print how to hit the HTTP API. |
 | `mcp-agent serve` | Run the **server** in the foreground (`java -jar … mcp-integration.jar` with the config override). This is exactly what the systemd `ExecStart` calls; also handy for debugging without systemd. |
 | `mcp-agent start` / `stop` / `restart` / `status` | Thin `systemctl … mcp-agent` wrappers. |
 | `mcp-agent logs` | `journalctl -u mcp-agent -f`. |
 | `mcp-agent config` | Re-run the API-key / Redis prompts (§5 steps 3–6), rewrite `agent.env`, `restart` the service. |
 | `mcp-agent uninstall` | §9. |
 
-The launcher loads `$AGENT_HOME/agent.env` and sets the terminal client's
-environment before launching it:
+The launcher loads `$AGENT_HOME/agent.env` so it can surface the right `curl`
+invocation — including the `X-API-Key` header when `AGENT_API_KEY` is set:
 
 ```bash
-export AGENT_SERVER_URL="http://localhost:8080"
-[ -n "$AGENT_API_KEY" ] && export AGENT_API_KEY   # forwarded as X-API-Key
+[ -n "$AGENT_API_KEY" ] && auth='-H "X-API-Key: $AGENT_API_KEY"'   # forwarded to /api/agent/**
 ```
 
-(`agent-terminal` already reads `AGENT_SERVER_URL`, `AGENT_API_KEY`, and
-`AGENT_MODEL` from its `terminal.*` config.) This is what makes a single
-`mcp-agent` invocation "start the service and open the interface."
+This is what makes a single `mcp-agent` invocation "start the service and tell
+you how to call it."
 
 ## 7. systemd service
 
@@ -289,11 +283,10 @@ WantedBy=multi-user.target
 | OpenRouter key | `agent.env` → `OPEN_ROUTER_API_KEY` | `llm.providers.openrouter.api-key`, `embedding.api-key`, web-search env |
 | Long-term memory on/off | `agent.env` → `MEMORY_ENABLED` (blank Redis ⇒ false) | `memory.enabled` |
 | Redis host/port | `agent.env` → `REDIS_HOST` / `REDIS_PORT` | `spring.data.redis.*` |
-| Optional API auth | `agent.env` → `AGENT_API_KEY` | `agent.api-key` (+ terminal `X-API-Key`) |
+| Optional API auth | `agent.env` → `AGENT_API_KEY` | `agent.api-key` (sent as `X-API-Key`) |
 | MCP config path | `config/application.yml` (absolute) | `mcp.config-file` |
 | Web-search script path | `config/application.yml` (absolute) | `search.openrouter-script` |
 | Tool sandbox root | `config/application.yml` (absolute) | `agent.tools.workspace-root` |
-| Server URL for terminal | launcher exports `AGENT_SERVER_URL` | `terminal.server-url` |
 
 **Security notes (carried from the existing docs):**
 - `agent.api-key` is blank by default, leaving `/api/agent/**` open. On a
@@ -327,11 +320,11 @@ of preference:
 
 1. **Now:** `MAVEN_OPTS="-Xmx512m"` and `-DskipTests` (already in the build
    command). Acceptable on 2 GB+.
-2. **Follow-up:** a CI job (extend `.github/workflows/`) that builds the two fat
-   jars and attaches them to a **GitHub Release**. `install.sh` then offers
-   "download prebuilt jars" vs "build from source", downloading
-   `mcp-integration.jar` + `agent-terminal.jar` for the Pi's architecture
-   (the jars are pure-JVM, so one artifact set works on any arch). This removes
+2. **Follow-up:** a CI job (extend `.github/workflows/`) that builds the fat
+   jar and attaches it to a **GitHub Release**. `install.sh` then offers
+   "download prebuilt jar" vs "build from source", downloading
+   `mcp-integration.jar` for the Pi's architecture
+   (the jar is pure-JVM, so one artifact works on any arch). This removes
    Maven/JDK-build from the Pi entirely — only a JRE is needed at runtime.
 
 ## 11. Implementation checklist
@@ -351,8 +344,8 @@ New files / changes, smallest-blast-radius first:
    `install.sh`.
 
 No Java code changes are required for this plan — it is packaging + config +
-service wiring around the existing server and terminal client. (The cloud-agent
-plan is where the Java refactors live.)
+service wiring around the existing server. (The cloud-agent plan is where the
+Java refactors live.)
 
 ## 12. Open questions / out of scope
 

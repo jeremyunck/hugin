@@ -168,16 +168,15 @@ python3 -m venv "$AGENT_HOME/venv"
 cp "$REPO_DIR/openrouter-search-mcp.py" "$AGENT_HOME/bin/openrouter-search-mcp.py"
 info "Python venv ready; openrouter-search-mcp.py copied to bin/"
 
-# ── 8. build fat jars ────────────────────────────────────────────────────────
-info "Building fat jars (this may take a few minutes on a Pi)..."
+# ── 8. build fat jar ─────────────────────────────────────────────────────────
+info "Building the server fat jar (this may take a few minutes on a Pi)..."
 MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" \
   mvn -f "$REPO_DIR/pom.xml" \
-      -pl mcp-integration,agent-terminal -am \
+      -pl mcp-integration -am \
       clean package -DskipTests -q
 
 cp "$REPO_DIR"/mcp-integration/target/mcp-integration-*.jar  "$AGENT_HOME/bin/mcp-integration.jar"
-cp "$REPO_DIR"/agent-terminal/target/agent-terminal-*.jar     "$AGENT_HOME/bin/agent-terminal.jar"
-success "Jars built and copied to $AGENT_HOME/bin/"
+success "Jar built and copied to $AGENT_HOME/bin/"
 
 # ── 9. install mcp-agent launcher ────────────────────────────────────────────
 LAUNCHER_SRC="$REPO_DIR/scripts/mcp-agent"
@@ -222,7 +221,7 @@ cat <<'MSG'
 
 Installed. The agent server is running on http://localhost:8080
 
-  Start chatting:        mcp-agent
+  Check it's up:         mcp-agent
   Hit the API directly:  curl -X POST http://localhost:8080/api/agent/chat \
                            -H "Content-Type: application/json" \
                            -d '{"prompt": "Hello!"}'

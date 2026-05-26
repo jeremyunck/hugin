@@ -140,7 +140,7 @@ class McpIntegrationApplicationTests {
                 .getResponse()
                 .getContentAsString();
 
-        // Then: the body is a well-formed SSE stream the terminal client can parse
+        // Then: the body is a well-formed SSE stream an SSE client can parse
         assertThat(body).isNotNull();
         assertThat(body).contains("event:token");
         assertThat(body).contains("\"text\":\"Hello\"");

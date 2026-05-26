@@ -3,7 +3,7 @@
 # Installed to /usr/local/bin/mcp-agent by install.sh.
 #
 # Commands:
-#   mcp-agent [run]    start service if needed, wait for health, open terminal chat
+#   mcp-agent [run]    start service if needed, wait for health, print API usage
 #   mcp-agent serve    run the server in the foreground (no systemd)
 #   mcp-agent start    systemctl start mcp-agent
 #   mcp-agent stop     systemctl stop mcp-agent
@@ -58,14 +58,28 @@ cmd_run() {
   fi
 
   info "Waiting for agent server..."
-  if wait_for_health 30; then
-    success "Server ready on http://localhost:8080"
+  if ! wait_for_health 30; then
+    return 1
   fi
+  success "Server ready on http://localhost:8080"
 
-  export AGENT_SERVER_URL="http://localhost:8080"
-  [[ -n "${AGENT_API_KEY:-}" ]] && export AGENT_API_KEY
+  local auth_hint=""
+  [[ -n "${AGENT_API_KEY:-}" ]] && auth_hint='-H "X-API-Key: $AGENT_API_KEY" '
 
-  exec java -jar "$AGENT_HOME/bin/agent-terminal.jar"
+  cat <<MSG
+
+Send a prompt to the agent:
+  curl -X POST http://localhost:8080/api/agent/chat \\
+    -H "Content-Type: application/json" ${auth_hint}\\
+    -d '{"prompt": "Hello!"}'
+
+Stream the response (Server-Sent Events):
+  curl -N -X POST http://localhost:8080/api/agent/stream \\
+    -H "Content-Type: application/json" -H "Accept: text/event-stream" ${auth_hint}\\
+    -d '{"prompt": "Hello!"}'
+
+Service status/logs:  mcp-agent status  |  mcp-agent logs
+MSG
 }
 
 cmd_serve() {
@@ -161,7 +175,7 @@ case "$CMD" in
 Usage: mcp-agent [command]
 
 Commands:
-  (none) / run   Start service if needed, open terminal chat
+  (none) / run   Start service if needed, wait for health, print API usage
   serve          Run the server in the foreground (no systemd)
   start          Start the background service
   stop           Stop the background service

@@ -4,7 +4,7 @@ A Spring Boot AI agent that connects to [Model Context Protocol](https://modelco
 
 ## Raspberry Pi install (Ollama-style)
 
-The quickest way to run the agent as a persistent appliance — on a Raspberry Pi or any Debian/Ubuntu machine — is the interactive installer. It mirrors the Ollama experience: one install command, then a single `mcp-agent` command to chat.
+The quickest way to run the agent as a persistent appliance — on a Raspberry Pi or any Debian/Ubuntu machine — is the interactive installer. It mirrors the Ollama experience: one install command, then a single `mcp-agent` command to bring the server up.
 
 ```bash
 # 1. Clone the repo (if you haven't already)
@@ -20,13 +20,13 @@ The installer will:
 - Prompt for a **Redis host** for long-term memory (leave blank to skip)
 - Build the fat jars, create `~/.mcp-agent/`, and register a **systemd service** that starts on boot
 
-From then on, one command opens the chat:
+From then on, one command brings the server up:
 
 ```bash
-mcp-agent        # starts the service if needed, waits for health, opens terminal
+mcp-agent        # starts the service if needed, waits for health, prints API usage
 ```
 
-The agent server is always available on **`:8080`** for direct API access too:
+The agent server is available on **`:8080`** for API access:
 
 ```bash
 curl -X POST http://localhost:8080/api/agent/chat \
@@ -189,28 +189,6 @@ curl http://localhost:8080/actuator/health
 - **Set `AGENT_API_KEY`** before exposing the server publicly so the `/api/agent/**` endpoints require authentication.
 - The `/api/servers/**` management endpoints are currently unauthenticated — keep them off the public network.
 
-## Terminal front-end
-
-`agent-terminal` is an interactive terminal client — think Claude Code. With the server running, start it in another shell:
-
-```bash
-mvn -pl agent-terminal spring-boot:run
-```
-
-Type a prompt and the answer **streams back token-by-token** in real time; tool calls the agent makes are shown inline. Built-in commands:
-
-- `/help` — show help
-- `/model [name]` — show or change the model used for new prompts
-- `/exit` (also `/quit`, `exit`, `quit`, or Ctrl-D) — quit
-
-Configure it via the `terminal` block in `agent-terminal/src/main/resources/application.yml` (or environment variables):
-
-| Key | Env var | Description | Default |
-| --- | --- | --- | --- |
-| `terminal.server-url` | `AGENT_SERVER_URL` | Base URL of the running server | `http://localhost:8080` |
-| `terminal.api-key` | `AGENT_API_KEY` | Sent as `X-API-Key`; needed only if the server sets `agent.api-key` | _(blank)_ |
-| `terminal.model` | `AGENT_MODEL` | Default model; blank lets the server pick `llm.model` | _(blank)_ |
-
 ## Usage
 
 Send a prompt to the agent (non-streaming):
@@ -221,7 +199,7 @@ curl -X POST http://localhost:8080/api/agent/chat \
   -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
 ```
 
-Or stream the response as Server-Sent Events (this is what the terminal uses):
+Or stream the response as Server-Sent Events:
 
 ```bash
 curl -N -X POST http://localhost:8080/api/agent/stream \

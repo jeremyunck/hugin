@@ -7,7 +7,6 @@ COPY pom.xml .
 COPY agent-core/pom.xml agent-core/
 COPY mcp-client/pom.xml mcp-client/
 COPY mcp-integration/pom.xml mcp-integration/
-COPY agent-terminal/pom.xml agent-terminal/
 RUN mvn -pl mcp-integration -am dependency:go-offline --no-transfer-progress -q
 
 # Copy sources and package the mcp-integration fat jar.
