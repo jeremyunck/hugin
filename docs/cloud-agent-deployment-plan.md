@@ -1,5 +1,14 @@
 # Cloud Agent Deployment Plan
 
+> **Status / sequencing (updated):** This work is now **deferred behind the
+> Raspberry Pi install experience** — see
+> [`raspberry-pi-install-plan.md`](./raspberry-pi-install-plan.md). The priority
+> shifted to first making the agent trivially installable and runnable on a Pi
+> (Ollama-style: interactive installer + a single `mcp-agent` command). That
+> plan reuses the same `$AGENT_HOME` base-of-operations directory defined here,
+> so it is a foundation for — not a replacement of — the cloud-agent work below,
+> which remains the next phase.
+
 Plan for turning the agent server into an installable tool that owns a **base of
 operations** directory, learns the facts of the machine it runs on at init time,
 and can spin up **cloud agents** — each cloning a GitHub repository into its own
