@@ -105,7 +105,7 @@ class McpIntegrationApplicationTests {
         // includes Spring Security. Since no api-key is configured in the test,
         // the endpoint is open and this should succeed.
         var request = Map.of("prompt", "What time is it?", "model", "llama3.2");
-        var response = restTemplate.postForEntity("/api/agent/chat", request, String.class);
+        var response = restTemplate.postForEntity("/api/v1/agent/chat", request, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -127,7 +127,7 @@ class McpIntegrationApplicationTests {
         // TestRestTemplate cannot read SSE/async responses (body arrives after headers on a
         // background thread). MockMvc + asyncDispatch handles Spring's async dispatch correctly.
         MvcResult mvcResult = mockMvc.perform(
-                        post("/api/agent/stream")
+                        post("/api/v1/agent/stream")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .accept(MediaType.TEXT_EVENT_STREAM)
                                 .content("{\"prompt\":\"hi\",\"model\":\"llama3.2\"}"))
@@ -159,7 +159,7 @@ class McpIntegrationApplicationTests {
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
 
         ResponseEntity<String> response = restTemplate.exchange(
-                "/api/agent/chat", HttpMethod.POST, entity, String.class);
+                "/api/v1/agent/chat", HttpMethod.POST, entity, String.class);
 
         // Without an api-key configured, the security filter is disabled,
         // so the endpoint should still succeed (no auth required).

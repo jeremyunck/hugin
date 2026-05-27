@@ -74,7 +74,7 @@ class AgentServiceTest {
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
         when(toolProvider.callTool(eq("server1"), eq("get_time"), anyMap())).thenReturn("12:00");
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_1", "get_time", "{}"))
                 .thenReturn(responseWithContent("The time is 12:00."));
 
@@ -94,7 +94,7 @@ class AgentServiceTest {
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
         when(toolProvider.callTool(eq("server1"), eq("always_call"), anyMap())).thenReturn("done");
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_x", "always_call", "{}"));
 
         // When
@@ -115,7 +115,7 @@ class AgentServiceTest {
         when(toolProvider.callTool(eq("server1"), eq("flaky_tool"), anyMap()))
                 .thenThrow(new RuntimeException("Something went wrong"));
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_1", "flaky_tool", "{}"))
                 .thenReturn(responseWithContent("I tried but failed."));
 
@@ -132,7 +132,7 @@ class AgentServiceTest {
         // Given: model calls a tool that doesn't exist on any server
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_1", "nonexistent_tool", "{}"))
                 .thenReturn(responseWithContent("I cannot find that tool."));
 
@@ -162,7 +162,7 @@ class AgentServiceTest {
 
         var finalResponse = responseWithContent("Final answer.");
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(chatResponse)
                 .thenReturn(finalResponse);
 
@@ -189,7 +189,7 @@ class AgentServiceTest {
             return "done";
         });
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_1", "slow_tool", "{}"));
 
         // When
@@ -203,7 +203,7 @@ class AgentServiceTest {
     void shouldReturnDirectAnswerWithNoTools() {
         // Given: no tools available, model responds directly
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("Hello there!"));
 
         // When
@@ -223,7 +223,7 @@ class AgentServiceTest {
                 defaultRegistry(), Optional.empty(), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
 
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithToolCall("call_1", "local_echo", "{\"value\":\"ok\"}"))
                 .thenReturn(responseWithContent("Done."));
 
@@ -243,7 +243,7 @@ class AgentServiceTest {
         var availableTool = new AvailableTool("get_time", "Get the current time",
                 Map.of("type", "object", "properties", Map.of()));
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("12:00"));
 
         // When
@@ -251,7 +251,7 @@ class AgentServiceTest {
 
         // Then: first message is the tool system prompt
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList(), any());
         assertThat(captor.getValue().get(0).role()).isEqualTo("system");
         assertThat(captor.getValue().get(0).content()).isEqualTo(AgentService.TOOL_SYSTEM_PROMPT);
     }
@@ -261,7 +261,7 @@ class AgentServiceTest {
     void shouldNotPrependSystemPromptWhenNoToolsAvailable() {
         // Given: no tools at all
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("Hi!"));
 
         // When
@@ -269,7 +269,7 @@ class AgentServiceTest {
 
         // Then: conversation starts directly with the user message
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList(), any());
         assertThat(captor.getValue().get(0).role()).isEqualTo("user");
     }
 
@@ -277,7 +277,7 @@ class AgentServiceTest {
     void chatStreamDeliversTokensAndFinalAnswer() {
         // Given: no tools; the streaming call emits two text fragments
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
                 .thenAnswer(invocation -> {
                     java.util.function.Consumer<String> onDelta = invocation.getArgument(3);
                     onDelta.accept("Hel");
@@ -304,7 +304,7 @@ class AgentServiceTest {
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
         when(toolProvider.callTool(eq("server1"), eq("get_time"), anyMap())).thenReturn("12:00");
 
-        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
                 .thenReturn(responseWithToolCall("call_1", "get_time", "{}"))
                 .thenReturn(responseWithContent("The time is 12:00."));
 
@@ -333,7 +333,7 @@ class AgentServiceTest {
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
                 defaultRegistry(), Optional.of(memory), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("Final answer."));
 
         // When
@@ -346,7 +346,7 @@ class AgentServiceTest {
         verify(memory).remember(PROMPT, "Final answer.");
 
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList(), any());
         List<ChatMessage> sent = captor.getValue();
         assertThat(sent.get(0).role()).isEqualTo("system");
         assertThat(sent.get(0).content()).contains("User: hi\nAssistant: hello");
@@ -363,7 +363,7 @@ class AgentServiceTest {
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
                 defaultRegistry(), Optional.of(memory), Optional.empty(), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("Hi!"));
 
         // When
@@ -386,7 +386,7 @@ class AgentServiceTest {
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
                 defaultRegistry(), Optional.empty(), Optional.of(conversation), Optional.empty());
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+        when(llmClient.chat(eq(MODEL), anyList(), anyList(), any()))
                 .thenReturn(responseWithContent("Your name is Ada."));
 
         // When
@@ -400,7 +400,7 @@ class AgentServiceTest {
         // are the replayed history followed by the current prompt (the assistant reply is appended
         // by the loop after the call returns).
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
-        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList(), any());
         List<ChatMessage> sent = captor.getValue();
         assertThat(sent.get(0).content()).isEqualTo("My name is Ada.");
         assertThat(sent.get(1).content()).isEqualTo("Nice to meet you, Ada.");

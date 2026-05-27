@@ -25,9 +25,8 @@ public class ApiKeyAuthenticationFilter extends AbstractAuthenticationProcessing
 
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final RequestMatcher REQUIRES_KEY = request ->
-            "POST".equalsIgnoreCase(request.getMethod())
-                    && request.getServletPath() != null
-                    && request.getServletPath().startsWith("/api/agent");
+            request.getServletPath() != null
+                    && request.getServletPath().startsWith("/api/v1");
 
     private final String expectedApiKey;
 

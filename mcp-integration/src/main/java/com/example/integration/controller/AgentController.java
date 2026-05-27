@@ -33,7 +33,7 @@ import java.util.concurrent.ExecutorService;
  * events report tool calls, {@code done} signals completion, and {@code error} reports a failure.
  */
 @RestController
-@RequestMapping("/api/agent")
+@RequestMapping("/api/v1/agent")
 public class AgentController {
 
     private static final Logger log = LoggerFactory.getLogger(AgentController.class);

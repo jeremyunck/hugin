@@ -46,6 +46,10 @@ import java.util.function.Consumer;
  * {@link LlmProperties}. When the provider supplies an API key it is sent as an
  * {@code Authorization: Bearer} header; otherwise no auth header is added.
  *
+ * <p>Per-call API key overrides are supported via {@link #chat(String, List, List, String)}
+ * and {@link #chatStream(String, List, List, Consumer, String)}. When the override is null
+ * or blank, the constructor-injected key from the provider config is used.
+ *
  * <p>{@link #chat} returns the full response in one shot; {@link #chatStream} consumes a
  * Server-Sent Events stream ({@code stream: true}) and emits assistant text token-by-token.
  */
@@ -58,7 +62,7 @@ public class OpenAiClient {
     private final URI endpoint;
     private final ObjectMapper objectMapper;
     private final HttpClient streamingHttpClient;
-    private final String apiKey;
+    private final String defaultApiKey;
 
     public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -70,7 +74,7 @@ public class OpenAiClient {
                     "llm.providers." + properties.provider() + ".base-url must be set");
         }
         this.endpoint = URI.create(stripTrailingSlash(baseUrl) + "/chat/completions");
-        this.apiKey = provider.hasApiKey() ? provider.apiKey() : null;
+        this.defaultApiKey = provider.hasApiKey() ? provider.apiKey() : null;
 
         var httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -101,13 +105,22 @@ public class OpenAiClient {
     }
 
     /**
-     * Sends a chat-completions request and returns the parsed response.
-     *
-     * @param model    model name (provider-specific, e.g. {@code llama3.2} or {@code deepseek/deepseek-chat})
-     * @param messages conversation history
-     * @param tools    tool definitions to advertise; pass an empty list to omit tool calling
+     * Sends a chat-completions request using the default API key.
      */
     public ChatResponse chat(String model, List<ChatMessage> messages, List<ToolDefinition> tools) {
+        return chat(model, messages, tools, null);
+    }
+
+    /**
+     * Sends a chat-completions request with an optional per-call API key override.
+     *
+     * @param model    model name
+     * @param messages conversation history
+     * @param tools    tool definitions to advertise; pass an empty list to omit tool calling
+     * @param apiKey   optional per-call API key override; null/blank uses the default
+     */
+    public ChatResponse chat(String model, List<ChatMessage> messages,
+                              List<ToolDefinition> tools, String apiKey) {
         boolean hasTools = tools != null && !tools.isEmpty();
         ChatRequest request = new ChatRequest(
                 model,
@@ -120,7 +133,12 @@ public class OpenAiClient {
         log.debug("Sending chat request: model={}, messages={}, tools={}",
                 model, messages.size(), hasTools ? tools.size() : 0);
 
-        return withRetry(() -> restClient.post()
+        String resolvedKey = apiKey != null && !apiKey.isBlank() ? apiKey : defaultApiKey;
+        RestClient client = resolvedKey != null
+                ? restClient.mutate().requestInterceptor(new DynamicAuthInterceptor(resolvedKey)).build()
+                : restClient;
+
+        return withRetry(() -> client.post()
                 .uri(endpoint)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
@@ -129,17 +147,27 @@ public class OpenAiClient {
     }
 
     /**
-     * Streams a chat-completions request ({@code stream: true}), invoking {@code onContentDelta}
-     * for each chunk of assistant text as it arrives, and returns the fully assembled response
-     * (content joined, tool-call argument fragments concatenated) once the stream ends.
+     * Streams a chat-completions request ({@code stream: true}) using the default API key.
+     */
+    public ChatResponse chatStream(String model, List<ChatMessage> messages,
+                                   List<ToolDefinition> tools, Consumer<String> onContentDelta) {
+        return chatStream(model, messages, tools, onContentDelta, null);
+    }
+
+    /**
+     * Streams a chat-completions request ({@code stream: true}) with an optional
+     * per-call API key override, invoking {@code onContentDelta} for each chunk of
+     * assistant text as it arrives.
      *
      * @param model          model name
      * @param messages       conversation history
      * @param tools          tool definitions to advertise; pass an empty list to omit tool calling
      * @param onContentDelta receives each streamed text fragment in order
+     * @param apiKey         optional per-call API key override; null/blank uses the default
      */
     public ChatResponse chatStream(String model, List<ChatMessage> messages,
-                                   List<ToolDefinition> tools, Consumer<String> onContentDelta) {
+                                   List<ToolDefinition> tools, Consumer<String> onContentDelta,
+                                   String apiKey) {
         boolean hasTools = tools != null && !tools.isEmpty();
         ChatRequest request = new ChatRequest(
                 model,
@@ -159,6 +187,8 @@ public class OpenAiClient {
             throw new IllegalStateException("Failed to serialize chat request", e);
         }
 
+        String resolvedKey = apiKey != null && !apiKey.isBlank() ? apiKey : defaultApiKey;
+
         Exception lastErr = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0) {
@@ -176,8 +206,8 @@ public class OpenAiClient {
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
                     .POST(BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-            if (apiKey != null) {
-                httpRequestBuilder.header("Authorization", "Bearer " + apiKey);
+            if (resolvedKey != null) {
+                httpRequestBuilder.header("Authorization", "Bearer " + resolvedKey);
             }
             try {
                 HttpResponse<InputStream> response = streamingHttpClient.send(
@@ -349,6 +379,17 @@ public class OpenAiClient {
 
     /** Adds {@code Authorization: Bearer <key>} to every request (OpenRouter, OpenAI, etc.). */
     private record BearerAuthInterceptor(String apiKey) implements ClientHttpRequestInterceptor {
+
+        @Override
+        public ClientHttpResponse intercept(HttpRequest request, byte[] body,
+                                            ClientHttpRequestExecution execution) throws IOException {
+            request.getHeaders().setBearerAuth(apiKey);
+            return execution.execute(request, body);
+        }
+    }
+
+    /** Dynamic auth interceptor that can be added per-call for BYOK support. */
+    private record DynamicAuthInterceptor(String apiKey) implements ClientHttpRequestInterceptor {
 
         @Override
         public ClientHttpResponse intercept(HttpRequest request, byte[] body,

@@ -1,48 +1,8 @@
 # mcp-client
 
-A Spring Boot AI agent that connects to [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers and lets an OpenAI-schema LLM use their tools to answer prompts. The LLM backend is pluggable — point it at a local [Ollama](https://ollama.com) instance or a hosted provider such as [OpenRouter](https://openrouter.ai) (see [LLM provider](#llm-provider)).
+A Spring Boot AI agent backend that connects to [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers and lets an OpenAI-schema LLM use their tools to answer prompts. The LLM backend is pluggable — point it at a local [Ollama](https://ollama.com) instance or a hosted provider such as [OpenRouter](https://openrouter.ai) (see [LLM provider](#llm-provider)).
 
-## Raspberry Pi install (Ollama-style)
-
-The quickest way to run the agent as a persistent appliance — on a Raspberry Pi or any Debian/Ubuntu machine — is the interactive installer. It mirrors the Ollama experience: one install command, then a single `mcp-agent` command to chat.
-
-```bash
-# 1. Clone the repo (if you haven't already)
-git clone https://github.com/jeremyunck/mcp-client.git && cd mcp-client
-
-# 2. Run the interactive installer once
-./install.sh
-```
-
-The installer will:
-- Install Java 21 (Temurin), git, Maven, and Python 3 if missing
-- Prompt for your **OpenRouter API key** (required — used for LLM + web search)
-- Prompt for a **Redis host** for long-term memory (leave blank to skip)
-- Build the fat jars, create `~/.mcp-agent/`, and register a **systemd service** that starts on boot
-
-From then on, one command opens the chat:
-
-```bash
-mcp-agent        # starts the service if needed, waits for health, opens terminal
-```
-
-The agent server is always available on **`:8080`** for direct API access too:
-
-```bash
-curl -X POST http://localhost:8080/api/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What can you do?"}'
-```
-
-Other `mcp-agent` subcommands:
-
-| Command | Description |
-|---|---|
-| `mcp-agent serve` | Run the server in the foreground (no systemd) |
-| `mcp-agent start / stop / restart / status` | Manage the background service |
-| `mcp-agent logs` | Stream service logs (`journalctl -f`) |
-| `mcp-agent config` | Re-prompt for API key / Redis, restart service |
-| `mcp-agent uninstall` | Remove service + launcher (prompts before deleting `~/.mcp-agent`) |
+This is the API backend for a cloud coding agent platform. A separate front-end app talks to this backend over HTTP. The agent can clone repositories, run the agent loop (editing code, running commands), and open pull requests.
 
 ## Prerequisites
 
@@ -86,7 +46,7 @@ cp mcp-servers.example.json mcp-servers.json
 }
 ```
 
-Stdio servers use `command` / `args` / `env`; SSE/HTTP servers use `url` / `headers`. Servers can also be managed at runtime through the `/api/servers` REST API.
+Stdio servers use `command` / `args` / `env`; SSE/HTTP servers use `url` / `headers`. Servers can also be managed at runtime through the `/api/v1/servers` REST API.
 
 ### Passing secrets and environment variables
 
@@ -141,7 +101,7 @@ docker run -p 8080:8080 \
 | Environment variable | Description | Default |
 |---|---|---|
 | `OPEN_ROUTER_API_KEY` | OpenRouter API key (required for LLM and web search) | _(blank)_ |
-| `AGENT_API_KEY` | Require this value as `X-API-Key` on `/api/agent/**` requests; blank leaves the endpoint open | _(blank)_ |
+| `AGENT_API_KEY` | Require this value as `X-API-Key` on `/api/**` requests; blank leaves endpoints open | _(blank)_ |
 | `AGENT_TOOLS_ENABLED` | Enable built-in file/shell tools inside the container | `false` |
 | `AGENT_TOOLS_WORKSPACE_ROOT` | Sandbox root for file/shell tools (pin to a mounted volume when enabling tools) | `.` |
 | `MEMORY_ENABLED` | Enable Redis-backed long-term memory | `false` |
@@ -171,7 +131,7 @@ OPEN_ROUTER_API_KEY=sk-or-v1-... MEMORY_ENABLED=true docker compose --profile me
 The container starts with no `mcp-servers.json` — the OpenRouter web-search server is registered automatically at startup. To add more servers:
 
 - **Mount a config file**: `-v /path/to/mcp-servers.json:/app/mcp-servers.json:ro`
-- **Use the REST API at runtime**: POST to `/api/servers` to add SSE/HTTP MCP servers without restarting.
+- **Use the REST API at runtime**: POST to `/api/v1/servers` to add SSE/HTTP MCP servers without restarting.
 
 Stdio servers that spawn subprocesses (e.g. `npx`, `uvx`) need those runtimes in the image; prefer SSE/remote MCP servers for cloud deployments.
 
@@ -186,45 +146,23 @@ curl http://localhost:8080/actuator/health
 ### Security notes
 
 - **Local tools are disabled by default** (`AGENT_TOOLS_ENABLED=false`). If you enable them, mount a dedicated volume and set `AGENT_TOOLS_WORKSPACE_ROOT` to its path.
-- **Set `AGENT_API_KEY`** before exposing the server publicly so the `/api/agent/**` endpoints require authentication.
-- The `/api/servers/**` management endpoints are currently unauthenticated — keep them off the public network.
-
-## Terminal front-end
-
-`agent-terminal` is an interactive terminal client — think Claude Code. With the server running, start it in another shell:
-
-```bash
-mvn -pl agent-terminal spring-boot:run
-```
-
-Type a prompt and the answer **streams back token-by-token** in real time; tool calls the agent makes are shown inline. Built-in commands:
-
-- `/help` — show help
-- `/model [name]` — show or change the model used for new prompts
-- `/exit` (also `/quit`, `exit`, `quit`, or Ctrl-D) — quit
-
-Configure it via the `terminal` block in `agent-terminal/src/main/resources/application.yml` (or environment variables):
-
-| Key | Env var | Description | Default |
-| --- | --- | --- | --- |
-| `terminal.server-url` | `AGENT_SERVER_URL` | Base URL of the running server | `http://localhost:8080` |
-| `terminal.api-key` | `AGENT_API_KEY` | Sent as `X-API-Key`; needed only if the server sets `agent.api-key` | _(blank)_ |
-| `terminal.model` | `AGENT_MODEL` | Default model; blank lets the server pick `llm.model` | _(blank)_ |
+- **Set `AGENT_API_KEY`** before exposing the server publicly so the API endpoints require authentication.
+- The `/api/v1/servers/**` management endpoints are authenticated with the same API key.
 
 ## Usage
 
 Send a prompt to the agent (non-streaming):
 
 ```bash
-curl -X POST http://localhost:8080/api/agent/chat \
+curl -X POST http://localhost:8080/api/v1/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
 ```
 
-Or stream the response as Server-Sent Events (this is what the terminal uses):
+Or stream the response as Server-Sent Events:
 
 ```bash
-curl -N -X POST http://localhost:8080/api/agent/stream \
+curl -N -X POST http://localhost:8080/api/v1/agent/stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
@@ -232,13 +170,38 @@ curl -N -X POST http://localhost:8080/api/agent/stream \
 
 `model` is optional and falls back to `llm.model` from configuration. Use a model name valid for the active provider (e.g. `llama3.2` for Ollama, `deepseek/deepseek-chat` for OpenRouter).
 
-Manage MCP servers at runtime:
+### Cloud agent endpoints
+
+Create and run a cloud agent (clones a repo, runs the agent loop, opens a PR):
 
 ```bash
-curl http://localhost:8080/api/servers                 # list servers + connection status
-curl http://localhost:8080/api/servers/time/tools      # list a server's tools
-curl -X POST http://localhost:8080/api/servers/time/reconnect
+curl -N -X POST http://localhost:8080/api/v1/agents \
+  -H "Content-Type: application/json" \
+  -d '{"repoUrl": "https://github.com/user/repo", "task": "Add error handling", "branch": "main", "model": "deepseek/deepseek-chat"}'
 ```
+
+Manage cloud agents:
+
+```bash
+curl http://localhost:8080/api/v1/agents                     # list agents + status
+curl http://localhost:8080/api/v1/agents/{id}                # get agent metadata
+curl -X DELETE http://localhost:8080/api/v1/agents/{id}      # stop + delete agent
+```
+
+### MCP server management
+
+```bash
+curl http://localhost:8080/api/v1/servers                    # list servers + connection status
+curl http://localhost:8080/api/v1/servers/time/tools          # list a server's tools
+curl -X POST http://localhost:8080/api/v1/servers/time/reconnect
+```
+
+## API documentation
+
+OpenAPI documentation is available when the server is running:
+
+- **Swagger UI**: http://localhost:8080/swagger-ui.html
+- **OpenAPI JSON**: http://localhost:8080/v3/api-docs
 
 ## LLM provider
 
@@ -345,7 +308,7 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 | `llm.providers.<name>.base-url` | OpenAI-compatible API root (the part before `/chat/completions`) | _(per provider)_ |
 | `llm.providers.<name>.api-key` | Optional; when set, sent as `Authorization: Bearer <key>` | _(blank)_ |
 | `mcp.config-file` | Path to the MCP servers JSON (supports `~/`) | `./mcp-servers.json` |
-| `agent.api-key` | If set, `/api/agent/**` requires the `X-API-Key` header; if blank, those endpoints are open | _(blank)_ |
+| `agent.api-key` | If set, all `/api/**` endpoints require the `X-API-Key` header; if blank, endpoints are open | _(blank)_ |
 | `agent.request-timeout` | Per-request wall-clock budget for the agent loop | `5m` |
 | `memory.enabled` | Enable Redis-backed long-term memory (see [Long-term memory](#long-term-memory)) | `false` |
 | `memory.key-prefix` | Redis key prefix for stored memory records | `agent:memory` |

@@ -97,13 +97,15 @@ public class AgentService {
     private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream) {
         Instant deadline = Instant.now().plus(requestTimeout);
         String model = resolveModel(request.model());
+        String apiKey = request.apiKey();
 
         // Build flattened tool list and a reverse lookup: tool name → server name.
         Map<String, String> toolServerMap = new LinkedHashMap<>();
         List<ToolDefinition> toolDefinitions = collectTools(toolServerMap);
 
-        log.debug("Agent chat: model={}, tools available={} (local={}), stream={}",
-                model, toolDefinitions.size(), localTools.tools().size(), stream);
+        log.debug("Agent chat: model={}, tools available={} (local={}), stream={}, byok={}",
+                model, toolDefinitions.size(), localTools.tools().size(), stream,
+                apiKey != null && !apiKey.isBlank() ? "yes" : "no");
 
         List<ChatMessage> messages = new ArrayList<>();
         systemFactsService.ifPresent(sfs -> {
@@ -134,8 +136,8 @@ public class AgentService {
             }
 
             ChatResponse response = stream
-                    ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent)
-                    : llmClient.chat(model, messages, toolDefinitions);
+                    ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent, apiKey)
+                    : llmClient.chat(model, messages, toolDefinitions, apiKey);
             ChatResponse.Choice choice = response.choices().get(0);
             ChatMessage assistantMsg = choice.message();
             messages.add(assistantMsg);

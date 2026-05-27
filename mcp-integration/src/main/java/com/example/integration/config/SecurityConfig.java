@@ -15,10 +15,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * Secures the agent endpoint with an API key (X-API-Key header).
+ * Secures the API endpoints with an API key (X-API-Key header).
  *
- * <p>Other paths (management, MCP servers CRUD) are left open for now.
- * In production, apply appropriate authentication to all public endpoints.
+ * <p>All {@code /api/v1/**} endpoints (agent, agents, servers) are secured.
+ * Swagger/OpenAPI paths are left open. When no API key is configured, all endpoints
+ * are permitted (relies on network-level security).
  */
 @Configuration
 public class SecurityConfig {
@@ -34,17 +35,26 @@ public class SecurityConfig {
 
     @Bean
     @Order(2)
+    public SecurityFilterChain actuatorFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/actuator/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(csrf -> csrf.disable());
+        return http.build();
+    }
+
+    @Bean
+    @Order(3)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             @Value("${agent.api-key:}") String apiKey) throws Exception {
 
         if (apiKey == null || apiKey.isBlank()) {
-            // No API key configured — rely on network-level security (e.g. internal network only)
-            http.securityMatcher("/api/agent/**")
+            // No API key configured — rely on network-level security
+            http.securityMatcher("/api/v1/**")
                     .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         } else {
             var apiKeyFilter = new ApiKeyAuthenticationFilter(apiKey);
-            http.securityMatcher("/api/agent/**")
+            http.securityMatcher("/api/v1/**")
                     .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
                     .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
         }
@@ -57,10 +67,15 @@ public class SecurityConfig {
 
     private CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // Allow specific front-end origins in production; wildcard for development
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "https://*.your-frontend-domain.com"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

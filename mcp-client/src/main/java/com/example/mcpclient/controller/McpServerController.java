@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 @RestController
-@RequestMapping("/api/servers")
+@RequestMapping("/api/v1/servers")
 public class McpServerController {
 
     private final McpServerRegistryService registry;

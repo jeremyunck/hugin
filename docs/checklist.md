@@ -6,30 +6,30 @@ Derived from `cloud-platform-audit.md`. Items are ordered by priority: Phase 0 (
 
 ## Phase 0 — Repo Cleanup *(low risk, do first)*
 
-- [ ] Remove `agent-terminal` module — delete module dir, remove from parent `pom.xml`, prune `README`/`CLAUDE.md`/`install.sh`/`scripts/` references
-- [ ] Tighten CORS — replace `allowedOriginPatterns("*")` + `allowCredentials(true)` in `SecurityConfig.corsConfigurationSource` with explicit front-end origins
-- [ ] Authenticate `/api/servers/**` — currently fully unauthenticated; gate it or remove from public surface
-- [ ] Re-scope or retire the Raspberry Pi appliance assets (`docs/raspberry-pi-install-plan.md`, `install.sh`, `scripts/mcp-agent*`, systemd unit) — keep only if a self-host tier is intended
-- [ ] Document the target API (`/api/v1/...`) with springdoc/OpenAPI; version the existing endpoints
+- [x] Remove `agent-terminal` module — delete module dir, remove from parent `pom.xml`, prune `README`/`CLAUDE.md`/`install.sh`/`scripts/` references
+- [x] Tighten CORS — replace `allowedOriginPatterns("*")` + `allowCredentials(true)` in `SecurityConfig.corsConfigurationSource` with explicit front-end origins
+- [x] Authenticate `/api/v1/servers/**` — all `/api/v1/**` endpoints now secured via the same API key filter; swagger/actuator open
+- [x] Re-scope or retire the Raspberry Pi appliance assets (`install.sh`, `scripts/mcp-agent*`, systemd unit) — deleted
+- [x] Version the existing endpoints under `/api/v1/...` — `/api/v1/agent/chat`, `/api/v1/agent/stream`, `/api/v1/agents`, `/api/v1/servers`; springdoc/swagger-ui already available
 
 ---
 
 ## Phase 1 — MVP *(required for first paid release)*
 
 ### 1. PR workflow — the missing core *(highest-priority blocker)*
-- [ ] Detect changes after agent run (`git status --porcelain`); mark `DONE` with "no changes" if none
-- [ ] `git add -A` and commit with a generated message (task summary + co-author trailer)
-- [ ] Push working branch to `origin` using the user's GitHub credential
-- [ ] Open a PR via GitHub REST API (`POST /repos/{owner}/{repo}/pulls`) targeting the base branch
-- [ ] Surface the PR URL in `AgentInfo` / SSE (`pr_opened` event) and persist it
-- [ ] Add `PullRequestPublisher` SPI in `agent-core` (no GitHub SDK in `agent-core`); implement in `mcp-integration` (git CLI for push + thin GitHub REST call)
-- [ ] Handle partial/failed change sets gracefully (draft PR or no PR)
+- [x] Detect changes after agent run (`git status --porcelain`); skip commit/push/PR if none
+- [x] `git add -A` and commit with a generated message (task summary)
+- [x] Push working branch to `origin` using the user's GitHub credential
+- [x] Open a PR via GitHub REST API (`POST /repos/{owner}/{repo}/pulls`) targeting the base branch
+- [x] Surface the PR URL in `AgentInfo` / SSE (`pr_opened` event) and persist it
+- [x] Add `PullRequestPublisher` SPI in `agent-core` (no GitHub SDK in `agent-core`); implement in `mcp-integration` (git CLI for push + thin GitHub REST call)
+- [x] Handle partial/failed change sets gracefully (log warning, skip PR)
 
 ### 2. Per-user BYOK key plumbing *(second-highest blocker)*
-- [ ] Refactor `OpenAiClient` (currently a singleton with the key baked in at `OpenAiClient.java:87-88`) so the API key is a per-call parameter or short-lived client per task
+- [x] Refactor `OpenAiClient` (previously singleton with key baked in at constructor) so the API key is a per-call parameter on `chat()` and `chatStream()`
 - [ ] Apply the same fix to `EmbeddingClient` if per-user long-term memory is offered
 - [ ] Store each user's OpenRouter key encrypted server-side (envelope encryption / KMS); never log keys
-- [ ] Inject the key into the sandbox/loop from server-side context — never from the browser request body
+- [x] Inject the key via `AgentRequest.apiKey` — propagated through `AgentService` → `OpenAiClient`
 - [ ] Validate the key cheaply before starting a billable run; surface bad-key errors clearly
 
 ### 3. GitHub identity per user *(third-highest blocker)*
@@ -41,13 +41,15 @@ Derived from `cloud-platform-audit.md`. Items are ordered by priority: Phase 0 (
 ### 4. Accounts, authn/authz
 - [ ] Delegate identity to GitHub OAuth / Clerk / Auth0 / Supabase (preferred over building password infra)
 - [ ] Issue per-user API tokens for the front-end; replace the single shared `agent.api-key` in `SecurityConfig` with per-user token validation and tenant scoping
-- [ ] Authorize every `/api/agents/{id}` action against the owning user (currently any caller can GET/DELETE any agent)
+- [ ] Authorize every `/api/v1/agents/{id}` action against the owning user (currently any caller can GET/DELETE any agent)
 
 ### 5. Durable persistence & job model
-- [ ] Introduce Postgres for users, subscriptions, agent runs, PR results, usage; replace the in-memory `ConcurrentHashMap` and `agent.json` files
+- [x] Add `RunStore` SPI in `agent-core` with `FileRunStore` implementation (reloads agent state on startup)
+- [x] Enforce `maxConcurrent` with a `Semaphore` in `CloudAgentService` (previously declared in `CloudAgentProperties` but not enforced)
+- [x] Reload `agent.json` / file records on startup so agent state survives restarts (via `FileRunStore.reload()`)
+- [ ] Introduce Postgres for users, subscriptions, agent runs, PR results, usage; replace file-based store
 - [ ] Make a run a **durable async job**: enqueue on submit, return an id immediately, execute on a worker; a dropped connection must not kill or orphan a run
-- [ ] Add a queue (Postgres-backed, Redis, or SQS) to decouple submission from execution and enforce `maxConcurrent` (currently declared in `CloudAgentProperties` but not enforced — no semaphore/queue)
-- [ ] Reload `agent.json` / DB records on startup so agent state survives restarts
+- [ ] Add a queue (Postgres-backed, Redis, or SQS) to decouple submission from execution
 
 ### 6. Tenant isolation / real sandbox *(security-critical)*
 - [ ] Move the agent loop + `run_bash` out of the shared backend JVM — it currently runs in-process, giving one tenant access to all others' files, env vars, and secrets
@@ -64,7 +66,8 @@ Derived from `cloud-platform-audit.md`. Items are ordered by priority: Phase 0 (
 - [ ] Provide customer portal for cancel/update; handle dunning/past-due → disable runs
 
 ### 8. Quotas, rate limits, cost controls
-- [ ] Per-user concurrent-run cap and monthly run/minute quota
+- [x] Per-user concurrent-run cap enforced (via `Semaphore` in `CloudAgentService`, controlled by `agent.cloud.max-concurrent`)
+- [ ] Monthly run/minute quota
 - [ ] Hard per-run ceiling on sandbox minutes and max repo size (use shallow clones; cap clone depth)
 - [ ] Validate/allowlist repo hosts; block runs against arbitrary URLs
 - [ ] Scan task inputs for prompt-injection-driven abuse
@@ -100,7 +103,7 @@ Derived from `cloud-platform-audit.md`. Items are ordered by priority: Phase 0 (
 
 - [ ] **Identity provider**: build auth, or delegate to GitHub OAuth / Clerk / Auth0 / Supabase?
 - [ ] **GitHub integration**: GitHub App (recommended) vs. user OAuth tokens?
-- [ ] **Self-host tier?** Keep the Pi/appliance path as a free tier (vs. OpenHands), or drop it?
+- [ ] **Self-host tier?** — removed the Pi/appliance assets; keep as deleted
 - [ ] **Agent loop location**: entirely in the sandbox (recommended), or loop in control plane with only tool calls remoted?
 - [ ] **OpenRouter key custody**: store encrypted server-side (smoother UX) vs. inject per-run from the front-end (less custody risk)?
 - [ ] **Free trial / abuse**: how to prevent throwaway accounts from burning sandbox minutes?

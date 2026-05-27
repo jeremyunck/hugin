@@ -23,19 +23,19 @@ import java.util.concurrent.ExecutorService;
  * REST API for cloud agents.
  *
  * <pre>
- * POST   /api/agents           create + run a cloud agent (streams SSE like /api/agent/stream)
- * GET    /api/agents           list all known agents + status
- * GET    /api/agents/{id}      get one agent's metadata
- * DELETE /api/agents/{id}      stop + delete the agent directory
+ * POST   /api/v1/agents           create + run a cloud agent (streams SSE)
+ * GET    /api/v1/agents           list all known agents + status
+ * GET    /api/v1/agents/{id}      get one agent's metadata
+ * DELETE /api/v1/agents/{id}      stop + delete the agent directory
  * </pre>
  */
 @RestController
-@RequestMapping("/api/agents")
+@RequestMapping("/api/v1/agents")
 public class CloudAgentController {
 
     private static final Logger log = LoggerFactory.getLogger(CloudAgentController.class);
 
-    /** Request body for {@code POST /api/agents}. */
+    /** Request body for {@code POST /api/v1/agents}. */
     public record CreateAgentRequest(
             String repoUrl,
             String task,
@@ -75,8 +75,9 @@ public class CloudAgentController {
             }
 
             final String agentId = info.id();
+            final String baseBranch = req.branch() != null ? req.branch() : "main";
             try {
-                cloudAgentService.run(agentId, req.model(), new AgentStreamListener() {
+                cloudAgentService.run(agentId, req.model(), baseBranch, new AgentStreamListener() {
                     @Override
                     public void onContent(String delta) {
                         send(emitter, "token", Map.of("text", delta));
@@ -90,6 +91,11 @@ public class CloudAgentController {
                     @Override
                     public void onToolResult(String toolName, String result) {
                         send(emitter, "tool_result", Map.of("name", toolName, "result", result));
+                    }
+
+                    @Override
+                    public void onPrOpened(String prUrl) {
+                        send(emitter, "pr_opened", Map.of("url", prUrl));
                     }
                 });
                 send(emitter, "done", Map.of("id", agentId));

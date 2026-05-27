@@ -16,4 +16,7 @@ public interface AgentStreamListener {
 
     /** A tool call finished; {@code result} is what will be fed back to the model. */
     default void onToolResult(String toolName, String result) {}
+
+    /** A pull request was opened after the agent finished. */
+    default void onPrOpened(String prUrl) {}
 }

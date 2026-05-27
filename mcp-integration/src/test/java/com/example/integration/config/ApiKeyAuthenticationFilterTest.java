@@ -28,8 +28,8 @@ class ApiKeyAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         filter = new ApiKeyAuthenticationFilter(API_KEY);
-        request = new MockHttpServletRequest("POST", "/api/agent/chat");
-        request.setServletPath("/api/agent/chat");
+        request = new MockHttpServletRequest("POST", "/api/v1/agent/chat");
+        request.setServletPath("/api/v1/agent/chat");
         response = new MockHttpServletResponse();
         SecurityContextHolder.clearContext();
     }

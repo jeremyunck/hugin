@@ -42,13 +42,13 @@ class McpServerControllerTest {
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/servers
+    // GET /api/v1/servers
     // -------------------------------------------------------------------------
 
     @Test
     void listServersReturnsEmptyList() throws Exception {
         when(registry.listServers()).thenReturn(List.of());
-        mockMvc.perform(get("/api/servers"))
+        mockMvc.perform(get("/api/v1/servers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(0));
@@ -60,7 +60,7 @@ class McpServerControllerTest {
         ServerInfo info = new ServerInfo("fs", def, true, null, List.of());
         when(registry.listServers()).thenReturn(List.of(info));
 
-        mockMvc.perform(get("/api/servers"))
+        mockMvc.perform(get("/api/v1/servers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -69,7 +69,7 @@ class McpServerControllerTest {
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/servers/{name}
+    // GET /api/v1/servers/{name}
     // -------------------------------------------------------------------------
 
     @Test
@@ -78,7 +78,7 @@ class McpServerControllerTest {
         ServerInfo info = new ServerInfo("fs", def, true, null, List.of());
         when(registry.getServer("fs")).thenReturn(info);
 
-        mockMvc.perform(get("/api/servers/fs"))
+        mockMvc.perform(get("/api/v1/servers/fs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("fs"))
                 .andExpect(jsonPath("$.connected").value(true));
@@ -88,13 +88,13 @@ class McpServerControllerTest {
     void getServerReturns404WhenNotFound() throws Exception {
         when(registry.getServer("missing")).thenThrow(new NoSuchElementException("Server not found: missing"));
 
-        mockMvc.perform(get("/api/servers/missing"))
+        mockMvc.perform(get("/api/v1/servers/missing"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("Server not found: missing"));
     }
 
     // -------------------------------------------------------------------------
-    // PUT /api/servers/{name}
+    // PUT /api/v1/servers/{name}
     // -------------------------------------------------------------------------
 
     @Test
@@ -103,7 +103,7 @@ class McpServerControllerTest {
         ServerInfo info = new ServerInfo("fs", def, true, null, List.of());
         when(registry.addServer(eq("fs"), any())).thenReturn(info);
 
-        mockMvc.perform(put("/api/servers/fs")
+        mockMvc.perform(put("/api/v1/servers/fs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(def)))
                 .andExpect(status().isOk())
@@ -116,7 +116,7 @@ class McpServerControllerTest {
         ServerInfo info = new ServerInfo("remote", def, false, "connection refused", null);
         when(registry.addServer(eq("remote"), any())).thenReturn(info);
 
-        mockMvc.perform(put("/api/servers/remote")
+        mockMvc.perform(put("/api/v1/servers/remote")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(def)))
                 .andExpect(status().isOk())
@@ -125,14 +125,14 @@ class McpServerControllerTest {
     }
 
     // -------------------------------------------------------------------------
-    // DELETE /api/servers/{name}
+    // DELETE /api/v1/servers/{name}
     // -------------------------------------------------------------------------
 
     @Test
     void removeServerReturnsOkWithMessage() throws Exception {
         doNothing().when(registry).removeServer("fs");
 
-        mockMvc.perform(delete("/api/servers/fs"))
+        mockMvc.perform(delete("/api/v1/servers/fs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Server 'fs' removed"));
     }
@@ -142,13 +142,13 @@ class McpServerControllerTest {
         doThrow(new NoSuchElementException("Server not found: ghost"))
                 .when(registry).removeServer("ghost");
 
-        mockMvc.perform(delete("/api/servers/ghost"))
+        mockMvc.perform(delete("/api/v1/servers/ghost"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("Server not found: ghost"));
     }
 
     // -------------------------------------------------------------------------
-    // POST /api/servers/{name}/reconnect
+    // POST /api/v1/servers/{name}/reconnect
     // -------------------------------------------------------------------------
 
     @Test
@@ -157,7 +157,7 @@ class McpServerControllerTest {
         ServerInfo info = new ServerInfo("fs", def, true, null, List.of());
         when(registry.reconnect("fs")).thenReturn(info);
 
-        mockMvc.perform(post("/api/servers/fs/reconnect"))
+        mockMvc.perform(post("/api/v1/servers/fs/reconnect"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("fs"))
                 .andExpect(jsonPath("$.connected").value(true));
@@ -167,13 +167,13 @@ class McpServerControllerTest {
     void reconnectReturns404WhenServerUnknown() throws Exception {
         when(registry.reconnect("nope")).thenThrow(new NoSuchElementException("Server not found: nope"));
 
-        mockMvc.perform(post("/api/servers/nope/reconnect"))
+        mockMvc.perform(post("/api/v1/servers/nope/reconnect"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").exists());
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/servers/{name}/tools
+    // GET /api/v1/servers/{name}/tools
     // -------------------------------------------------------------------------
 
     @Test
@@ -184,7 +184,7 @@ class McpServerControllerTest {
         );
         when(registry.listTools("fs")).thenReturn(tools);
 
-        mockMvc.perform(get("/api/servers/fs/tools"))
+        mockMvc.perform(get("/api/v1/servers/fs/tools"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2))
@@ -197,7 +197,7 @@ class McpServerControllerTest {
         when(registry.listTools("fs"))
                 .thenThrow(new IllegalStateException("Server 'fs' is not connected"));
 
-        mockMvc.perform(get("/api/servers/fs/tools"))
+        mockMvc.perform(get("/api/v1/servers/fs/tools"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Server 'fs' is not connected"));
     }
@@ -212,7 +212,7 @@ class McpServerControllerTest {
         when(registry.addServer(any(), any()))
                 .thenThrow(new IllegalStateException("conflict situation"));
 
-        mockMvc.perform(put("/api/servers/fs")
+        mockMvc.perform(put("/api/v1/servers/fs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(def)))
                 .andExpect(status().isConflict())
@@ -225,7 +225,7 @@ class McpServerControllerTest {
         when(registry.addServer(any(), any()))
                 .thenThrow(new IllegalArgumentException("'command' is required for stdio servers"));
 
-        mockMvc.perform(put("/api/servers/bad")
+        mockMvc.perform(put("/api/v1/servers/bad")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(def)))
                 .andExpect(status().isBadRequest())
