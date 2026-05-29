@@ -59,6 +59,10 @@ public class DiscordBotService implements DisposableBean {
                     .build();
             jda.awaitReady();
             log.info("Discord bot connected as {}", jda.getSelfUser().getName());
+            jda.getGuilds().forEach(g -> {
+                log.info("Guild: '{}' id={}", g.getName(), g.getId());
+                g.getTextChannels().forEach(c -> log.info("  Channel: #{} id={}", c.getName(), c.getId()));
+            });
             if (!properties.getAllowedChannelIds().isEmpty()) {
                 log.info("Listening on {} guild channel(s)", properties.getAllowedChannelIds().size());
             }
