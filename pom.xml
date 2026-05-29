@@ -23,6 +23,7 @@
         <module>mcp-client</module>
         <module>mcp-integration</module>
         <module>agent-terminal</module>
+        <module>agent-discord</module>
     </modules>
 
     <properties>
