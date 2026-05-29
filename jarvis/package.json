@@ -1,0 +1,14 @@
+{
+  "name": "jarvis-agent",
+  "version": "0.1.0",
+  "description": "CLI for the Jarvis MCP Agent server and terminal",
+  "bin": {
+    "jarvis": "./bin/jarvis.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
+}
