@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,11 +26,13 @@ class LocalToolsExtendedTest {
 
     private Workspace workspace;
     private LocalToolProperties properties;
+    private PathDenyList noDenyList;
 
     @BeforeEach
     void setUp() {
-        properties = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 100);
+        properties = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 100, List.of());
         workspace = new Workspace(properties);
+        noDenyList = new PathDenyList(properties);
     }
 
     // ------------------------------------------------------------------
@@ -89,7 +92,7 @@ class LocalToolsExtendedTest {
     @Test
     void readEmptyFileReturnsPlaceholder() throws Exception {
         Files.writeString(tmp.resolve("empty.txt"), "");
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         String result = read.execute(Map.of("path", "empty.txt"));
 
@@ -98,7 +101,7 @@ class LocalToolsExtendedTest {
 
     @Test
     void readNonExistentFileReturnsError() throws Exception {
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         String result = read.execute(Map.of("path", "ghost.txt"));
 
@@ -109,7 +112,7 @@ class LocalToolsExtendedTest {
     @Test
     void readDirectoryReturnsError() throws Exception {
         Files.createDirectories(tmp.resolve("adir"));
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         String result = read.execute(Map.of("path", "adir"));
 
@@ -122,7 +125,7 @@ class LocalToolsExtendedTest {
         // properties.maxOutputChars() == 100; write 150 chars
         String bigContent = "a".repeat(150);
         Files.writeString(tmp.resolve("big.txt"), bigContent);
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         String result = read.execute(Map.of("path", "big.txt"));
 
@@ -137,7 +140,7 @@ class LocalToolsExtendedTest {
     @Test
     void writeToDirectoryPathReturnsError() throws Exception {
         Files.createDirectories(tmp.resolve("existingdir"));
-        var write = new WriteFileTool(workspace);
+        var write = new WriteFileTool(workspace, noDenyList);
 
         String result = write.execute(Map.of("path", "existingdir", "content", "data"));
 

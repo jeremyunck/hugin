@@ -14,10 +14,12 @@ public class ReadFileTool implements LocalTool {
 
     private final Workspace workspace;
     private final int maxChars;
+    private final PathDenyList denyList;
 
-    public ReadFileTool(Workspace workspace, LocalToolProperties properties) {
+    public ReadFileTool(Workspace workspace, LocalToolProperties properties, PathDenyList denyList) {
         this.workspace = workspace;
         this.maxChars = properties.maxOutputChars();
+        this.denyList = denyList;
     }
 
     @Override
@@ -50,7 +52,13 @@ public class ReadFileTool implements LocalTool {
     @Override
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = requiredString(arguments, "path");
-        Path file = ctx.workspace().resolve(requested);
+        Workspace ws = ctx.workspace();
+        Path file = ws.resolve(requested);
+        String relative = ws.relativize(file);
+
+        if (denyList.isDenied(relative)) {
+            return "Error: access to '" + requested + "' is denied by configuration.";
+        }
 
         if (!Files.exists(file)) {
             return "Error: file does not exist: " + requested;

@@ -22,17 +22,19 @@ class LocalToolsTest {
 
     private Workspace workspace;
     private LocalToolProperties properties;
+    private PathDenyList noDenyList;
 
     @BeforeEach
     void setUp() {
-        properties = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000);
+        properties = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000, List.of());
         workspace = new Workspace(properties);
+        noDenyList = new PathDenyList(properties);
     }
 
     @Test
     void writeThenReadRoundTrips() throws Exception {
-        var write = new WriteFileTool(workspace);
-        var read = new ReadFileTool(workspace, properties);
+        var write = new WriteFileTool(workspace, noDenyList);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         String writeResult = write.execute(Map.of("path", "src/Hello.java", "content", "class Hello {}"));
         assertThat(writeResult).contains("Wrote");
@@ -45,7 +47,7 @@ class LocalToolsTest {
     @Test
     void editReplacesUniqueOccurrence() throws Exception {
         Files.writeString(tmp.resolve("a.txt"), "foo bar baz");
-        var edit = new EditFileTool(workspace);
+        var edit = new EditFileTool(workspace, noDenyList);
 
         String result = edit.execute(Map.of(
                 "path", "a.txt", "old_string", "bar", "new_string", "qux"));
@@ -57,7 +59,7 @@ class LocalToolsTest {
     @Test
     void editRejectsAmbiguousMatchUnlessReplaceAll() throws Exception {
         Files.writeString(tmp.resolve("a.txt"), "x x x");
-        var edit = new EditFileTool(workspace);
+        var edit = new EditFileTool(workspace, noDenyList);
 
         String ambiguous = edit.execute(Map.of(
                 "path", "a.txt", "old_string", "x", "new_string", "y"));
@@ -122,7 +124,7 @@ class LocalToolsTest {
 
     @Test
     void pathsEscapingWorkspaceAreRejected() {
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> read.execute(Map.of("path", "../outside.txt")))
@@ -141,7 +143,7 @@ class LocalToolsTest {
             org.junit.jupiter.api.Assumptions.assumeTrue(false, "symlinks unsupported on this platform");
         }
 
-        var read = new ReadFileTool(workspace, properties);
+        var read = new ReadFileTool(workspace, properties, noDenyList);
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> read.execute(Map.of("path", "link/secret.txt")))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -157,7 +159,7 @@ class LocalToolsTest {
             org.junit.jupiter.api.Assumptions.assumeTrue(false, "symlinks unsupported on this platform");
         }
 
-        var write = new WriteFileTool(workspace);
+        var write = new WriteFileTool(workspace, noDenyList);
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> write.execute(Map.of("path", "badlink/file.txt", "content", "x")))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -165,11 +167,87 @@ class LocalToolsTest {
 
     @Test
     void disabledRegistryExposesNoTools() {
-        var disabled = new LocalToolProperties(false, tmp.toString(), Duration.ofSeconds(10), 30_000);
+        var disabled = new LocalToolProperties(false, tmp.toString(), Duration.ofSeconds(10), 30_000, List.of());
         var emptyRegistry = new LocalToolRegistry(
-                List.of(new WriteFileTool(workspace)), disabled);
+                List.of(new WriteFileTool(workspace, noDenyList)), disabled);
 
         assertThat(emptyRegistry.tools()).isEmpty();
         assertThat(emptyRegistry.find("write_file")).isNull();
+    }
+
+    // ------------------------------------------------------------------
+    // Deny list
+    // ------------------------------------------------------------------
+
+    @Test
+    void readFileDeniedByGlobPattern() throws Exception {
+        Files.createDirectories(tmp.resolve("secrets"));
+        Files.writeString(tmp.resolve("secrets/key.pem"), "private key");
+        var denyList = new PathDenyList(
+                new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                        List.of("secrets/**")));
+        var read = new ReadFileTool(workspace, properties, denyList);
+
+        String result = read.execute(Map.of("path", "secrets/key.pem"));
+
+        assertThat(result).startsWith("Error: access to 'secrets/key.pem' is denied");
+        assertThat(Files.readString(tmp.resolve("secrets/key.pem"))).isEqualTo("private key");
+    }
+
+    @Test
+    void writeFileDeniedByGlobPattern() throws Exception {
+        var denyList = new PathDenyList(
+                new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                        List.of("**/.env")));
+        var write = new WriteFileTool(workspace, denyList);
+
+        String result = write.execute(Map.of("path", ".env", "content", "SECRET=1"));
+
+        assertThat(result).startsWith("Error: access to '.env' is denied");
+        assertThat(Files.exists(tmp.resolve(".env"))).isFalse();
+    }
+
+    @Test
+    void editFileDeniedByGlobPattern() throws Exception {
+        Files.writeString(tmp.resolve("config.yml"), "key: value");
+        var denyList = new PathDenyList(
+                new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                        List.of("*.yml")));
+        var edit = new EditFileTool(workspace, denyList);
+
+        String result = edit.execute(Map.of(
+                "path", "config.yml", "old_string", "key: value", "new_string", "key: hacked"));
+
+        assertThat(result).startsWith("Error: access to 'config.yml' is denied");
+        assertThat(Files.readString(tmp.resolve("config.yml"))).isEqualTo("key: value");
+    }
+
+    @Test
+    void denyListDoesNotBlockNonMatchingPaths() throws Exception {
+        var denyList = new PathDenyList(
+                new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                        List.of("secrets/**")));
+        var write = new WriteFileTool(workspace, denyList);
+        var read = new ReadFileTool(workspace, properties, denyList);
+
+        String writeResult = write.execute(Map.of("path", "safe.txt", "content", "ok"));
+        assertThat(writeResult).contains("Wrote");
+
+        String readResult = read.execute(Map.of("path", "safe.txt"));
+        assertThat(readResult).isEqualTo("ok");
+    }
+
+    @Test
+    void denyPatternMatchesNestedPaths() throws Exception {
+        Files.createDirectories(tmp.resolve("secrets/nested"));
+        Files.writeString(tmp.resolve("secrets/nested/key.pem"), "nested key");
+        var denyList = new PathDenyList(
+                new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                        List.of("secrets/**")));
+        var read = new ReadFileTool(workspace, properties, denyList);
+
+        String result = read.execute(Map.of("path", "secrets/nested/key.pem"));
+
+        assertThat(result).startsWith("Error: access to 'secrets/nested/key.pem' is denied");
     }
 }

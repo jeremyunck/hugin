@@ -13,9 +13,11 @@ import java.util.Map;
 public class WriteFileTool implements LocalTool {
 
     private final Workspace workspace;
+    private final PathDenyList denyList;
 
-    public WriteFileTool(Workspace workspace) {
+    public WriteFileTool(Workspace workspace, PathDenyList denyList) {
         this.workspace = workspace;
+        this.denyList = denyList;
     }
 
     @Override
@@ -55,6 +57,11 @@ public class WriteFileTool implements LocalTool {
         String content = presentString(arguments, "content");
         Workspace ws = ctx.workspace();
         Path file = ws.resolve(requested);
+        String relative = ws.relativize(file);
+
+        if (denyList.isDenied(relative)) {
+            return "Error: access to '" + requested + "' is denied by configuration.";
+        }
 
         if (Files.isDirectory(file)) {
             return "Error: path is a directory, not a file: " + requested;
@@ -65,6 +72,6 @@ public class WriteFileTool implements LocalTool {
             Files.createDirectories(parent);
         }
         Files.writeString(file, content);
-        return "Wrote " + content.length() + " characters to " + ws.relativize(file);
+        return "Wrote " + content.length() + " characters to " + relative;
     }
 }

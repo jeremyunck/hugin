@@ -13,9 +13,11 @@ import java.util.Map;
 public class EditFileTool implements LocalTool {
 
     private final Workspace workspace;
+    private final PathDenyList denyList;
 
-    public EditFileTool(Workspace workspace) {
+    public EditFileTool(Workspace workspace, PathDenyList denyList) {
         this.workspace = workspace;
+        this.denyList = denyList;
     }
 
     @Override
@@ -72,6 +74,12 @@ public class EditFileTool implements LocalTool {
         }
 
         Path file = ws.resolve(requested);
+        String relative = ws.relativize(file);
+
+        if (denyList.isDenied(relative)) {
+            return "Error: access to '" + requested + "' is denied by configuration.";
+        }
+
         if (!Files.exists(file)) {
             return "Error: file does not exist: " + requested;
         }
@@ -95,7 +103,7 @@ public class EditFileTool implements LocalTool {
         Files.writeString(file, updated);
 
         int replaced = replaceAll ? occurrences : 1;
-        return "Edited " + ws.relativize(file) + " (" + replaced
+        return "Edited " + relative + " (" + replaced
                 + (replaced == 1 ? " replacement)." : " replacements).");
     }
 

@@ -120,6 +120,10 @@ agent:
     bash-timeout: 30s
     # Cap on the size (characters) of any single tool result returned to the model.
     max-output-chars: 30000
+    # Glob patterns (relative to workspace-root) that read_file, write_file, and edit_file
+    # will refuse to access. Patterns follow Java glob syntax; ** matches across directories.
+    # Examples:  **/.env  secrets/**  **/*.key  .git/**
+    deny-list: []
 
 management:
   endpoints:

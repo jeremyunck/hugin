@@ -51,7 +51,7 @@ class AgentServiceTest {
 
     private static LocalToolRegistry registry(LocalTool... tools) {
         return new LocalToolRegistry(List.of(tools),
-                new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000));
+                new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000, List.of()));
     }
 
     @BeforeEach
@@ -62,7 +62,7 @@ class AgentServiceTest {
     }
 
     private static WorkspaceRegistry defaultRegistry() {
-        var props = new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000);
+        var props = new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000, List.of());
         return new WorkspaceRegistry(new Workspace(props));
     }
 
