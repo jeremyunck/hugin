@@ -1,33 +1,36 @@
 
 
-![mcp-client banner](img/readme_banner.png)
+![Hugin banner](img/readme_banner.png)
 
-# mcp-client
+# Hugin
 
-A Spring Boot AI agent that connects to [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers and lets an OpenAI-schema LLM use their tools to answer prompts. The LLM backend is pluggable — point it at a local [Ollama](https://ollama.com) instance or a hosted provider such as [OpenRouter](https://openrouter.ai) (see [LLM provider](#llm-provider)).
+Hugin is an AI personal assistant built on Spring Boot that connects to [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers and lets an OpenAI-schema LLM use their tools to answer prompts. The LLM backend is pluggable — point it at any hosted provider such as [OpenRouter](https://openrouter.ai) (see [LLM provider](#llm-provider)).
 
-## Install (Ollama-style)
+## Getting started
 
-The quickest way to run the agent as a persistent appliance on any Debian/Ubuntu machine is the interactive installer. It mirrors the Ollama experience: one install command, then a single `mcp-agent` command to chat.
+Clone the repo and install the Hugin CLI:
 
 ```bash
-# 1. Clone the repo (if you haven't already)
 git clone https://github.com/jeremyunck/mcp-client.git && cd mcp-client
-
-# 2. Run the interactive installer once
-./install.sh
+npm install -g .
 ```
 
-The installer will:
+Then run the interactive setup:
+
+```bash
+hugin onboard
+```
+
+Onboarding will:
 - Install Java 21 (Temurin), git, Maven, and Python 3 if missing
 - Prompt for your **OpenRouter API key** (required — used for LLM + web search)
 - Prompt for a **Redis host** for long-term memory (leave blank to skip)
-- Build the fat jars, create `~/.mcp-agent/`, and register a **systemd service** that starts on boot
+- Build the fat jars, create `~/.hugin/`, and register a **systemd service** that starts on boot
 
 From then on, one command opens the chat:
 
 ```bash
-mcp-agent        # starts the service if needed, waits for health, opens terminal
+hugin        # starts the service if needed, waits for health, opens terminal
 ```
 
 The agent server is always available on **`:8080`** for direct API access too:
@@ -38,57 +41,27 @@ curl -X POST http://localhost:8080/api/agent/chat \
   -d '{"prompt": "What can you do?"}'
 ```
 
-Other `mcp-agent` subcommands:
+## Commands
 
 | Command | Description |
 |---|---|
-| `mcp-agent serve` | Run the server in the foreground (no systemd) |
-| `mcp-agent start / stop / restart / status` | Manage the background service |
-| `mcp-agent logs` | Stream service logs (`journalctl -f`) |
-| `mcp-agent config` | Re-prompt for API key / Redis, restart service |
-| `mcp-agent uninstall` | Remove service + launcher (prompts before deleting `~/.mcp-agent`) |
+| `hugin` | Ensure server is running, then open terminal chat |
+| `hugin onboard` | Run the interactive setup wizard |
+| `hugin server run` | Run the server in the foreground (no systemd) |
+| `hugin server start / stop / restart / status` | Manage the background service |
+| `hugin server logs` | Stream service logs (`journalctl -f`) |
+| `hugin terminal` | Launch the terminal client directly |
+| `hugin serve` | Run the server in the foreground (no systemd) |
+| `hugin config` | Re-prompt for API key / Redis, restart service |
+| `hugin doctor` | Health-check every subsystem; auto-fix what it can |
+| `hugin uninstall` | Remove service + launcher (prompts before deleting `~/.hugin`) |
 
-## jarvis CLI (npm)
-
-After running `./install.sh`, you can optionally install a `jarvis` npm package that wraps the same jars with a more ergonomic subcommand interface — useful if you prefer `jarvis server start` over remembering `mcp-agent` subcommands, or if you want the command available in environments where npm is the primary package manager.
-
-**Requirements:** Node 18+ and a completed `./install.sh` run (the jars must exist in `~/.mcp-agent/bin/`).
-
-```bash
-# Install globally from the repo
-npm install -g ./jarvis
-
-# Then use from anywhere:
-jarvis                    # start server if needed, open terminal chat
-jarvis server start       # start the background service
-jarvis server stop        # stop the background service
-jarvis server restart     # restart the background service
-jarvis server status      # show service status
-jarvis server logs        # stream logs (journalctl -f)
-jarvis server run         # run the server in the foreground (no systemd)
-jarvis terminal           # launch the interactive terminal client
-```
-
-| Command | Description |
-|---|---|
-| `jarvis` | Ensure server is running, then open terminal chat |
-| `jarvis server run` | Run the server in the foreground (no systemd) |
-| `jarvis server start / stop / restart / status` | Manage the systemd service |
-| `jarvis server logs` | Stream service logs (`journalctl -f`) |
-| `jarvis terminal` | Launch the terminal client directly |
-
-Set `AGENT_HOME` to override the default install location (`~/.mcp-agent`).
+Set `AGENT_HOME` to override the default install location (`~/.hugin`).
 
 ## Prerequisites
 
 - **Java 21** and **Maven**
-- An **OpenAI-compatible LLM endpoint** with a tool-calling model. Either:
-  - **[Ollama](https://ollama.com)** running locally (no API key):
-    ```bash
-    ollama pull llama3.2
-    ollama serve            # exposes http://localhost:11434
-    ```
-  - or a hosted provider like **[OpenRouter](https://openrouter.ai)** (recommended for cloud/CI environments — set `OPEN_ROUTER_API_KEY`).
+- An **OpenAI-compatible LLM endpoint** with a tool-calling model. [OpenRouter](https://openrouter.ai) is recommended — set `OPEN_ROUTER_API_KEY`.
 - Runtimes for the MCP servers you configure. The default `mcp-servers.json` uses:
   - `uvx` ([uv](https://docs.astral.sh/uv/)) for the time server
   - `python3` for the web search server (when `search.provider=openrouter`, the default)
@@ -157,12 +130,12 @@ The server starts on **port 8080**. `agent-core` and `mcp-client` are libraries.
 
 ## Docker
 
-Build and run the agent server as a container. The image bundles the Spring Boot server and the Python 3 runtime for the OpenRouter web-search MCP server. No Ollama or other local LLM is required — the default configuration talks to OpenRouter over HTTPS.
+Build and run the agent server as a container. The image bundles the Spring Boot server and the Python 3 runtime for the OpenRouter web-search MCP server. The default configuration talks to OpenRouter over HTTPS.
 
 ### Build the image
 
 ```bash
-docker build -t mcp-client .
+docker build -t hugin .
 ```
 
 ### Run with `docker run`
@@ -170,7 +143,7 @@ docker build -t mcp-client .
 ```bash
 docker run -p 8080:8080 \
   -e OPEN_ROUTER_API_KEY=sk-or-v1-... \
-  mcp-client
+  hugin
 ```
 
 | Environment variable | Description | Default |
@@ -253,7 +226,7 @@ Send a prompt to the agent (non-streaming):
 ```bash
 curl -X POST http://localhost:8080/api/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
+  -d '{"prompt": "What time is it in Tokyo?"}'
 ```
 
 Or stream the response as Server-Sent Events (this is what the terminal uses):
@@ -262,10 +235,10 @@ Or stream the response as Server-Sent Events (this is what the terminal uses):
 curl -N -X POST http://localhost:8080/api/agent/stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
-  -d '{"prompt": "What time is it in Tokyo?", "model": "llama3.2"}'
+  -d '{"prompt": "What time is it in Tokyo?"}'
 ```
 
-`model` is optional and falls back to `llm.model` from configuration. Use a model name valid for the active provider (e.g. `llama3.2` for Ollama, `deepseek/deepseek-chat` for OpenRouter).
+`model` is optional and falls back to `llm.model` from configuration.
 
 Manage MCP servers at runtime:
 
@@ -281,18 +254,15 @@ The agent talks to any OpenAI-schema `/chat/completions` endpoint. Providers are
 
 ```yaml
 llm:
-  provider: openrouter              # or "ollama" for a local instance
+  provider: openrouter
   model: openai/gpt-oss-120b        # default model for the active provider
   providers:
-    ollama:
-      base-url: http://localhost:11434/v1   # no api-key → no auth header sent
     openrouter:
       base-url: https://openrouter.ai/api/v1
       api-key: ${OPEN_ROUTER_API_KEY:}       # sent as Authorization: Bearer <key>
 ```
 
-- **Ollama** has no `api-key`, so requests are sent without an `Authorization` header.
-- **OpenRouter** authenticates with an `Authorization: Bearer <api-key>` header ([OpenRouter auth docs](https://openrouter.ai/docs/api/reference/authentication)). Provide the key via the `OPEN_ROUTER_API_KEY` environment variable and set `llm.provider: openrouter` (also pick an OpenRouter `model`, e.g. `openai/gpt-oss-120b`).
+**OpenRouter** authenticates with an `Authorization: Bearer <api-key>` header ([OpenRouter auth docs](https://openrouter.ai/docs/api/reference/authentication)). Provide the key via the `OPEN_ROUTER_API_KEY` environment variable.
 
 To add another OpenAI-compatible provider, add an entry under `llm.providers` with its `base-url` and (optionally) `api-key`, then point `llm.provider` at it.
 
@@ -335,8 +305,6 @@ Similarity search runs in-process (cosine similarity over the stored vectors), s
    export OPEN_ROUTER_API_KEY=sk-or-v1-...
    ```
 
-   (The embedding endpoint is configured independently of the chat LLM — you can embed via OpenRouter while chatting against a local Ollama model.)
-
 3. **Enable memory** when starting the server:
 
    ```bash
@@ -367,7 +335,7 @@ spring:
       port: ${REDIS_PORT:6379}
 ```
 
-To use a different embedding model, set `embedding.model` (or the `EMBEDDING_MODEL` env var) — for example a local Ollama embedding model by also pointing `embedding.base-url` at `http://localhost:11434/v1`. Embedding and store failures are non-fatal: if Redis or the embedding endpoint is unavailable the agent logs a warning and continues without memory.
+To use a different embedding model, set `embedding.model` (or the `EMBEDDING_MODEL` env var). Embedding and store failures are non-fatal: if Redis or the embedding endpoint is unavailable the agent logs a warning and continues without memory.
 
 ## Configuration
 
@@ -375,8 +343,8 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 
 | Key | Description | Default |
 | --- | --- | --- |
-| `llm.provider` | Active provider; must match a key under `llm.providers` | `ollama` |
-| `llm.model` | Default model when a request omits one (must support tool calling) | `qwen-coder-3:latest` |
+| `llm.provider` | Active provider; must match a key under `llm.providers` | `openrouter` |
+| `llm.model` | Default model when a request omits one (must support tool calling) | `openai/gpt-oss-120b` |
 | `llm.providers.<name>.base-url` | OpenAI-compatible API root (the part before `/chat/completions`) | _(per provider)_ |
 | `llm.providers.<name>.api-key` | Optional; when set, sent as `Authorization: Bearer <key>` | _(blank)_ |
 | `mcp.config-file` | Path to the MCP servers JSON (supports `~/`) | `./mcp-servers.json` |

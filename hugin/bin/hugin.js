@@ -8,26 +8,26 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const AGENT_HOME = process.env.AGENT_HOME ?? path.join(os.homedir(), '.mcp-agent');
+const AGENT_HOME = process.env.AGENT_HOME ?? path.join(os.homedir(), '.hugin');
 const SERVER_JAR = path.join(AGENT_HOME, 'bin', 'mcp-integration.jar');
 const TERMINAL_JAR = path.join(AGENT_HOME, 'bin', 'agent-terminal.jar');
 const CONFIG_YML = path.join(AGENT_HOME, 'config', 'application.yml');
 
 const installed = () => existsSync(SERVER_JAR);
 const hasSystemd = () => spawnSync('systemctl', ['--version'], { stdio: 'ignore' }).status === 0;
-const hasMcpAgent = () => spawnSync('which', ['mcp-agent'], { stdio: 'ignore' }).status === 0;
+const hasHuginLauncher = () => spawnSync('which', ['hugin'], { stdio: 'ignore' }).status === 0;
 
 function die(msg) {
-  process.stderr.write(`\x1b[31m[jarvis]\x1b[0m ${msg}\n`);
+  process.stderr.write(`\x1b[31m[hugin]\x1b[0m ${msg}\n`);
   process.exit(1);
 }
 
 function info(msg) {
-  process.stdout.write(`\x1b[34m[jarvis]\x1b[0m ${msg}\n`);
+  process.stdout.write(`\x1b[34m[hugin]\x1b[0m ${msg}\n`);
 }
 
 function success(msg) {
-  process.stdout.write(`\x1b[32m[jarvis]\x1b[0m ${msg}\n`);
+  process.stdout.write(`\x1b[32m[hugin]\x1b[0m ${msg}\n`);
 }
 
 // Run a command, inheriting stdio, and exit with its status code.
@@ -46,7 +46,7 @@ function requireInstalled() {
   if (!installed()) {
     die(
       `No installed jars found in ${AGENT_HOME}.\n` +
-      '  Run ./install.sh from the repo root to build and install, or set AGENT_HOME.'
+      '  Run "hugin onboard" to build and install, or set AGENT_HOME.'
     );
   }
 }
@@ -72,9 +72,25 @@ function waitForHealth(timeoutSecs = 30) {
 const program = new Command();
 
 program
-  .name('jarvis')
-  .description('Jarvis MCP Agent CLI')
+  .name('hugin')
+  .description('Hugin AI personal assistant CLI')
   .version('0.1.0');
+
+// ── onboard ───────────────────────────────────────────────────────────────────
+
+program
+  .command('onboard')
+  .description('Run the interactive setup wizard (build, install, configure)')
+  .action(() => {
+    const installScript = path.join(__dirname, '..', '..', 'install.sh');
+    if (!existsSync(installScript)) {
+      die(
+        `install.sh not found at ${installScript}.\n` +
+        '  Make sure you installed from the repo root: npm install -g .'
+      );
+    }
+    sh('bash', [installScript]);
+  });
 
 // ── server subcommands ────────────────────────────────────────────────────────
 
@@ -84,9 +100,9 @@ server
   .command('start')
   .description('Start the agent server via systemd')
   .action(() => {
-    if (!hasSystemd()) die('systemd not found. Use "jarvis server run" to start in the foreground.');
-    if (!hasMcpAgent()) die('mcp-agent launcher not found. Run ./install.sh first.');
-    sh('sudo', ['systemctl', 'start', 'mcp-agent']);
+    if (!hasSystemd()) die('systemd not found. Use "hugin server run" to start in the foreground.');
+    if (!hasHuginLauncher()) die('hugin launcher not found. Run "hugin onboard" first.');
+    sh('sudo', ['systemctl', 'start', 'hugin']);
   });
 
 server
@@ -94,15 +110,15 @@ server
   .description('Stop the agent server via systemd')
   .action(() => {
     if (!hasSystemd()) die('systemd not found.');
-    sh('sudo', ['systemctl', 'stop', 'mcp-agent']);
+    sh('sudo', ['systemctl', 'stop', 'hugin']);
   });
 
 server
   .command('restart')
   .description('Restart the agent server via systemd')
   .action(() => {
-    if (!hasSystemd()) die('systemd not found. Use "jarvis server run" to start in the foreground.');
-    sh('sudo', ['systemctl', 'restart', 'mcp-agent']);
+    if (!hasSystemd()) die('systemd not found. Use "hugin server run" to start in the foreground.');
+    sh('sudo', ['systemctl', 'restart', 'hugin']);
   });
 
 server
@@ -110,7 +126,7 @@ server
   .description('Show agent server service status')
   .action(() => {
     if (!hasSystemd()) die('systemd not found.');
-    sh('systemctl', ['status', 'mcp-agent']);
+    sh('systemctl', ['status', 'hugin']);
   });
 
 server
@@ -118,7 +134,7 @@ server
   .description('Stream agent server logs (journalctl -f)')
   .action(() => {
     if (!hasSystemd()) die('systemd not found. Check your process manager logs manually.');
-    exec('journalctl', ['-u', 'mcp-agent', '-f']);
+    exec('journalctl', ['-u', 'hugin', '-f']);
   });
 
 server
@@ -149,7 +165,7 @@ program
   });
 
 // ── default: smart start ──────────────────────────────────────────────────────
-// "jarvis" with no subcommand: ensure the server is up, then open the terminal.
+// "hugin" with no subcommand: ensure the server is up, then open the terminal.
 
 program.action(async () => {
   requireInstalled();
@@ -157,18 +173,18 @@ program.action(async () => {
   // Check if server is already healthy; if not, try to start it.
   const alreadyUp = await waitForHealth(2);
   if (!alreadyUp) {
-    if (hasMcpAgent() && hasSystemd()) {
-      info('Server not running — starting mcp-agent service...');
-      spawnSync('sudo', ['systemctl', 'start', 'mcp-agent'], { stdio: 'inherit' });
+    if (hasHuginLauncher() && hasSystemd()) {
+      info('Server not running — starting hugin service...');
+      spawnSync('sudo', ['systemctl', 'start', 'hugin'], { stdio: 'inherit' });
     } else {
-      info(`Server not responding. Start it with:\n  jarvis server run`);
+      info(`Server not responding. Start it with:\n  hugin server run`);
       process.exit(1);
     }
 
     info('Waiting for server to become healthy...');
     const healthy = await waitForHealth(30);
     if (!healthy) {
-      die('Server did not become healthy within 30 s. Check: jarvis server logs');
+      die('Server did not become healthy within 30 s. Check: hugin server logs');
     }
     success('Server is ready on http://localhost:8080');
   }

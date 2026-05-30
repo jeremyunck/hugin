@@ -1,0 +1,14 @@
+{
+  "name": "hugin",
+  "version": "0.1.0",
+  "description": "Hugin — AI personal assistant CLI",
+  "bin": {
+    "hugin": "./bin/hugin.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
+}

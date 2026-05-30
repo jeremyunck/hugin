@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
-# install.sh — single-script installer for Jarvis (MCP Agent)
+# install.sh — single-script installer for Hugin (MCP Agent)
 #
 # Usage:
 #   ./install.sh             interactive install / reconfigure
-#   ./install.sh --uninstall remove service, launcher, and optionally ~/.jarvis
+#   ./install.sh --uninstall remove service, launcher, and optionally ~/.hugin
 #
-# All files go under JARVIS_HOME (default ~/.jarvis).
-# Environment variables collected during install are stored in ~/.jarvis/jarvis.env (chmod 600).
-# The agent workspace (file/shell operations) lives at ~/.jarvis/workspace.
+# All files go under HUGIN_HOME (default ~/.hugin).
+# Environment variables collected during install are stored in ~/.hugin/hugin.env (chmod 600).
+# The agent workspace (file/shell operations) lives at ~/.hugin/workspace.
 set -euo pipefail
 
 # ── constants ─────────────────────────────────────────────────────────────────
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.jarvis}"
-SERVICE_NAME="jarvis"
-LAUNCHER_NAME="jarvis"
+HUGIN_HOME="${HUGIN_HOME:-$HOME/.hugin}"
+SERVICE_NAME="hugin"
+LAUNCHER_NAME="hugin"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_USER="$(id -un)"
-ENV_FILE="$JARVIS_HOME/jarvis.env"
-CONFIG_YML="$JARVIS_HOME/config/application.yml"
-MCP_JSON="$JARVIS_HOME/config/mcp-servers.json"
+ENV_FILE="$HUGIN_HOME/hugin.env"
+CONFIG_YML="$HUGIN_HOME/config/application.yml"
+MCP_JSON="$HUGIN_HOME/config/mcp-servers.json"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 LAUNCHER_PATH="/usr/local/bin/${LAUNCHER_NAME}"
 
 # ── colours ───────────────────────────────────────────────────────────────────
-info()    { printf '\033[1;34m[jarvis]\033[0m %s\n' "$*"; }
-success() { printf '\033[1;32m[jarvis]\033[0m %s\n' "$*"; }
-warn()    { printf '\033[1;33m[jarvis]\033[0m %s\n' "$*"; }
-die()     { printf '\033[1;31m[jarvis]\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\033[1;34m[hugin]\033[0m %s\n' "$*"; }
+success() { printf '\033[1;32m[hugin]\033[0m %s\n' "$*"; }
+warn()    { printf '\033[1;33m[hugin]\033[0m %s\n' "$*"; }
+die()     { printf '\033[1;31m[hugin]\033[0m %s\n' "$*" >&2; exit 1; }
 ask()     { printf '\033[1;35m   >\033[0m %s' "$*"; }
 
 require_cmd() { command -v "$1" >/dev/null 2>&1; }
@@ -56,13 +56,13 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   sudo rm -f "$LAUNCHER_PATH"
   success "Service and launcher removed."
 
-  if [[ -d "$JARVIS_HOME" ]]; then
-    ask "Delete $JARVIS_HOME (config + workspace + logs)? [y/N] "; read -r _confirm; echo
+  if [[ -d "$HUGIN_HOME" ]]; then
+    ask "Delete $HUGIN_HOME (config + workspace + logs)? [y/N] "; read -r _confirm; echo
     if [[ "${_confirm,,}" == "y" ]]; then
-      rm -rf "$JARVIS_HOME"
-      success "$JARVIS_HOME deleted."
+      rm -rf "$HUGIN_HOME"
+      success "$HUGIN_HOME deleted."
     else
-      info "Kept $JARVIS_HOME."
+      info "Kept $HUGIN_HOME."
     fi
   fi
   exit 0
@@ -72,9 +72,9 @@ fi
 ALREADY_INSTALLED=false
 SKIP_BUILD=false
 
-if [[ -f "$JARVIS_HOME/bin/mcp-integration.jar" ]]; then
+if [[ -f "$HUGIN_HOME/bin/mcp-integration.jar" ]]; then
   ALREADY_INSTALLED=true
-  warn "Existing Jarvis installation detected at $JARVIS_HOME."
+  warn "Existing Hugin installation detected at $HUGIN_HOME."
   echo
   echo "  1) Reconfigure only  (keep existing jars, update env + config, restart service)"
   echo "  2) Full reinstall    (rebuild jars from source, update everything)"
@@ -90,18 +90,18 @@ if [[ -f "$JARVIS_HOME/bin/mcp-integration.jar" ]]; then
 fi
 
 echo
-info "Jarvis home : $JARVIS_HOME"
-info "Repo root   : $REPO_DIR"
+info "Hugin home : $HUGIN_HOME"
+info "Repo root  : $REPO_DIR"
 echo
 
 # ── 1. directory tree ─────────────────────────────────────────────────────────
 mkdir -p \
-  "$JARVIS_HOME/bin" \
-  "$JARVIS_HOME/config" \
-  "$JARVIS_HOME/venv" \
-  "$JARVIS_HOME/workspace" \
-  "$JARVIS_HOME/logs"
-info "Directory tree ready at $JARVIS_HOME"
+  "$HUGIN_HOME/bin" \
+  "$HUGIN_HOME/config" \
+  "$HUGIN_HOME/venv" \
+  "$HUGIN_HOME/workspace" \
+  "$HUGIN_HOME/logs"
+info "Directory tree ready at $HUGIN_HOME"
 
 # ── 2. system dependencies ────────────────────────────────────────────────────
 need_apt_update=false
@@ -327,9 +327,9 @@ fi
 CLOUD_AGENTS_ENABLED=false
 [[ -n "$GITHUB_TOKEN" ]] && CLOUD_AGENTS_ENABLED=true
 
-# ── 4. write jarvis.env ───────────────────────────────────────────────────────
+# ── 4. write hugin.env ────────────────────────────────────────────────────────
 cat > "$ENV_FILE" <<EOF
-# Jarvis environment — sourced by the systemd service and the jarvis launcher.
+# Hugin environment — sourced by the systemd service and the hugin launcher.
 # Permissions: 600 (owner-read-only).  Do not commit this file.
 
 OPEN_ROUTER_API_KEY=${OPENROUTER_KEY}
@@ -347,8 +347,8 @@ REDIS_PORT=${REDIS_PORT_VAL}
 CLOUD_AGENTS_ENABLED=${CLOUD_AGENTS_ENABLED}
 GITHUB_TOKEN=${GITHUB_TOKEN}
 
-# Jarvis home directory (workspace root is $JARVIS_HOME/workspace)
-AGENT_HOME=${JARVIS_HOME}
+# Hugin home directory (workspace root is $HUGIN_HOME/workspace)
+AGENT_HOME=${HUGIN_HOME}
 EOF
 chmod 600 "$ENV_FILE"
 success "Wrote $ENV_FILE (chmod 600)"
@@ -357,19 +357,19 @@ success "Wrote $ENV_FILE (chmod 600)"
 cat > "$CONFIG_YML" <<EOF
 # Per-installation overrides — merged on top of the bundled application.yml.
 mcp:
-  config-file: ${JARVIS_HOME}/config/mcp-servers.json
+  config-file: ${HUGIN_HOME}/config/mcp-servers.json
 
 search:
-  openrouter-script: ${JARVIS_HOME}/bin/openrouter-search-mcp.py
+  openrouter-script: ${HUGIN_HOME}/bin/openrouter-search-mcp.py
 
 llm:
   model: \${LLM_MODEL:${LLM_MODEL}}
 
 agent:
   api-key: \${AGENT_API_KEY:}
-  home: ${JARVIS_HOME}
+  home: ${HUGIN_HOME}
   tools:
-    workspace-root: ${JARVIS_HOME}/workspace
+    workspace-root: ${HUGIN_HOME}/workspace
   cloud:
     enabled: \${CLOUD_AGENTS_ENABLED:false}
     github-token: \${GITHUB_TOKEN:}
@@ -377,7 +377,7 @@ agent:
 
 logging:
   file:
-    name: ${JARVIS_HOME}/logs/jarvis.log
+    name: ${HUGIN_HOME}/logs/hugin.log
 EOF
 info "Wrote $CONFIG_YML"
 
@@ -396,9 +396,9 @@ fi
 
 # ── 6. python venv for web search ────────────────────────────────────────────
 info "Setting up Python venv for the web-search MCP server..."
-python3 -m venv "$JARVIS_HOME/venv"
-"$JARVIS_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp
-cp "$REPO_DIR/openrouter-search-mcp.py" "$JARVIS_HOME/bin/openrouter-search-mcp.py"
+python3 -m venv "$HUGIN_HOME/venv"
+"$HUGIN_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp
+cp "$REPO_DIR/openrouter-search-mcp.py" "$HUGIN_HOME/bin/openrouter-search-mcp.py"
 info "Python venv ready; openrouter-search-mcp.py copied."
 
 # ── 7. build fat jars ────────────────────────────────────────────────────────
@@ -410,36 +410,36 @@ else
     mvn -f "$REPO_DIR/pom.xml" \
         -pl mcp-integration,agent-terminal -am \
         clean package -DskipTests -q
-  cp "$REPO_DIR"/mcp-integration/target/mcp-integration-*.jar  "$JARVIS_HOME/bin/mcp-integration.jar"
-  cp "$REPO_DIR"/agent-terminal/target/agent-terminal-*.jar     "$JARVIS_HOME/bin/agent-terminal.jar"
-  success "Jars built and copied to $JARVIS_HOME/bin/"
+  cp "$REPO_DIR"/mcp-integration/target/mcp-integration-*.jar  "$HUGIN_HOME/bin/mcp-integration.jar"
+  cp "$REPO_DIR"/agent-terminal/target/agent-terminal-*.jar     "$HUGIN_HOME/bin/agent-terminal.jar"
+  success "Jars built and copied to $HUGIN_HOME/bin/"
 fi
 
-# ── 8. install the jarvis launcher ───────────────────────────────────────────
+# ── 8. install the hugin launcher ────────────────────────────────────────────
 info "Installing $LAUNCHER_NAME launcher to $LAUNCHER_PATH..."
 sudo tee "$LAUNCHER_PATH" > /dev/null <<'LAUNCHER_EOF'
 #!/usr/bin/env bash
-# jarvis — Jarvis agent launcher (installed by install.sh)
+# hugin — Hugin agent launcher (installed by install.sh)
 #
 # Commands:
-#   jarvis [run]    start service if needed, open terminal chat
-#   jarvis serve    run server in the foreground (no systemd)
-#   jarvis start / stop / restart / status / logs
-#   jarvis config   re-prompt for credentials, restart service
-#   jarvis doctor   health-check every subsystem; auto-fix what it can
-#   jarvis uninstall
+#   hugin [run]    start service if needed, open terminal chat
+#   hugin serve    run server in the foreground (no systemd)
+#   hugin start / stop / restart / status / logs
+#   hugin config   re-prompt for credentials, restart service
+#   hugin doctor   health-check every subsystem; auto-fix what it can
+#   hugin uninstall
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-__JARVIS_HOME__}"
-ENV_FILE="$JARVIS_HOME/jarvis.env"
-CONFIG_YML="$JARVIS_HOME/config/application.yml"
+HUGIN_HOME="${HUGIN_HOME:-__HUGIN_HOME__}"
+ENV_FILE="$HUGIN_HOME/hugin.env"
+CONFIG_YML="$HUGIN_HOME/config/application.yml"
 SERVICE_NAME="__SERVICE_NAME__"
 LAUNCHER_PATH="__LAUNCHER_PATH__"
 
-info()    { printf '\033[1;34m[jarvis]\033[0m %s\n' "$*"; }
-success() { printf '\033[1;32m[jarvis]\033[0m %s\n' "$*"; }
-warn()    { printf '\033[1;33m[jarvis]\033[0m %s\n' "$*"; }
-die()     { printf '\033[1;31m[jarvis]\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\033[1;34m[hugin]\033[0m %s\n' "$*"; }
+success() { printf '\033[1;32m[hugin]\033[0m %s\n' "$*"; }
+warn()    { printf '\033[1;33m[hugin]\033[0m %s\n' "$*"; }
+die()     { printf '\033[1;31m[hugin]\033[0m %s\n' "$*" >&2; exit 1; }
 
 load_env() {
   [[ -f "$ENV_FILE" ]] || return 0
@@ -451,7 +451,7 @@ wait_for_health() {
   local max="${1:-45}" elapsed=0
   until curl -sf http://localhost:8080/actuator/health >/dev/null 2>&1; do
     elapsed=$((elapsed + 1))
-    [[ $elapsed -ge $max ]] && { warn "Server did not respond within ${max}s. Try: jarvis logs"; return 1; }
+    [[ $elapsed -ge $max ]] && { warn "Server did not respond within ${max}s. Try: hugin logs"; return 1; }
     sleep 1
   done
 }
@@ -468,12 +468,12 @@ cmd_run() {
   fi
   export AGENT_SERVER_URL="http://localhost:8080"
   [[ -n "${AGENT_API_KEY:-}" ]] && export AGENT_API_KEY
-  exec java -jar "$JARVIS_HOME/bin/agent-terminal.jar"
+  exec java -jar "$HUGIN_HOME/bin/agent-terminal.jar"
 }
 
 cmd_serve() {
   load_env
-  exec java -jar "$JARVIS_HOME/bin/mcp-integration.jar" \
+  exec java -jar "$HUGIN_HOME/bin/mcp-integration.jar" \
     "--spring.config.additional-location=file:${CONFIG_YML}"
 }
 
@@ -560,10 +560,10 @@ REDIS_HOST=${rhost}
 REDIS_PORT=${rport}
 CLOUD_AGENTS_ENABLED=${CLOUD_AGENTS_ENABLED:-false}
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
-AGENT_HOME=${JARVIS_HOME}
+AGENT_HOME=${HUGIN_HOME}
 ENV
   chmod 600 "$ENV_FILE"
-  success "jarvis.env updated."
+  success "hugin.env updated."
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     info "Restarting service..."
     sudo systemctl restart "$SERVICE_NAME"
@@ -583,7 +583,7 @@ cmd_doctor() {
   _dr_fixed() { printf '  \033[1;34m→ [fixed]\033[0m %s\n' "$*"; _fixes=$((_fixes + 1)); }
   _dr_note()  { printf '  \033[1;33m⚠\033[0m %s\n' "$*"; }
 
-  printf '\033[1;34m─── Jarvis Doctor ──────────────────────────────────────────────────────\033[0m\n'
+  printf '\033[1;34m─── Hugin Doctor ───────────────────────────────────────────────────────\033[0m\n'
   echo
 
   # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -596,22 +596,22 @@ cmd_doctor() {
     _dr_fail "Java 21+ not found — required to run jars; re-run install.sh to install"
   fi
 
-  if [[ -x "$JARVIS_HOME/venv/bin/python3" ]]; then
-    if "$JARVIS_HOME/venv/bin/python3" -c "import mcp" 2>/dev/null; then
+  if [[ -x "$HUGIN_HOME/venv/bin/python3" ]]; then
+    if "$HUGIN_HOME/venv/bin/python3" -c "import mcp" 2>/dev/null; then
       _dr_pass "Python venv + mcp package"
     else
       _dr_fail "mcp package missing from venv — attempting reinstall"
-      if "$JARVIS_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp 2>/dev/null; then
+      if "$HUGIN_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp 2>/dev/null; then
         _dr_fixed "mcp package reinstalled in venv"
       else
         _dr_fail "Could not reinstall mcp (check internet access)"
       fi
     fi
   else
-    _dr_fail "Python venv missing at $JARVIS_HOME/venv — attempting rebuild"
+    _dr_fail "Python venv missing at $HUGIN_HOME/venv — attempting rebuild"
     if command -v python3 >/dev/null 2>&1; then
-      if python3 -m venv "$JARVIS_HOME/venv" \
-          && "$JARVIS_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp 2>/dev/null; then
+      if python3 -m venv "$HUGIN_HOME/venv" \
+          && "$HUGIN_HOME/venv/bin/pip" install --no-cache-dir --quiet mcp 2>/dev/null; then
         _dr_fixed "Python venv rebuilt"
       else
         _dr_fail "venv rebuild failed — check python3-venv: sudo apt-get install python3-venv"
@@ -626,11 +626,11 @@ cmd_doctor() {
   printf '\033[1;34m[Files]\033[0m\n'
 
   for _d in bin config venv workspace logs; do
-    if [[ -d "$JARVIS_HOME/$_d" ]]; then
-      _dr_pass "~/.jarvis/$_d/"
+    if [[ -d "$HUGIN_HOME/$_d" ]]; then
+      _dr_pass "~/.hugin/$_d/"
     else
-      mkdir -p "$JARVIS_HOME/$_d"
-      _dr_fixed "Created missing directory ~/.jarvis/$_d/"
+      mkdir -p "$HUGIN_HOME/$_d"
+      _dr_fixed "Created missing directory ~/.hugin/$_d/"
     fi
   done
 
@@ -639,18 +639,18 @@ cmd_doctor() {
                            || stat -f '%OLp' "$ENV_FILE" 2>/dev/null \
                            || echo "unknown")
     if [[ "$_perms" == "600" ]]; then
-      _dr_pass "jarvis.env (permissions 600)"
+      _dr_pass "hugin.env (permissions 600)"
     else
       chmod 600 "$ENV_FILE"
-      _dr_fixed "Fixed jarvis.env permissions ($_perms → 600)"
+      _dr_fixed "Fixed hugin.env permissions ($_perms → 600)"
     fi
     if grep -qE '^OPEN_ROUTER_API_KEY=.+' "$ENV_FILE" 2>/dev/null; then
       _dr_pass "OPEN_ROUTER_API_KEY is set"
     else
-      _dr_fail "OPEN_ROUTER_API_KEY is missing or empty — run: jarvis config"
+      _dr_fail "OPEN_ROUTER_API_KEY is missing or empty — run: hugin config"
     fi
   else
-    _dr_fail "jarvis.env not found at $ENV_FILE — run: jarvis config  or re-run install.sh"
+    _dr_fail "hugin.env not found at $ENV_FILE — run: hugin config  or re-run install.sh"
   fi
 
   if [[ -f "$CONFIG_YML" ]]; then
@@ -659,27 +659,27 @@ cmd_doctor() {
     _dr_fail "config/application.yml not found — re-run install.sh"
   fi
 
-  if [[ -f "$JARVIS_HOME/config/mcp-servers.json" ]]; then
+  if [[ -f "$HUGIN_HOME/config/mcp-servers.json" ]]; then
     _dr_pass "config/mcp-servers.json"
   else
-    printf '{"mcpServers":{}}\n' > "$JARVIS_HOME/config/mcp-servers.json"
+    printf '{"mcpServers":{}}\n' > "$HUGIN_HOME/config/mcp-servers.json"
     _dr_fixed "Created empty mcp-servers.json"
   fi
 
-  if [[ -f "$JARVIS_HOME/bin/mcp-integration.jar" ]]; then
-    local _sz; _sz=$(du -sh "$JARVIS_HOME/bin/mcp-integration.jar" | cut -f1)
+  if [[ -f "$HUGIN_HOME/bin/mcp-integration.jar" ]]; then
+    local _sz; _sz=$(du -sh "$HUGIN_HOME/bin/mcp-integration.jar" | cut -f1)
     _dr_pass "mcp-integration.jar ($_sz)"
   else
     _dr_fail "mcp-integration.jar not found — rebuild: mvn clean package -DskipTests && re-run install.sh"
   fi
 
-  if [[ -f "$JARVIS_HOME/bin/agent-terminal.jar" ]]; then
+  if [[ -f "$HUGIN_HOME/bin/agent-terminal.jar" ]]; then
     _dr_pass "agent-terminal.jar"
   else
     _dr_fail "agent-terminal.jar not found — rebuild: mvn clean package -DskipTests && re-run install.sh"
   fi
 
-  if [[ -f "$JARVIS_HOME/bin/openrouter-search-mcp.py" ]]; then
+  if [[ -f "$HUGIN_HOME/bin/openrouter-search-mcp.py" ]]; then
     _dr_pass "openrouter-search-mcp.py"
   else
     _dr_fail "openrouter-search-mcp.py missing — re-run install.sh to restore it"
@@ -714,10 +714,10 @@ cmd_doctor() {
       if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
         _dr_fixed "Service started successfully"
       else
-        _dr_fail "Service started but exited — check: jarvis logs"
+        _dr_fail "Service started but exited — check: hugin logs"
       fi
     else
-      _dr_fail "Could not start service — check: jarvis logs"
+      _dr_fail "Could not start service — check: hugin logs"
     fi
   fi
 
@@ -744,7 +744,7 @@ cmd_doctor() {
         local _conflict; _conflict=$(ss -tlnp 2>/dev/null | grep ':8080 ' | head -1 || true)
         [[ -n "$_conflict" ]] && _dr_fail "Port 8080 in use by another process: $_conflict"
       fi
-      _dr_note "Tip: inspect with  jarvis logs"
+      _dr_note "Tip: inspect with  hugin logs"
     fi
   fi
 
@@ -787,13 +787,13 @@ cmd_doctor() {
   printf '\033[1;34m────────────────────────────────────────────────────────────────────────\033[0m\n'
   if [[ $_fails -eq 0 ]]; then
     if [[ $_fixes -gt 0 ]]; then
-      success "All checks passed after $_fixes auto-fix(es). Jarvis is healthy."
+      success "All checks passed after $_fixes auto-fix(es). Hugin is healthy."
     else
-      success "All checks passed. Jarvis is healthy."
+      success "All checks passed. Hugin is healthy."
     fi
   else
     warn "$_fails check(s) failed, $_fixes item(s) auto-fixed."
-    warn "Address the failures above, then re-run:  jarvis doctor"
+    warn "Address the failures above, then re-run:  hugin doctor"
     return 1
   fi
 }
@@ -805,13 +805,13 @@ cmd_uninstall() {
   sudo systemctl daemon-reload
   sudo rm -f "$LAUNCHER_PATH"
   success "Service and launcher removed."
-  if [[ -d "$JARVIS_HOME" ]]; then
-    printf '\033[1;35m   >\033[0m Delete %s? [y/N] ' "$JARVIS_HOME"
+  if [[ -d "$HUGIN_HOME" ]]; then
+    printf '\033[1;35m   >\033[0m Delete %s? [y/N] ' "$HUGIN_HOME"
     read -r _c; echo
     if [[ "${_c,,}" == "y" ]]; then
-      rm -rf "$JARVIS_HOME"; success "$JARVIS_HOME deleted."
+      rm -rf "$HUGIN_HOME"; success "$HUGIN_HOME deleted."
     else
-      info "Kept $JARVIS_HOME."
+      info "Kept $HUGIN_HOME."
     fi
   fi
 }
@@ -831,7 +831,7 @@ case "$CMD" in
   uninstall) cmd_uninstall ;;
   *)
     cat <<USAGE
-Usage: jarvis [command]
+Usage: hugin [command]
 
   (none) / run   Start service if needed, open terminal chat
   serve          Run the server in the foreground (no systemd)
@@ -842,7 +842,7 @@ Usage: jarvis [command]
   logs           Stream service logs  (journalctl -f)
   config         Reconfigure credentials, restart service
   doctor         Check every subsystem; auto-fix what it can
-  uninstall      Remove service, launcher, and optionally ~/.jarvis
+  uninstall      Remove service, launcher, and optionally ~/.hugin
 USAGE
     exit 1
     ;;
@@ -851,7 +851,7 @@ LAUNCHER_EOF
 
 # Substitute the install-time paths into the launcher
 sudo sed -i \
-  -e "s|__JARVIS_HOME__|${JARVIS_HOME}|g" \
+  -e "s|__HUGIN_HOME__|${HUGIN_HOME}|g" \
   -e "s|__SERVICE_NAME__|${SERVICE_NAME}|g" \
   -e "s|__LAUNCHER_PATH__|${LAUNCHER_PATH}|g" \
   "$LAUNCHER_PATH"
@@ -861,25 +861,25 @@ success "Launcher installed: $LAUNCHER_PATH"
 # ── 9. install systemd service ────────────────────────────────────────────────
 info "Installing systemd service $SERVICE_NAME..."
 sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE
-# Jarvis agent service — managed by install.sh
+# Hugin agent service — managed by install.sh
 [Unit]
-Description=Jarvis MCP Agent Server
+Description=Hugin MCP Agent Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=${INSTALL_USER}
-Environment=JARVIS_HOME=${JARVIS_HOME}
-Environment=AGENT_HOME=${JARVIS_HOME}
+Environment=HUGIN_HOME=${HUGIN_HOME}
+Environment=AGENT_HOME=${HUGIN_HOME}
 EnvironmentFile=${ENV_FILE}
 # Prepend the venv so the web-search MCP subprocess finds python3 + mcp package.
-Environment=PATH=${JARVIS_HOME}/venv/bin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=${JARVIS_HOME}
-ExecStart=/usr/bin/java -jar ${JARVIS_HOME}/bin/mcp-integration.jar \
-  --spring.config.additional-location=file:${JARVIS_HOME}/config/application.yml
-StandardOutput=append:${JARVIS_HOME}/logs/jarvis.log
-StandardError=append:${JARVIS_HOME}/logs/jarvis.log
+Environment=PATH=${HUGIN_HOME}/venv/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=${HUGIN_HOME}
+ExecStart=/usr/bin/java -jar ${HUGIN_HOME}/bin/mcp-integration.jar \
+  --spring.config.additional-location=file:${HUGIN_HOME}/config/application.yml
+StandardOutput=append:${HUGIN_HOME}/logs/hugin.log
+StandardError=append:${HUGIN_HOME}/logs/hugin.log
 Restart=on-failure
 RestartSec=5
 
@@ -904,18 +904,18 @@ wait_for_health 60
 # ── done ──────────────────────────────────────────────────────────────────────
 echo
 printf '\033[1;32m══════════════════════════════════════════════════════════════════\033[0m\n'
-printf '\033[1;32m  Jarvis is running at http://localhost:8080\033[0m\n'
+printf '\033[1;32m  Hugin is running at http://localhost:8080\033[0m\n'
 printf '\033[1;32m══════════════════════════════════════════════════════════════════\033[0m\n'
 echo
 cat <<MSG
-  Start chatting:       jarvis
-  Server in foreground: jarvis serve
-  Service status/logs:  jarvis status  |  jarvis logs
-  Health check:         jarvis doctor
-  Reconfigure:          jarvis config
-  Workspace:            $JARVIS_HOME/workspace
-  Config:               $JARVIS_HOME/config/
+  Start chatting:       hugin
+  Server in foreground: hugin serve
+  Service status/logs:  hugin status  |  hugin logs
+  Health check:         hugin doctor
+  Reconfigure:          hugin config
+  Workspace:            $HUGIN_HOME/workspace
+  Config:               $HUGIN_HOME/config/
   Env vars:             $ENV_FILE
-  Uninstall:            jarvis uninstall
+  Uninstall:            hugin uninstall
 MSG
 echo
