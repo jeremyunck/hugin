@@ -134,8 +134,11 @@ function Chat({ model, token, sessionId, onUnauth }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
+  const abortRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
 
   const send = async () => {
     if (!input.trim() || busy) return;
@@ -143,6 +146,10 @@ function Chat({ model, token, sessionId, onUnauth }) {
     setMsgs(m => [...m, { role: "user", text: userText }]);
     setInput("");
     setBusy(true);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     let currentAssistantId = null;
 
@@ -154,6 +161,7 @@ function Chat({ model, token, sessionId, onUnauth }) {
           "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt: userText, model, sessionId }),
+        signal: controller.signal,
       });
 
       if (res.status === 401) { onUnauth?.(); return; }
@@ -185,7 +193,7 @@ function Chat({ model, token, sessionId, onUnauth }) {
             else if (line.startsWith("data:")) dataLines.push(line.slice(5));
           }
           const dataStr = dataLines.join("\n").trim();
-          if (!evtType) continue;
+          if (!evtType) evtType = "message";
 
           let data = {};
           try { data = dataStr ? JSON.parse(dataStr) : {}; } catch {}
@@ -213,6 +221,7 @@ function Chat({ model, token, sessionId, onUnauth }) {
         }
       }
     } catch (e) {
+      if (e.name === "AbortError") return;
       setMsgs(m => [...m, { role: "assistant", text: `Connection error: ${e.message}` }]);
     } finally {
       setBusy(false);
@@ -727,7 +736,7 @@ function App() {
       const res = await fetch("/api/servers", { headers: { "Authorization": `Bearer ${t}` } });
       if (res.status === 401) { handleLogout(); return; }
       if (res.ok) setServers(await res.json());
-    } catch {}
+    } catch (e) { console.error("fetchServers failed:", e); }
   }, [token, handleLogout]);
 
   const fetchStatus = useCallback(async (tok) => {
@@ -737,7 +746,7 @@ function App() {
       const res = await fetch("/api/status", { headers: { "Authorization": `Bearer ${t}` } });
       if (res.status === 401) { handleLogout(); return; }
       if (res.ok) setServices(await res.json());
-    } catch {}
+    } catch (e) { console.error("fetchStatus failed:", e); }
   }, [token, handleLogout]);
 
   useEffect(() => {

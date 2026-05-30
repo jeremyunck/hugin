@@ -5,12 +5,15 @@ import com.example.agent.OpenAiClient;
 import com.example.agent.model.AvailableTool;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ChatResponse;
+import com.example.integration.service.JwtService;
 import com.example.mcpclient.model.McpServerDefinition;
 import com.example.mcpclient.model.McpServersConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -51,11 +54,21 @@ class McpIntegrationApplicationTests {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtService jwtService;
+
     @MockBean
     private McpToolProvider toolProvider;
 
     @MockBean
     private OpenAiClient llmClient;
+
+    private String authToken;
+
+    @BeforeEach
+    void setUpAuth() {
+        authToken = jwtService.generate("testuser");
+    }
 
     private void stubLlmFinalAnswer(String answer) {
         when(llmClient.chat(anyString(), anyList(), anyList()))
@@ -101,17 +114,18 @@ class McpIntegrationApplicationTests {
         when(toolProvider.callTool(anyString(), anyString(), anyMap())).thenReturn("12:00");
         stubLlmFinalAnswer("It is 12:00.");
 
-        // The rest template sends requests through the full web layer, which now
-        // includes Spring Security. Since no api-key is configured in the test,
-        // the endpoint is open and this should succeed.
         var request = Map.of("prompt", "What time is it?", "model", "llama3.2");
-        var response = restTemplate.postForEntity("/api/agent/chat", request, String.class);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + authToken);
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
+        var response = restTemplate.exchange("/api/agent/chat", HttpMethod.POST, entity, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
     }
 
     @Test
+    @WithMockUser
     void agentStreamEndpointEmitsSseEvents() throws Exception {
         // Given: no tools and a streaming LLM that emits two text fragments then a final answer
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
@@ -154,16 +168,17 @@ class McpIntegrationApplicationTests {
         stubLlmFinalAnswer("ok");
         var request = Map.of("prompt", "test", "model", "llama3.2");
 
+        // Send a valid JWT plus a wrong X-API-Key. The JWT satisfies the security
+        // filter; the X-API-Key filter is not active (no api-key configured in test),
+        // so the wrong key is ignored and the request succeeds with 200.
         HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + authToken);
         headers.set("X-API-Key", "wrong-key");
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
 
         ResponseEntity<String> response = restTemplate.exchange(
                 "/api/agent/chat", HttpMethod.POST, entity, String.class);
 
-        // Without an api-key configured, the security filter is disabled,
-        // so the endpoint should still succeed (no auth required).
-        // When an api-key IS configured, this would return 401.
         assertThat(response.getStatusCode()).isIn(HttpStatus.OK, HttpStatus.UNAUTHORIZED);
     }
 }
