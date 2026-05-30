@@ -12,7 +12,7 @@ Clone the repo and install the Hugin CLI:
 
 ```bash
 git clone https://github.com/jeremyunck/mcp-client.git && cd mcp-client
-npm install -g .
+npm install && npm install -g .
 ```
 
 Then run the interactive setup:
@@ -51,10 +51,6 @@ curl -X POST http://localhost:8080/api/agent/chat \
 | `hugin server start / stop / restart / status` | Manage the background service |
 | `hugin server logs` | Stream service logs (`journalctl -f`) |
 | `hugin terminal` | Launch the terminal client directly |
-| `hugin serve` | Run the server in the foreground (no systemd) |
-| `hugin config` | Re-prompt for API key / Redis, restart service |
-| `hugin doctor` | Health-check every subsystem; auto-fix what it can |
-| `hugin uninstall` | Remove service + launcher (prompts before deleting `~/.hugin`) |
 
 Set `AGENT_HOME` to override the default install location (`~/.hugin`).
 
@@ -96,21 +92,7 @@ cp mcp-servers.example.json mcp-servers.json
 
 Stdio servers use `command` / `args` / `env`; SSE/HTTP servers use `url` / `headers`. Servers can also be managed at runtime through the `/api/servers` REST API.
 
-### Passing secrets and environment variables
-
-The client launches stdio servers as subprocesses and **does not inherit your shell environment** — only a fixed whitelist (`PATH`, `HOME`, etc.) is passed through. To give a server an API key or other config, put it in that server's `env` block:
-
-```json
-"ddg-mcp": {
-  "command": "node",
-  "args": ["/path/to/ddg-mcp/dist/server.js"],
-  "env": {
-    "OPEN_ROUTER_API_KEY": "sk-or-v1-..."
-  }
-}
-```
-
-Exporting a variable in your shell (or relying on the server's own `.env` file) will **not** work unless the server explicitly loads it — pass values through the `env` block instead. Because `mcp-servers.json` is gitignored, secrets placed here stay local.
+Stdio servers do not inherit your shell environment — pass API keys and other config through each server's `env` block. `mcp-servers.json` is gitignored so secrets placed there stay local.
 
 ## Build
 
@@ -291,51 +273,7 @@ The agent can keep a **Redis-backed long-term memory** of past conversations usi
 
 Similarity search runs in-process (cosine similarity over the stored vectors), so it works against plain Redis — no RediSearch or vector modules required.
 
-### Setup
-
-1. **Start Redis** (any 6+ instance). For a quick local one:
-
-   ```bash
-   docker run -p 6379:6379 redis:7
-   ```
-
-2. **Provide an embedding endpoint.** Embeddings are generated through an OpenAI-schema `POST {base-url}/embeddings` call. The defaults target **OpenRouter**, so set your key:
-
-   ```bash
-   export OPEN_ROUTER_API_KEY=sk-or-v1-...
-   ```
-
-3. **Enable memory** when starting the server:
-
-   ```bash
-   MEMORY_ENABLED=true mvn -pl mcp-integration spring-boot:run
-   ```
-
-   Or set `memory.enabled: true` in `application.yml`.
-
-### Configuration
-
-```yaml
-memory:
-  enabled: ${MEMORY_ENABLED:false}   # master switch
-  key-prefix: agent:memory           # Redis key prefix (hash key is "<prefix>:records")
-  top-k: 3                           # how many past memories to recall into the prompt
-  min-score: 0.75                    # min cosine similarity (0..1) to recall; 0 disables the threshold
-  max-entries: 1000                  # cap on stored memories; oldest are evicted past this
-
-embedding:
-  base-url: ${EMBEDDING_BASE_URL:https://openrouter.ai/api/v1}
-  api-key: ${OPEN_ROUTER_API_KEY:}    # sent as Authorization: Bearer <key> when set
-  model: ${EMBEDDING_MODEL:openai/text-embedding-3-small}   # model used specifically for embeddings
-
-spring:
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-```
-
-To use a different embedding model, set `embedding.model` (or the `EMBEDDING_MODEL` env var). Embedding and store failures are non-fatal: if Redis or the embedding endpoint is unavailable the agent logs a warning and continues without memory.
+To enable: start a Redis instance, set `OPEN_ROUTER_API_KEY` (used for embeddings), then start the server with `MEMORY_ENABLED=true`. See the [Configuration](#configuration) table for all tunables (`memory.*`, `embedding.*`, `spring.data.redis.*`). Embedding and store failures are non-fatal — the agent logs a warning and continues without memory.
 
 ## Configuration
 
