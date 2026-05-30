@@ -1,0 +1,16 @@
+{
+  "name": "hugin-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild entry.jsx --bundle --minify --jsx=automatic --platform=browser --target=es2020 --outfile=../resources/static/app.js"
+  },
+  "dependencies": {
+    "lucide-react": "1.17.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.0"
+  }
+}

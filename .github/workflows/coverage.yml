@@ -20,6 +20,10 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Build and collect coverage
         run: mvn --batch-mode --no-transfer-progress clean verify
 

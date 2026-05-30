@@ -58,6 +58,45 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>frontend-npm-install</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>npm</executable>
+                            <workingDirectory>${project.basedir}/src/main/frontend</workingDirectory>
+                            <arguments>
+                                <argument>install</argument>
+                                <argument>--prefer-offline</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>frontend-build</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>npx</executable>
+                            <workingDirectory>${project.basedir}/src/main/frontend</workingDirectory>
+                            <arguments>
+                                <argument>esbuild</argument>
+                                <argument>entry.jsx</argument>
+                                <argument>--bundle</argument>
+                                <argument>--minify</argument>
+                                <argument>--jsx=automatic</argument>
+                                <argument>--platform=browser</argument>
+                                <argument>--target=es2020</argument>
+                                <argument>--outfile=../resources/static/app.js</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
