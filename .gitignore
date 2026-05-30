@@ -10,3 +10,4 @@ mcp-servers.json
 application-local.yml
 node_modules/
 mcp-integration/src/main/resources/static/app.js
+data/
