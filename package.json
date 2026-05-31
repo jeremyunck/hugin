@@ -1,6 +1,6 @@
 {
   "name": "hugin-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Hugin — AI personal assistant powered by MCP and any OpenAI-compatible LLM",
   "bin": {
     "hugin": "./hugin/bin/hugin.js"
