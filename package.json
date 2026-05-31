@@ -11,11 +11,21 @@
     "openrouter-search-mcp.py",
     "mcp-servers.example.json",
     "pom.xml",
-    "agent-core/",
-    "agent-discord/",
-    "agent-terminal/",
-    "mcp-client/",
-    "mcp-integration/"
+    "agent-core/src",
+    "agent-core/pom.xml",
+    "agent-discord/src",
+    "agent-discord/pom.xml",
+    "agent-terminal/src",
+    "agent-terminal/pom.xml",
+    "mcp-client/src",
+    "mcp-client/pom.xml",
+    "mcp-integration/src/main/java",
+    "mcp-integration/src/main/resources",
+    "mcp-integration/src/main/frontend/entry.jsx",
+    "mcp-integration/src/main/frontend/package.json",
+    "mcp-integration/src/main/frontend/package-lock.json",
+    "mcp-integration/src/test",
+    "mcp-integration/pom.xml"
   ],
   "engines": {
     "node": ">=18"

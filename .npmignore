@@ -1,0 +1,21 @@
+# Frontend build dependencies - contain hard-linked binaries (esbuild)
+mcp-integration/src/main/frontend/node_modules
+
+# Maven build artifacts
+agent-core/target
+agent-discord/target
+agent-terminal/target
+mcp-client/target
+mcp-integration/target
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Logs
+*.log
+logs/
