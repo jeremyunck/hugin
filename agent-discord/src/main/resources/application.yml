@@ -42,7 +42,7 @@ discord:
   # still appears but the action is a no-op (logged as a warning).
   # -----------------------------------------------------------------------
   github-token: ${GITHUB_TOKEN:}
-  github-repo: ${GITHUB_REPO:}
+  github-repo: ${GITHUB_REPO:https://github.com/jeremyunck/hugin}
 
 logging:
   level:
