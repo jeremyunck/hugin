@@ -117,38 +117,16 @@ public class DiscordBotService implements DisposableBean {
 
     private void handleMessage(MessageReceivedEvent event, String content, String sessionId) {
         log.debug("Agent request — session={} author={}", sessionId, event.getAuthor().getName());
-        StringBuilder response = new StringBuilder();
+        String text;
         try {
-            agentClient.streamChat(content, sessionId, new DiscordAgentClient.Handler() {
-                @Override
-                public void onToken(String text) {
-                    response.append(text);
-                }
-
-                @Override
-                public void onToolCall(String name, String args) {
-                    event.getChannel().sendTyping().queue();
-                    event.getChannel().sendMessage("Calling **" + name + "**...").queue();
-                }
-
-                @Override
-                public void onToolResult(String name, String result) {
-                    String preview = result.length() > 200 ? result.substring(0, 200) + "..." : result;
-                    event.getChannel().sendMessage("**" + name + "** result:\n```\n" + preview + "\n```").queue();
-                }
-
-                @Override
-                public void onError(String message) {
-                    response.append("Agent error: ").append(message);
-                }
-            });
+            String response = agentClient.chat(content, sessionId);
+            text = response == null ? "" : response.strip();
         } catch (Exception e) {
             log.error("Agent call failed for session {}", sessionId, e);
             event.getChannel().sendMessage("Sorry, I encountered an error. Please try again.").queue();
             return;
         }
 
-        String text = response.toString().strip();
         if (text.isBlank()) text = "(no response)";
 
         List<String> chunks = splitMessage(text, DISCORD_MSG_LIMIT);
