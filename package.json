@@ -1,14 +1,41 @@
 {
-  "name": "hugin",
+  "name": "hugin-agent",
   "version": "0.1.0",
-  "description": "Hugin — AI personal assistant",
+  "description": "Hugin — AI personal assistant powered by MCP and any OpenAI-compatible LLM",
   "bin": {
     "hugin": "./hugin/bin/hugin.js"
   },
+  "files": [
+    "hugin/bin/",
+    "install.sh",
+    "openrouter-search-mcp.py",
+    "mcp-servers.example.json",
+    "pom.xml",
+    "agent-core/",
+    "agent-discord/",
+    "agent-terminal/",
+    "mcp-client/",
+    "mcp-integration/"
+  ],
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "commander": "^12.1.0"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremyunck/hugin.git"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "mcp",
+    "llm",
+    "assistant",
+    "openai",
+    "openrouter",
+    "spring-boot"
+  ]
 }
