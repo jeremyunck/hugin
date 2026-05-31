@@ -1,12 +1,18 @@
 package com.example.discord;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DiscordBotServiceTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void splitMessage_shortTextReturnsSingleChunk() {
@@ -53,5 +59,50 @@ class DiscordBotServiceTest {
         DiscordProperties props = new DiscordProperties();
         props.setGithubRepo("https://github.com/jeremyunck/hugin.git/");
         assertThat(props.getGithubRepo()).isEqualTo("jeremyunck/hugin");
+    }
+
+    @Test
+    void truncateWords_capsLongTextAtWordLimit() {
+        String text = "one two three four five";
+        assertThat(DiscordBotService.truncateWords(text, 3))
+                .isEqualTo("one two three ...(truncated)");
+    }
+
+    @Test
+    void tail_returnsLastLines() throws Exception {
+        Path log = tempDir.resolve("hugin.log");
+        Files.writeString(log, "a\nb\nc\nd\n");
+
+        assertThat(DiscordBotService.tail(log, 2)).containsExactly("c", "d");
+    }
+
+    @Test
+    void boundedLogLines_keepsNewestLinesWithinBudget() {
+        List<String> result = DiscordBotService.boundedLogLines(
+                List.of("old line", "middle line", "newest line"), 20);
+
+        assertThat(result).containsExactly("...(older log lines omitted)", "newest line");
+    }
+
+    @Test
+    void buildIssueBody_includesToolDiagnosticsAndBoundedLogExcerpts() throws Exception {
+        Files.writeString(tempDir.resolve("hugin.log"),
+                "regular line\n" + "word ".repeat(220) + "\n");
+        Files.writeString(tempDir.resolve("discord.log"), "discord line\n");
+
+        DiscordBotService service = new DiscordBotService(
+                new DiscordProperties(), null, null, tempDir);
+        service.logToolCall("session-1", "list_mcp_servers", "{}");
+        service.logToolResult("session-1", "list_mcp_servers", "Server: web-search");
+
+        String body = service.buildIssueBody("session-1", "Jeremy");
+
+        assertThat(body).contains("## Tool Calls");
+        assertThat(body).contains("Tool call `list_mcp_servers` args: {}");
+        assertThat(body).contains("Tool result `list_mcp_servers`: Server: web-search");
+        assertThat(body).contains("## Hugin Server Log");
+        assertThat(body).contains("## Discord Bot Log");
+        assertThat(body).contains("each line truncated to 200 words");
+        assertThat(body).contains("...(truncated)");
     }
 }

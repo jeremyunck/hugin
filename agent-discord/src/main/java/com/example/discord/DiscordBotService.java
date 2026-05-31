@@ -14,6 +14,7 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Service;
 
@@ -25,10 +26,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -58,11 +62,15 @@ public class DiscordBotService implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordBotService.class);
     private static final int DISCORD_MSG_LIMIT = 2000;
+    private static final int DIAGNOSTIC_WORD_LIMIT = 200;
+    private static final int DIAGNOSTIC_LOG_LINES = 120;
+    private static final int DIAGNOSTIC_LOG_CHAR_LIMIT = 24_000;
 
     private final DiscordProperties properties;
     private final DiscordAgentClient agentClient;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final Path logDir;
     private JDA jda;
 
     /**
@@ -71,12 +79,20 @@ public class DiscordBotService implements DisposableBean {
      * accessed from one virtual thread at a time (serialised per-message within a session).
      */
     private final ConcurrentHashMap<String, LinkedList<String>> conversationLogs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LinkedList<String>> diagnosticLogs = new ConcurrentHashMap<>();
 
+    @Autowired
     public DiscordBotService(DiscordProperties properties, DiscordAgentClient agentClient,
                              ObjectMapper objectMapper) {
+        this(properties, agentClient, objectMapper, Path.of(System.getProperty("user.home"), ".hugin", "logs"));
+    }
+
+    DiscordBotService(DiscordProperties properties, DiscordAgentClient agentClient,
+                      ObjectMapper objectMapper, Path logDir) {
         this.properties = properties;
         this.agentClient = agentClient;
         this.objectMapper = objectMapper;
+        this.logDir = logDir;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -137,8 +153,24 @@ public class DiscordBotService implements DisposableBean {
         }
     }
 
-    private String buildIssueBody(String sessionId, String authorMention) {
-        LinkedList<String> log = conversationLogs.get(sessionId);
+    void logToolCall(String sessionId, String name, String args) {
+        diagnosticLogs.computeIfAbsent(sessionId, k -> new LinkedList<>())
+                .add("Tool call `" + name + "` args: " + truncateWords(oneLine(args), DIAGNOSTIC_WORD_LIMIT));
+    }
+
+    void logToolResult(String sessionId, String name, String result) {
+        diagnosticLogs.computeIfAbsent(sessionId, k -> new LinkedList<>())
+                .add("Tool result `" + name + "`: " + truncateWords(oneLine(result), DIAGNOSTIC_WORD_LIMIT));
+    }
+
+    void logAgentError(String sessionId, String message) {
+        diagnosticLogs.computeIfAbsent(sessionId, k -> new LinkedList<>())
+                .add("Agent error: " + truncateWords(oneLine(message), DIAGNOSTIC_WORD_LIMIT));
+    }
+
+    String buildIssueBody(String sessionId, String authorMention) {
+        LinkedList<String> conversationLog = conversationLogs.get(sessionId);
+        LinkedList<String> diagnosticLog = diagnosticLogs.get(sessionId);
         StringBuilder body = new StringBuilder();
         body.append("## Bug Report\n\n");
         body.append("**Session:** `").append(sessionId).append("`\n");
@@ -148,14 +180,103 @@ public class DiscordBotService implements DisposableBean {
                         .format(Instant.now()))
                 .append("\n\n");
         body.append("## Conversation Log\n\n");
-        if (log == null || log.isEmpty()) {
+        if (conversationLog == null || conversationLog.isEmpty()) {
             body.append("*(No conversation history available)*\n");
         } else {
-            for (String entry : log) {
+            for (String entry : conversationLog) {
                 body.append("- ").append(entry).append("\n");
             }
         }
+        body.append("\n## Tool Calls\n\n");
+        if (diagnosticLog == null || diagnosticLog.isEmpty()) {
+            body.append("*(No tool calls or agent diagnostics recorded for this session)*\n");
+        } else {
+            for (String entry : diagnosticLog) {
+                body.append("- ").append(entry).append("\n");
+            }
+        }
+        appendLogExcerpt(body, "Hugin Server Log", logDir.resolve("hugin.log"));
+        appendLogExcerpt(body, "Discord Bot Log", logDir.resolve("discord.log"));
         return body.toString();
+    }
+
+    private void appendLogExcerpt(StringBuilder body, String title, Path logFile) {
+        body.append("\n## ").append(title).append("\n\n");
+        body.append("Last ").append(DIAGNOSTIC_LOG_LINES)
+                .append(" lines; each line truncated to ")
+                .append(DIAGNOSTIC_WORD_LIMIT).append(" words.\n\n");
+        List<String> lines = tail(logFile, DIAGNOSTIC_LOG_LINES);
+        if (lines.isEmpty()) {
+            body.append("*(No readable log excerpt available from `")
+                    .append(logFile).append("`)*\n");
+            return;
+        }
+        body.append("```text\n");
+        for (String line : boundedLogLines(lines, DIAGNOSTIC_LOG_CHAR_LIMIT)) {
+            body.append(line).append("\n");
+        }
+        body.append("```\n");
+    }
+
+    static List<String> boundedLogLines(List<String> lines, int maxChars) {
+        if (lines == null || lines.isEmpty() || maxChars <= 0) {
+            return List.of();
+        }
+        LinkedList<String> bounded = new LinkedList<>();
+        int totalChars = 0;
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String line = truncateWords(lines.get(i), DIAGNOSTIC_WORD_LIMIT);
+            if (line.length() > maxChars) {
+                line = line.substring(0, Math.max(0, maxChars - 15)) + "...(truncated)";
+            }
+            int nextChars = totalChars + line.length() + 1;
+            if (nextChars > maxChars && !bounded.isEmpty()) {
+                bounded.addFirst("...(older log lines omitted)");
+                break;
+            }
+            bounded.addFirst(line);
+            totalChars = nextChars;
+        }
+        return bounded;
+    }
+
+    static List<String> tail(Path path, int maxLines) {
+        if (path == null || maxLines <= 0 || !Files.isReadable(path)) {
+            return List.of();
+        }
+        ArrayDeque<String> buffer = new ArrayDeque<>(maxLines);
+        try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (buffer.size() == maxLines) {
+                    buffer.removeFirst();
+                }
+                buffer.addLast(line);
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        return new ArrayList<>(buffer);
+    }
+
+    static String truncateWords(String text, int maxWords) {
+        if (text == null || text.isBlank() || maxWords <= 0) {
+            return "";
+        }
+        String[] words = text.strip().split("\\s+");
+        if (words.length <= maxWords) {
+            return text;
+        }
+        StringBuilder truncated = new StringBuilder();
+        for (int i = 0; i < maxWords; i++) {
+            if (i > 0) truncated.append(' ');
+            truncated.append(words[i]);
+        }
+        return truncated.append(" ...(truncated)").toString();
+    }
+
+    private static String oneLine(String text) {
+        return text == null ? "" : text.replaceAll("\\s+", " ").strip();
     }
 
     // ---- GitHub issue creation ----
@@ -291,23 +412,28 @@ public class DiscordBotService implements DisposableBean {
 
                 @Override
                 public void onToolCall(String name, String args) {
+                    logToolCall(sessionId, name, args);
                     event.getChannel().sendTyping().queue();
                     event.getChannel().sendMessage("Calling **" + name + "**...").queue();
                 }
 
                 @Override
                 public void onToolResult(String name, String result) {
-                    String preview = result.length() > 200 ? result.substring(0, 200) + "..." : result;
+                    String resultText = result == null ? "" : result;
+                    logToolResult(sessionId, name, resultText);
+                    String preview = resultText.length() > 200 ? resultText.substring(0, 200) + "..." : resultText;
                     event.getChannel().sendMessage("**" + name + "** result:\n```\n" + preview + "\n```").queue();
                 }
 
                 @Override
                 public void onError(String message) {
+                    logAgentError(sessionId, message);
                     response.append("Agent error: ").append(message);
                 }
             });
         } catch (Exception e) {
             log.error("Agent call failed for session {}", sessionId, e);
+            logAgentError(sessionId, e.getMessage());
             event.getChannel().sendMessage("Sorry, I encountered an error. Please try again.").queue();
             return;
         }

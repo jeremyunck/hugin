@@ -72,9 +72,11 @@ public class AgentController {
 
         streamExecutor.execute(() -> {
             try {
-                agentService.chatStream(request, new AgentStreamListener() {
+                StringBuilder streamedContent = new StringBuilder();
+                AgentResponse response = agentService.chatStream(request, new AgentStreamListener() {
                     @Override
                     public void onContent(String delta) {
+                        streamedContent.append(delta);
                         send(emitter, "token", Map.of("text", delta));
                     }
 
@@ -88,6 +90,12 @@ public class AgentController {
                         send(emitter, "tool_result", Map.of("name", toolName, "result", result));
                     }
                 });
+                if (streamedContent.isEmpty()
+                        && response != null
+                        && response.response() != null
+                        && !response.response().isBlank()) {
+                    send(emitter, "token", Map.of("text", response.response()));
+                }
                 send(emitter, "done", Map.of());
                 emitter.complete();
             } catch (Exception e) {

@@ -144,6 +144,33 @@ class McpIntegrationApplicationTests {
     }
 
     @Test
+    @WithMockUser
+    void agentStreamEndpointEmitsFinalAnswerWhenNoTokensStreamed() throws Exception {
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chatStream(anyString(), anyList(), anyList(), any()))
+                .thenReturn(new ChatResponse(null, List.of(
+                        new ChatResponse.Choice(0, ChatMessage.assistant("Final answer"), "stop"))));
+
+        MvcResult mvcResult = mockMvc.perform(
+                        post("/api/agent/stream")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .accept(MediaType.TEXT_EVENT_STREAM)
+                                .content("{\"prompt\":\"hi\",\"model\":\"llama3.2\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        String body = mockMvc.perform(asyncDispatch(mvcResult))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).contains("event:token");
+        assertThat(body).contains("\"text\":\"Final answer\"");
+        assertThat(body).contains("event:done");
+    }
+
+    @Test
     void agentEndpointCanBeCalledWithApiKeyWhenConfigured() {
         // When no api-key is configured, wrong X-API-Key is ignored and localhost request succeeds.
         stubLlmFinalAnswer("ok");
