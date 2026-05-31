@@ -56,7 +56,7 @@ public class SelfUpdateTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException, InterruptedException {
-        ProcessBuilder builder = new ProcessBuilder("sh", "-c", "hugin update");
+        ProcessBuilder builder = new ProcessBuilder("hugin", "update");
         builder.directory(ctx.workspace().root().toFile());
         builder.redirectErrorStream(true);
 
