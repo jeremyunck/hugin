@@ -23,9 +23,13 @@ public class SelfUpdateTool implements LocalTool {
     private final Duration timeout;
     private final int maxChars;
 
+    private static final Duration MIN_TIMEOUT = Duration.ofMinutes(10);
+
     public SelfUpdateTool(Workspace workspace, LocalToolProperties properties) {
         this.workspace = workspace;
-        this.timeout = properties.bashTimeout();
+        // Maven builds take several minutes; use at least 10 minutes regardless of bash-timeout.
+        Duration configured = properties.bashTimeout();
+        this.timeout = configured.compareTo(MIN_TIMEOUT) < 0 ? MIN_TIMEOUT : configured;
         this.maxChars = properties.maxOutputChars();
     }
 
@@ -56,8 +60,14 @@ public class SelfUpdateTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException, InterruptedException {
-        ProcessBuilder builder = new ProcessBuilder("hugin", "update");
+        // Run through bash so PATH is resolved even when the JVM was started with a minimal
+        // environment (e.g. macOS LaunchAgent). Prepend common Homebrew / user-local bins.
+        String currentPath = System.getenv("PATH") != null ? System.getenv("PATH") : "";
+        String extendedPath = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:" + currentPath;
+
+        ProcessBuilder builder = new ProcessBuilder("/bin/bash", "-c", "hugin update");
         builder.directory(ctx.workspace().root().toFile());
+        builder.environment().put("PATH", extendedPath);
         builder.redirectErrorStream(true);
 
         Process process = builder.start();

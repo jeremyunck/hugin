@@ -158,6 +158,7 @@ public class OpenAiClient {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to serialize chat request", e);
         }
+        log.debug("→ LLM stream POST {}\n{}", endpoint, body);
 
         Exception lastErr = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -194,6 +195,7 @@ public class OpenAiClient {
                     throw new IllegalStateException(
                             "LLM streaming request failed (HTTP " + response.statusCode() + "): " + errorBody);
                 }
+                log.debug("← LLM stream POST {} status={}", endpoint, response.statusCode());
 
                 return parseStream(response.body(), onContentDelta);
             } catch (IllegalStateException e) {
@@ -270,7 +272,13 @@ public class OpenAiClient {
                 content.isEmpty() ? null : content.toString(),
                 assembledToolCalls.isEmpty() ? null : assembledToolCalls,
                 null);
-        return new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));
+        ChatResponse assembled = new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));
+        try {
+            log.debug("← LLM stream assembled response:\n{}", objectMapper.writeValueAsString(assembled));
+        } catch (IOException e) {
+            log.debug("← LLM stream assembled response (serialization failed): {}", e.getMessage());
+        }
+        return assembled;
     }
 
     // -------------------------------------------------------------------------
