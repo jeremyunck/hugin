@@ -156,10 +156,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,metrics,info
   endpoint:
     health:
       show-details: never
+  newrelic:
+    metrics:
+      export:
+        enabled: ${NEW_RELIC_ENABLED:false}
+        api-key: ${NEW_RELIC_TOKEN:}
+        uri: https://metric-api.newrelic.com/metric/v1
+        step: 1m
 
 logging:
   level:

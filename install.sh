@@ -480,6 +480,10 @@ REDIS_PORT=${REDIS_PORT_VAL:-6379}
 CLOUD_AGENTS_ENABLED=${CLOUD_AGENTS_ENABLED:-false}
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
 
+# New Relic monitoring (optional — leave blank to disable)
+NEW_RELIC_TOKEN=${NEW_RELIC_TOKEN:-}
+NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
+
 # Hugin home directory (workspace root is $HUGIN_HOME/workspace)
 AGENT_HOME=${HUGIN_HOME}
 
@@ -500,7 +504,7 @@ EOF
 
 # Load existing values so they can be used as defaults on reconfigure
 _existing_key="" _existing_agent_key="" _existing_redis_host="" _existing_redis_port="6379"
-_existing_model="" _existing_github_token="" _existing_discord_token=""
+_existing_model="" _existing_github_token="" _existing_discord_token="" _existing_nr_token=""
 if [[ -f "$ENV_FILE" ]]; then
   _existing_key=$(grep -E '^OPEN_ROUTER_API_KEY=' "$ENV_FILE" | cut -d= -f2- || true)
   _existing_agent_key=$(grep -E '^AGENT_API_KEY=' "$ENV_FILE" | cut -d= -f2- || true)
@@ -509,12 +513,14 @@ if [[ -f "$ENV_FILE" ]]; then
   _existing_model=$(grep -E '^LLM_MODEL=' "$ENV_FILE" | cut -d= -f2- || true)
   _existing_github_token=$(grep -E '^GITHUB_TOKEN=' "$ENV_FILE" | cut -d= -f2- || true)
   _existing_discord_token=$(grep -E '^DISCORD_BOT_TOKEN=' "$ENV_FILE" | cut -d= -f2- || true)
+  _existing_nr_token=$(grep -E '^NEW_RELIC_TOKEN=' "$ENV_FILE" | cut -d= -f2- || true)
 fi
 
 # Initialise all config vars to empty so save_env can be called at any point.
 OPENROUTER_KEY="" LLM_MODEL="" AGENT_API_KEY="" MEMORY_ENABLED=false
 REDIS_HOST_VAL="" REDIS_PORT_VAL=6379 GITHUB_TOKEN="" CLOUD_AGENTS_ENABLED=false
 ADMIN_USERNAME="" ADMIN_PASSWORD="" JWT_SECRET="" DISCORD_BOT_TOKEN=""
+NEW_RELIC_TOKEN="" NEW_RELIC_ENABLED=false
 
 if [[ "$SKIP_CREDENTIALS" == "true" ]]; then
   info "Reusing existing credentials from $ENV_FILE — skipping interactive prompts."
@@ -536,6 +542,8 @@ if [[ "$SKIP_CREDENTIALS" == "true" ]]; then
   fi
   # Prefer existing env file value, fall back to shell env var (handles first-run after manual token setup)
   DISCORD_BOT_TOKEN="${_existing_discord_token:-${DISCORD_BOT_TOKEN:-}}"
+  NEW_RELIC_TOKEN="${_existing_nr_token:-}"
+  NEW_RELIC_ENABLED=$(grep -E '^NEW_RELIC_ENABLED=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "false")
   success "Credentials loaded."
 else
 
@@ -711,7 +719,39 @@ CLOUD_AGENTS_ENABLED=false
 [[ -n "$GITHUB_TOKEN" ]] && CLOUD_AGENTS_ENABLED=true
 save_env
 
-# 3f. Admin username + password (required — creates the dashboard login account)
+# 3f. New Relic license key (optional — enables full application monitoring)
+echo
+info "New Relic monitoring sends JVM and HTTP metrics to your New Relic account."
+NEW_RELIC_TOKEN=""
+NEW_RELIC_ENABLED=false
+if [[ -n "$_existing_nr_token" ]]; then
+  ask "New Relic license key [current hidden, press Enter to keep, or 'clear' to disable]: "
+  read -rsp "" _nr_token_input; echo
+  if [[ "$(echo "$_nr_token_input" | tr '[:upper:]' '[:lower:]')" == "clear" ]]; then
+    NEW_RELIC_TOKEN=""
+    info "New Relic monitoring disabled."
+  elif [[ -z "$_nr_token_input" ]]; then
+    NEW_RELIC_TOKEN="$_existing_nr_token"
+    NEW_RELIC_ENABLED=true
+    info "New Relic token kept."
+  else
+    NEW_RELIC_TOKEN="$_nr_token_input"
+    NEW_RELIC_ENABLED=true
+    success "New Relic token updated."
+  fi
+else
+  ask "New Relic license key (leave blank to skip): "
+  read -rsp "" NEW_RELIC_TOKEN; echo
+  if [[ -n "$NEW_RELIC_TOKEN" ]]; then
+    NEW_RELIC_ENABLED=true
+    success "New Relic monitoring enabled."
+  else
+    info "New Relic monitoring disabled."
+  fi
+fi
+save_env
+
+# 3g. Admin username + password (required — creates the dashboard login account)
 echo
 printf '\033[1;34m─── Dashboard Admin Account ───────────────────────────────────────────\033[0m\n'
 echo
@@ -751,7 +791,7 @@ fi
 success "Admin password set."
 save_env
 
-# 3g. JWT secret (auto-generate or enter manually)
+# 3h. JWT secret (auto-generate or enter manually)
 echo
 printf '\033[1;34m─── JWT Secret ────────────────────────────────────────────────────────\033[0m\n'
 echo
@@ -1072,6 +1112,8 @@ REDIS_HOST=${rhost}
 REDIS_PORT=${rport}
 CLOUD_AGENTS_ENABLED=${CLOUD_AGENTS_ENABLED:-false}
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
+NEW_RELIC_TOKEN=${NEW_RELIC_TOKEN:-}
+NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
 AGENT_HOME=${HUGIN_HOME}
 DB_URL=jdbc:h2:file:${HUGIN_HOME}/db/hugin
 ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
