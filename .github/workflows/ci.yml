@@ -31,7 +31,7 @@ jobs:
 
       # SpotBugs SAST runs on the already-compiled bytecode — no recompile needed.
       - name: Run SpotBugs SAST
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && success()
         run: |
           mvn --batch-mode --no-transfer-progress \
             com.github.spotbugs:spotbugs-maven-plugin:4.8.6.4:check \
@@ -50,7 +50,6 @@ jobs:
           if-no-files-found: ignore
 
   # Scans Maven dependencies for known critical CVEs using Trivy.
-  # The official action caches the vulnerability DB across runs.
   dependency-scan:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -59,16 +58,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+
       - name: Scan for critical CVEs
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: library
-          severity: CRITICAL
-          format: table
+        run: |
+          trivy fs . \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type library \
+            --severity CRITICAL \
+            --quiet
 
   # Secret detection across all commits in the PR using the gitleaks CLI.
   secret-scan:
