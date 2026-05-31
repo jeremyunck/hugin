@@ -37,7 +37,7 @@ This boundary is enforced by the POMs (agent-core has no MCP dependency) and exi
 3. Sends to the configured LLM (`OpenAiClient`) advertising those tools. The model name comes from the request, falling back to `llm.model`.
 4. If the model returns `tool_calls`, executes each — local tools run in-process via `LocalToolRegistry`, otherwise routed to the owning server via `McpToolProvider.callTool` — appends results as `tool` messages, and repeats.
 5. On the final answer, persists the exchange to long-term memory (`MemoryService.remember`) and short-term conversation memory (`ConversationMemoryService.record`).
-6. Loop is bounded by `agent.max-iterations` (default 10) and a wall-clock `agent.request-timeout` (default 5m).
+6. Loop is bounded by `agent.max-iterations` (default 30) and a wall-clock `agent.request-timeout` (default 5m).
 
 Note: tool calls are handled whenever `tool_calls` are present **regardless of `finish_reason`** — some models set `stop` or null even with tool calls present. Preserve this behavior.
 
@@ -51,7 +51,7 @@ Note: tool calls are handled whenever `tool_calls` are present **regardless of `
 - Config file path comes from the `mcp` config prefix; supports `~/`-relative paths.
 
 ### Built-in local tools (`agent-core/.../tool/`)
-- In-process tools the agent can call directly, with **no MCP-SDK dependency** so they live in `agent-core`: `read_file`, `write_file`, `edit_file`, `list_files`, `find_files`, `grep_search`, `run_bash`. Each implements `LocalTool` (discovered as Spring beans) and is collected by `LocalToolRegistry`.
+- In-process tools the agent can call directly, with **no MCP-SDK dependency** so they live in `agent-core`: `read_file`, `write_file`, `edit_file`, `list_files`, `find_files`, `find_path`, `grep_search`, `run_bash`. Each implements `LocalTool` (discovered as Spring beans) and is collected by `LocalToolRegistry`. `find_path` is the forgiving "locate" tool — it finds files and directories by name or path fragment (case-insensitive, fuzzy) even when the exact path doesn't exist, so the agent can resolve approximate paths the user gives (e.g. "look for the folder /code/hugin/hugin"). `find_files` (glob) takes an optional `type` (`file`/`dir`/`any`) to match directories too.
 - Gated by `agent.tools.enabled` (master switch). When false the registry is empty — no local tools advertised or executable.
 - **All file/shell access is confined to a single workspace root** by `Workspace`: paths resolve relative to the root or absolute, but the symlink-resolved path must stay inside the root (blocks `../` traversal and symlink escapes). The root is also the working dir for `run_bash`. Configure via `agent.tools.workspace-root` (relative/`~` are NOT expanded — pin an absolute path). These tools grant filesystem + shell access; scope or disable them when that's a concern.
 

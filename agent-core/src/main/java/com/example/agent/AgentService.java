@@ -52,7 +52,7 @@ public class AgentService {
             ObjectMapper objectMapper,
             @Value("${agent.request-timeout:5m}") Duration requestTimeout,
             @Value("${llm.model:}") String defaultModel,
-            @Value("${agent.max-iterations:10}") int maxIterations,
+            @Value("${agent.max-iterations:30}") int maxIterations,
             WorkspaceRegistry workspaceRegistry,
             Optional<MemoryService> memoryService,
             Optional<ConversationMemoryService> conversationMemory,

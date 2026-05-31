@@ -111,7 +111,7 @@ agent:
   # Maximum number of tool-call iterations in the agent loop before giving up.
   # A higher value gives the model more chances to use tools and refine its answer,
   # but also increases the maximum latency of a single request.
-  max-iterations: 10
+  max-iterations: 30
   # Base-of-operations directory for the agent server (install.sh sets this to ~/.mcp-agent).
   # Used by SystemFactsService for disk-space reporting and by CloudAgentService for agent directories.
   home: ${AGENT_HOME:.}

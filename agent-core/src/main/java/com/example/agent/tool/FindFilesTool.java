@@ -36,11 +36,13 @@ public class FindFilesTool implements LocalTool {
 
     @Override
     public String description() {
-        return "Find files by name across the workspace using a glob pattern, like 'find -name'. "
-                + "A pattern without '/' (e.g. '*.java', 'pom.xml') matches against each file's name "
-                + "at any depth; a pattern containing '/' (e.g. 'src/**/*.yml') matches against the "
-                + "path relative to the workspace root. Returns matching paths, one per line. Common "
-                + "build/VCS directories (.git, target, node_modules, …) are skipped.";
+        return "Find files (and optionally directories) by name across the workspace using a glob "
+                + "pattern, like 'find -name'. A pattern without '/' (e.g. '*.java', 'pom.xml') matches "
+                + "against each entry's name at any depth; a pattern containing '/' (e.g. 'src/**/*.yml') "
+                + "matches against the path relative to the workspace root. Set type='dir' to find "
+                + "directories (e.g. pattern 'hugin') or type='any' for both. Returns matching paths "
+                + "(directories end with '/'), one per line. Common build/VCS directories (.git, target, "
+                + "node_modules, …) are skipped.";
     }
 
     @Override
@@ -50,10 +52,13 @@ public class FindFilesTool implements LocalTool {
                 "properties", Map.of(
                         "pattern", Map.of(
                                 "type", "string",
-                                "description", "Glob to match, e.g. '*.java', 'pom.xml' or 'src/**/*.yml'."),
+                                "description", "Glob to match, e.g. '*.java', 'pom.xml', 'hugin' or 'src/**/*.yml'."),
                         "path", Map.of(
                                 "type", "string",
                                 "description", "Directory to search under, relative to the workspace root. Defaults to '.'."),
+                        "type", Map.of(
+                                "type", "string",
+                                "description", "Restrict results to 'file', 'dir', or 'any'. Defaults to 'file'."),
                         "max_results", Map.of(
                                 "type", "integer",
                                 "description", "Maximum paths to return. Defaults to " + DEFAULT_MAX_RESULTS + ".")),
@@ -69,6 +74,7 @@ public class FindFilesTool implements LocalTool {
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String pattern = requiredString(arguments, "pattern");
         String requested = optionalString(arguments, "path", ".");
+        String typeFilter = optionalString(arguments, "type", "file").toLowerCase();
         int requestedMax = Math.min(optionalInt(arguments, "max_results", DEFAULT_MAX_RESULTS), HARD_MAX_RESULTS);
         int maxResults = requestedMax <= 0 ? DEFAULT_MAX_RESULTS : requestedMax;
 
@@ -81,14 +87,21 @@ public class FindFilesTool implements LocalTool {
             return "Error: path is not a directory: " + requested;
         }
 
-        // A bare name glob ('*.java') matches each file's name at any depth; a path glob
+        boolean wantFiles = !typeFilter.equals("dir");
+        boolean wantDirs = typeFilter.equals("dir") || typeFilter.equals("any");
+
+        // A bare name glob ('*.java') matches each entry's name at any depth; a path glob
         // ('src/**/*.yml') matches the path relative to the workspace root.
         boolean matchByName = !pattern.contains("/");
         PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
 
         List<String> results = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(base)) {
-            walk.filter(Files::isRegularFile)
+            walk.filter(p -> !p.equals(base))
+                    .filter(p -> {
+                        boolean dir = Files.isDirectory(p);
+                        return dir ? wantDirs : (wantFiles && Files.isRegularFile(p));
+                    })
                     .filter(p -> isNotSkipped(base, p))
                     .forEach(p -> {
                         if (results.size() >= maxResults + 1) {
@@ -96,7 +109,7 @@ public class FindFilesTool implements LocalTool {
                         }
                         Path candidate = matchByName ? p.getFileName() : Path.of(ws.relativize(p));
                         if (candidate != null && matcher.matches(candidate)) {
-                            results.add(ws.relativize(p));
+                            results.add(Files.isDirectory(p) ? ws.relativize(p) + "/" : ws.relativize(p));
                         }
                     });
         } catch (UncheckedIOException ignored) {
