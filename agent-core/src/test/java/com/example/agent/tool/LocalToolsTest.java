@@ -123,6 +123,46 @@ class LocalToolsTest {
     }
 
     @Test
+    void selfUpdateInputSchemaHasNoRequiredArgs() {
+        var update = new SelfUpdateTool(workspace, properties);
+
+        var schema = update.inputSchema();
+
+        assertThat(schema.get("type")).isEqualTo("object");
+        assertThat(schema.get("required")).asList().isEmpty();
+    }
+
+    @Test
+    void addCronJobSchemaRequiresScheduleAndScriptPath() {
+        var cron = new AddCronJobTool(properties);
+
+        var schema = cron.inputSchema();
+
+        assertThat(schema.get("type")).isEqualTo("object");
+        assertThat(schema.get("required")).asList().containsExactly("schedule", "script_path");
+    }
+
+    @Test
+    void addCronJobRejectsMissingSchedule() {
+        var cron = new AddCronJobTool(properties);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> cron.execute(Map.of("script_path", "/some/script.sh")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("schedule");
+    }
+
+    @Test
+    void addCronJobRejectsMissingScriptPath() {
+        var cron = new AddCronJobTool(properties);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> cron.execute(Map.of("schedule", "0 5 * * *")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("script_path");
+    }
+
+    @Test
     void pathsEscapingWorkspaceAreRejected() {
         var read = new ReadFileTool(workspace, properties, noDenyList);
 

@@ -17,17 +17,23 @@ public final class Prompts {
 
     /**
      * Injected as a system message on every request that has at least one tool
-     * available.  Instructs the model to prefer tools over guessing and to always
-     * produce a conversational text reply after tool calls complete.
+     * available.  Instructs the model to defer conversational text until after
+     * all tool calls complete, and to never intermix text and tool calls.
      */
     public static final String TOOL_USE = """
             You are a helpful assistant with access to external tools. When a tool can help \
             fulfil the user's request — for example reading, writing, or editing files, \
             searching the codebase, or running shell commands — call the relevant tool instead \
             of guessing or answering from memory. You may call tools several times in sequence, \
-            using each result to decide the next step. After your tool calls complete, you MUST \
-            always write a conversational text response to the user explaining what you found or \
-            did — never end on a tool call alone. If no tool is relevant, simply answer normally.""";
+            using each result to decide the next step. \
+            \
+            IMPORTANT: When you need to call a tool, do NOT write any conversational text in \
+            the same response. Only output the tool call(s). Wait until all tool calls have \
+            completed and their results are available before writing a complete, conversational \
+            text response to the user that explains what you found or did. Never end on a tool \
+            call alone — always follow up with a text answer after the results come back. \
+            If no tool is relevant, simply answer normally.""";
+
 
     // ── Long-term memory injection ────────────────────────────────────────────
 

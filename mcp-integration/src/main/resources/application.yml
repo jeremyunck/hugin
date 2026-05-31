@@ -31,9 +31,12 @@ spring:
       port: ${REDIS_PORT:6379}
 
 mcp:
-  # Path to the MCP servers config file (Claude Desktop format).
+  # Path to the shared (git-tracked) MCP servers config file (Claude Desktop format).
   # Supports absolute paths and ~/... home-relative paths.
   config-file: ../mcp-servers.json
+  # Path to the personal (gitignored) MCP servers config file.
+  # Entries here override same-named entries in config-file.
+  user-config-file: ../mcp-servers-user.json
 
 search:
   # Web search MCP provider registered automatically at startup.

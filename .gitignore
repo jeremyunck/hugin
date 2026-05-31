@@ -6,7 +6,7 @@ target/
 *.iml
 .vscode/
 .DS_Store
-mcp-servers.json
+mcp-servers-user.json
 application-local.yml
 node_modules/
 mcp-integration/src/main/resources/static/app.js

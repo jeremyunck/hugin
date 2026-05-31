@@ -132,6 +132,8 @@ public class AgentService {
         conversationMemory.ifPresent(cm -> messages.addAll(cm.history(request.sessionId())));
         messages.add(ChatMessage.user(request.prompt()));
 
+        String lastAssistantContent = null;
+
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             if (Instant.now().isAfter(deadline)) {
                 log.warn("Agent request timed out after {}", requestTimeout);
@@ -154,6 +156,9 @@ public class AgentService {
             // Handle tool calls regardless of finishReason — some models set
             // finish_reason to "stop" or leave it null even when tool_calls are present.
             if (assistantMsg.toolCalls() != null && !assistantMsg.toolCalls().isEmpty()) {
+                if (assistantMsg.content() != null && !assistantMsg.content().isEmpty()) {
+                    lastAssistantContent = assistantMsg.content();
+                }
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall, toolServerMap, request.sessionId());
@@ -162,8 +167,12 @@ public class AgentService {
                 }
             } else {
                 String answer = assistantMsg.content();
-                memoryService.ifPresent(memory -> memory.remember(request.prompt(), answer));
-                conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), answer));
+                if (answer == null || answer.isBlank()) {
+                    answer = lastAssistantContent;
+                }
+                final String finalAnswer = answer;
+                memoryService.ifPresent(memory -> memory.remember(request.prompt(), finalAnswer));
+                conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), finalAnswer));
                 return new AgentResponse(answer, Collections.unmodifiableList(messages));
             }
         }

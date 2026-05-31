@@ -7,14 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Maven multi-module project (Java 21, Spring Boot 3.5.x). Run from the repo root.
 
 ```bash
-mvn clean install            # build all modules + run tests
-mvn -pl agent-core test      # test a single module
-mvn -pl mcp-integration spring-boot:run   # run the agent server (port 8080)
-mvn -pl agent-terminal spring-boot:run    # run the interactive terminal front-end
+hugin install # fresh install
 
-# run a single test class / method
-mvn -pl agent-core test -Dtest=AgentServiceTest
-mvn -pl agent-core test -Dtest=AgentServiceTest#methodName
+hugin update # refresh code
 ```
 
 Two modules have a main class: `mcp-integration` (`McpClientApplication`, the agent **server** on port 8080) and `agent-terminal` (`AgentTerminalApplication`, the terminal **client**). `agent-core` and `mcp-client` are libraries. The terminal connects to a running server, so start `mcp-integration` first.

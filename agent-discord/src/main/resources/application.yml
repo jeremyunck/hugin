@@ -19,7 +19,7 @@ discord:
 
   # Guild channel IDs (right-click a channel → Copy Channel ID) the bot
   # will monitor. Leave empty to handle DMs only.
-  allowed-channel-ids: []
+  allowed-channel-ids: ["1510063052140056812"]
   #  - "1234567890123456789"
 
   # When true, the bot only replies in guild channels when directly @mentioned.
@@ -38,7 +38,7 @@ discord:
 
 logging:
   level:
-    root: WARN
+    root: INFO
     com.example.discord: INFO
   pattern:
     console: "%d{HH:mm:ss} %-5level %logger{36} - %msg%n"

@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -242,11 +243,34 @@ public class McpServerRegistryService {
         String command = resolveCommandPath(def.command());
         ServerParameters.Builder builder = ServerParameters.builder(command);
         if (def.args() != null && !def.args().isEmpty()) builder.args(def.args());
-        if (def.env()  != null && !def.env().isEmpty())  builder.env(def.env());
+        if (def.env()  != null && !def.env().isEmpty())  builder.env(resolveEnvVars(def.env()));
         return McpClient.sync(new StdioClientTransport(builder.build(), mcpJsonMapper))
                 .clientInfo(CLIENT_INFO)
                 .initializationTimeout(Duration.ofSeconds(120))
                 .build();
+    }
+
+    /**
+     * Resolves ${VAR_NAME} / $VAR_NAME patterns in env values from the JVM's
+     * environment, so config files can reference external env vars like
+     * {@code "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}.
+     */
+    static Map<String, String> resolveEnvVars(Map<String, String> env) {
+        return env.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> resolveEnvValue(e.getValue())));
+    }
+
+    private static String resolveEnvValue(String value) {
+        if (value == null || value.isEmpty()) return value;
+        // Match ${VAR_NAME} and $VAR_NAME (but not $$VAR)
+        return Pattern.compile("\\$\\{([^}]+)}|\\$(\\w+)").matcher(value)
+                .replaceAll(mr -> {
+                    String varName = mr.group(1) != null ? mr.group(1) : mr.group(2);
+                    String resolved = System.getenv(varName);
+                    return resolved != null ? resolved : mr.group();
+                });
     }
 
     private String resolveCommandPath(String command) {
