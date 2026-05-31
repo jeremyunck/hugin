@@ -78,7 +78,7 @@ public class SelfUpdateTool implements LocalTool {
         String currentPath = System.getenv("PATH") != null ? System.getenv("PATH") : "";
         String extendedPath = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:" + currentPath;
 
-        ProcessBuilder builder = new ProcessBuilder("/bin/bash", "-c", "hugin update");
+        ProcessBuilder builder = new ProcessBuilder("/bin/bash", "-c", "npm update hugin-agent; hugin update");
         builder.directory(ctx.workspace().root().toFile());
         builder.environment().put("PATH", extendedPath);
         builder.redirectErrorStream(true);
