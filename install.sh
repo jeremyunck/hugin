@@ -740,11 +740,17 @@ if [[ -n "$_existing_nr_token" ]]; then
     success "New Relic token updated."
   fi
 else
-  ask "New Relic license key (leave blank to skip): "
-  read -rsp "" NEW_RELIC_TOKEN; echo
-  if [[ -n "$NEW_RELIC_TOKEN" ]]; then
-    NEW_RELIC_ENABLED=true
-    success "New Relic monitoring enabled."
+  ask "Enable New Relic monitoring? [y/N]: "
+  read -r _nr_enable_input; echo
+  if [[ "$(echo "$_nr_enable_input" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
+    ask "New Relic license key: "
+    read -rsp "" NEW_RELIC_TOKEN; echo
+    if [[ -n "$NEW_RELIC_TOKEN" ]]; then
+      NEW_RELIC_ENABLED=true
+      success "New Relic monitoring enabled."
+    else
+      info "No license key entered — New Relic monitoring disabled."
+    fi
   else
     info "New Relic monitoring disabled."
   fi
