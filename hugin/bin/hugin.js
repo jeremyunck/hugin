@@ -146,6 +146,17 @@ program
   .description('Hugin AI personal assistant CLI')
   .version(version);
 
+// ── version ───────────────────────────────────────────────────────────────────
+// `--version` is provided by commander above; also expose a `version` subcommand
+// so `hugin version` works (the installed launcher and tooling call it this way).
+
+program
+  .command('version')
+  .description('Print the installed hugin version')
+  .action(() => {
+    process.stdout.write(`hugin ${version}\n`);
+  });
+
 // ── onboard ───────────────────────────────────────────────────────────────────
 
 program

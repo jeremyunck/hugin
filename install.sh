@@ -1463,6 +1463,20 @@ cmd_uninstall() {
   fi
 }
 
+cmd_version() {
+  # Resolve the installed version from the repo's package.json (falling back to
+  # pom.xml). REPO_DIR is substituted in at install time.
+  local _v=""
+  if [[ -f "$REPO_DIR/package.json" ]]; then
+    _v=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO_DIR/package.json" | head -n1)
+  fi
+  if [[ -z "$_v" && -f "$REPO_DIR/pom.xml" ]]; then
+    _v=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$REPO_DIR/pom.xml" | head -n1)
+  fi
+  [[ -z "$_v" ]] && _v="unknown"
+  echo "hugin $_v"
+}
+
 CMD="${1:-run}"
 shift || true
 case "$CMD" in
@@ -1477,6 +1491,7 @@ case "$CMD" in
   update)    cmd_update    ;;
   doctor)    cmd_doctor    ;;
   uninstall) cmd_uninstall ;;
+  version|--version|-v) cmd_version ;;
   *)
     cat <<USAGE
 Usage: hugin [command]
@@ -1492,6 +1507,7 @@ Usage: hugin [command]
   update         Pull latest code, rebuild jars, restart service
   doctor         Check every subsystem; auto-fix what it can
   uninstall      Remove service, launcher, and optionally ~/.hugin
+  version        Print the installed hugin version
 USAGE
     exit 1
     ;;

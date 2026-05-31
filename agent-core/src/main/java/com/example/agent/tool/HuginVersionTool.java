@@ -30,7 +30,7 @@ public class HuginVersionTool implements LocalTool {
 
     @Override
     public String description() {
-        return "Get the version of the hugin CLI tool by executing 'hugin --version'.";
+        return "Get the version of the hugin CLI tool by executing 'hugin version'.";
     }
 
     @Override
@@ -43,7 +43,9 @@ public class HuginVersionTool implements LocalTool {
 
     @Override
     public String execute(Map<String, Object> arguments) throws IOException, InterruptedException {
-        ProcessBuilder builder = new ProcessBuilder("hugin", "--version");
+        // The installed `hugin` launcher exposes a `version` subcommand, not a `--version`
+        // flag — invoking `hugin --version` falls through to the usage banner and exits 1.
+        ProcessBuilder builder = new ProcessBuilder("hugin", "version");
         builder.redirectErrorStream(true);
 
         Process process = builder.start();
@@ -56,16 +58,16 @@ public class HuginVersionTool implements LocalTool {
         if (!finished) {
             process.destroyForcibly();
             reader.join(1000);
-            return "Error: hugin --version timed out after " + timeout.toSeconds() + "s.";
+            return "Error: hugin version timed out after " + timeout.toSeconds() + "s.";
         }
         reader.join(2000);
 
         int exitCode = process.exitValue();
-        String rendered = render(output);
+        String rendered = render(output).strip();
         if (exitCode != 0) {
-            return "Error: hugin --version exited with code " + exitCode + "\n" + rendered;
+            return "Error: hugin version exited with code " + exitCode + "\n" + rendered;
         }
-        return rendered;
+        return rendered.isEmpty() ? "unknown" : rendered;
     }
 
     private void drain(Process process, StringBuilder output) {

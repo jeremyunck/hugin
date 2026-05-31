@@ -250,28 +250,37 @@ public class DiscordBotService implements DisposableBean {
             String customId = event.getComponentId();
             if (!customId.startsWith("report_bug:")) return;
 
-            // Disable the button immediately so it can't be clicked again
+            // Acknowledge the interaction immediately (within Discord's ~3s window) and disable
+            // the button so it can't be clicked again. editButton() both responds to the
+            // interaction and edits the source message.
             event.editButton(Button.danger(customId, "Report Bug").asDisabled()).queue();
 
             String sessionId = customId.substring("report_bug:".length());
             String authorMention = event.getUser().getEffectiveName();
-            String issueBody = buildIssueBody(sessionId, authorMention);
-            String title = "Bug Report — " + sessionId;
 
-            try {
-                String url = createGitHubIssue(title, issueBody);
-                event.getChannel().sendMessage("🐛 Bug report created: " + url).queue();
-            } catch (Exception e) {
-                log.error("Failed to create GitHub issue for session {}", sessionId, e);
-                String stackTrace = stackTraceOf(e);
-                // Discord caps messages at 2000 chars; keep the trace inside a fenced block.
-                String trace = stackTrace.length() > DISCORD_MSG_LIMIT - 200
-                        ? stackTrace.substring(0, DISCORD_MSG_LIMIT - 200) + "\n...(truncated)"
-                        : stackTrace;
-                event.getChannel().sendMessage(
-                        "❌ Failed to create bug report: " + e.getMessage()
-                                + "\n```\n" + trace + "\n```").queue();
-            }
+            // Creating the GitHub issue makes a blocking HTTP call. Never run it on the JDA
+            // event-dispatch thread — blocking that thread stalls the gateway and makes the
+            // interaction report as failed. Offload to a virtual thread like MessageListener does.
+            Thread.ofVirtual().start(() -> submitBugReport(event, sessionId, authorMention));
+        }
+    }
+
+    private void submitBugReport(ButtonInteractionEvent event, String sessionId, String authorMention) {
+        String issueBody = buildIssueBody(sessionId, authorMention);
+        String title = "Bug Report — " + sessionId;
+        try {
+            String url = createGitHubIssue(title, issueBody);
+            event.getChannel().sendMessage("🐛 Bug report created: " + url).queue();
+        } catch (Exception e) {
+            log.error("Failed to create GitHub issue for session {}", sessionId, e);
+            String stackTrace = stackTraceOf(e);
+            // Discord caps messages at 2000 chars; keep the trace inside a fenced block.
+            String trace = stackTrace.length() > DISCORD_MSG_LIMIT - 200
+                    ? stackTrace.substring(0, DISCORD_MSG_LIMIT - 200) + "\n...(truncated)"
+                    : stackTrace;
+            event.getChannel().sendMessage(
+                    "❌ Failed to create bug report: " + e.getMessage()
+                            + "\n```\n" + trace + "\n```").queue();
         }
     }
 
