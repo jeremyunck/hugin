@@ -246,7 +246,7 @@ public class McpServerRegistryService {
         if (def.env()  != null && !def.env().isEmpty())  builder.env(resolveEnvVars(def.env()));
         return McpClient.sync(new StdioClientTransport(builder.build(), mcpJsonMapper))
                 .clientInfo(CLIENT_INFO)
-                .initializationTimeout(Duration.ofSeconds(120))
+                .initializationTimeout(properties.initTimeout())
                 .build();
     }
 
@@ -293,7 +293,9 @@ public class McpServerRegistryService {
         if (def.url() == null || def.url().isBlank())
             throw new IllegalArgumentException("'url' is required for SSE servers");
         return McpClient.sync(HttpClientSseClientTransport.builder(def.url()).build())
-                .clientInfo(CLIENT_INFO).build();
+                .clientInfo(CLIENT_INFO)
+                .initializationTimeout(properties.initTimeout())
+                .build();
     }
 
     private ServerInfo buildServerInfo(String name, McpServerDefinition def) {

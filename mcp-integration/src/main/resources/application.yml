@@ -24,6 +24,10 @@ mcp:
   # Path to the personal (gitignored) MCP servers config file.
   # Entries here override same-named entries in config-file.
   user-config-file: ../mcp-servers-user.json
+  # Max wait for an MCP server's initialization handshake before the connection is
+  # considered failed. Generous by default to tolerate slow first-run servers (e.g. uvx
+  # downloading a package); lower it if you'd rather fail fast on unreachable servers.
+  init-timeout: 120s
 
 search:
   # Web search MCP provider registered automatically at startup.

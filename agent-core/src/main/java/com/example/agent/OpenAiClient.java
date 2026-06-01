@@ -431,16 +431,18 @@ public class OpenAiClient {
         @Override
         public ClientHttpResponse intercept(HttpRequest request, byte[] body,
                                             ClientHttpRequestExecution execution) throws IOException {
-            if (log.isDebugEnabled()) {
-                log.debug("→ LLM {} {}\n{}", request.getMethod(), request.getURI(),
-                        new String(body, StandardCharsets.UTF_8));
+            // When debug logging is off (the normal case) skip body buffering entirely so the
+            // RestClient can deserialize the response stream directly — buffering the whole LLM
+            // response into a byte[] only to discard it added latency and memory churn per request.
+            if (!log.isDebugEnabled()) {
+                return execution.execute(request, body);
             }
+            log.debug("→ LLM {} {}\n{}", request.getMethod(), request.getURI(),
+                    new String(body, StandardCharsets.UTF_8));
             ClientHttpResponse response = execution.execute(request, body);
             byte[] responseBody = response.getBody().readAllBytes();
-            if (log.isDebugEnabled()) {
-                log.debug("← LLM {} {}\n{}", request.getMethod(), response.getStatusCode(),
-                        new String(responseBody, StandardCharsets.UTF_8));
-            }
+            log.debug("← LLM {} {}\n{}", request.getMethod(), response.getStatusCode(),
+                    new String(responseBody, StandardCharsets.UTF_8));
             return new BufferedClientHttpResponse(response, responseBody);
         }
     }

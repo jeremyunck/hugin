@@ -36,6 +36,8 @@ public class AgentService {
     private final OpenAiClient llmClient;
     private final McpToolProvider toolProvider;
     private final LocalToolRegistry localTools;
+    /** Built-in local tool definitions, precomputed once — the local registry is fixed after startup. */
+    private final List<ToolDefinition> localToolDefinitions;
     private final ObjectMapper objectMapper;
     private final Duration requestTimeout;
     private final String defaultModel;
@@ -61,6 +63,11 @@ public class AgentService {
         this.llmClient = llmClient;
         this.toolProvider = toolProvider;
         this.localTools = localTools;
+        List<ToolDefinition> localDefs = new ArrayList<>();
+        for (LocalTool tool : localTools.tools()) {
+            localDefs.add(ToolDefinition.from(tool.name(), tool.description(), tool.inputSchema()));
+        }
+        this.localToolDefinitions = List.copyOf(localDefs);
         this.objectMapper = objectMapper;
         this.requestTimeout = requestTimeout;
         this.defaultModel = defaultModel;
@@ -225,11 +232,7 @@ public class AgentService {
      * Built-in local tools are advertised first and take precedence on name collisions.
      */
     private List<ToolDefinition> collectTools(Map<String, String> toolServerMap) {
-        List<ToolDefinition> toolDefinitions = new ArrayList<>();
-
-        for (LocalTool tool : localTools.tools()) {
-            toolDefinitions.add(ToolDefinition.from(tool.name(), tool.description(), tool.inputSchema()));
-        }
+        List<ToolDefinition> toolDefinitions = new ArrayList<>(localToolDefinitions);
 
         toolProvider.getAllToolsByServer().forEach((serverName, tools) ->
                 tools.forEach(tool -> {

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -30,15 +31,24 @@ class McpServerRegistryServiceTest {
     private static final ObjectMapper MAPPER =
             new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
+    // Connecting to NONEXISTENT_CMD never produces an init handshake, so the only thing bounding
+    // each failed connection is the init timeout. Use a tiny one in tests so the suite fails fast
+    // instead of blocking for the 120s production default on every connection attempt.
+    private static final Duration TEST_INIT_TIMEOUT = Duration.ofMillis(250);
+
+    private static McpProperties props(String configFile) {
+        return new McpProperties(configFile, TEST_INIT_TIMEOUT);
+    }
+
     private McpServerRegistryService serviceWithConfig(McpServersConfig config) throws Exception {
         Path configPath = tmp.resolve("mcp-servers.json");
         MAPPER.writeValue(configPath.toFile(), config);
-        return new McpServerRegistryService(new McpProperties(configPath.toString()));
+        return new McpServerRegistryService(props(configPath.toString()));
     }
 
     private McpServerRegistryService serviceNoConfig() {
         return new McpServerRegistryService(
-                new McpProperties(tmp.resolve("missing.json").toString()));
+                props(tmp.resolve("missing.json").toString()));
     }
 
     @Test
@@ -251,7 +261,7 @@ class McpServerRegistryServiceTest {
     void loadConfigThrowsOnMalformedJson() throws Exception {
         Path configPath = tmp.resolve("bad.json");
         java.nio.file.Files.writeString(configPath, "not-json-at-all");
-        var service = new McpServerRegistryService(new McpProperties(configPath.toString()));
+        var service = new McpServerRegistryService(props(configPath.toString()));
         // init() calls loadConfig(), which will throw on malformed JSON
         assertThatThrownBy(service::init)
                 .isInstanceOf(RuntimeException.class)
@@ -268,7 +278,7 @@ class McpServerRegistryServiceTest {
         // then replace the target with a directory to provoke a write failure.
         Path nested = dirPath.resolve("servers.json");
         // Service with a missing file → init works fine
-        var service = new McpServerRegistryService(new McpProperties(nested.toString()));
+        var service = new McpServerRegistryService(props(nested.toString()));
         service.init();
         // Now create a directory at the json path to block writes
         java.nio.file.Files.createDirectory(nested);

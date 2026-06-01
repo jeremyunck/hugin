@@ -27,7 +27,9 @@ jobs:
           node-version: '22'
 
       - name: Build and test
-        run: mvn --batch-mode --no-transfer-progress clean install
+        # -T 1C builds independent reactor modules in parallel (one thread per core).
+        # JaCoCo is opt-in via the "coverage" profile, so it stays off this hot path.
+        run: mvn --batch-mode --no-transfer-progress -T 1C clean install
 
       # SpotBugs SAST runs on the already-compiled bytecode — no recompile needed.
       - name: Run SpotBugs SAST
