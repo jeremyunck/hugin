@@ -30,8 +30,9 @@ import java.util.concurrent.ExecutorService;
  * }</pre>
  *
  * <p>{@code POST /api/agent/stream} returns the same agent run as a Server-Sent Events stream:
- * {@code token} events carry assistant text as it is generated, {@code tool} / {@code tool_result}
- * events report tool calls, {@code done} signals completion, and {@code error} reports a failure.
+ * {@code token} events carry assistant text as it is generated, {@code reasoning} exposes the
+ * model's reasoning stream for clients that want it, {@code tool} / {@code tool_result} events
+ * report tool calls, {@code done} signals completion, and {@code error} reports a failure.
  */
 @RestController
 @RequestMapping("/api/agent")
@@ -78,6 +79,11 @@ public class AgentController {
                     public void onContent(String delta) {
                         streamedContent.append(delta);
                         send(emitter, "token", Map.of("text", delta));
+                    }
+
+                    @Override
+                    public void onReasoning(String delta) {
+                        send(emitter, "reasoning", Map.of("text", delta));
                     }
 
                     @Override

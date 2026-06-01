@@ -11,6 +11,9 @@ public interface AgentStreamListener {
     /** A chunk of assistant text streamed from the model. */
     default void onContent(String delta) {}
 
+    /** A chunk of assistant reasoning streamed from the model. */
+    default void onReasoning(String delta) {}
+
     /** The model requested a tool call; about to be executed. */
     default void onToolCall(String toolName, String arguments) {}
 

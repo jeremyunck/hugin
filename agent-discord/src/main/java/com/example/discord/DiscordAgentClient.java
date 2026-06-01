@@ -119,7 +119,9 @@ public class DiscordAgentClient {
             case "tool_result" -> handler.onToolResult(node.path("name").asText(""), node.path("result").asText(""));
             case "error" -> { handler.onError(node.path("message").asText("unknown error")); return true; }
             case "done" -> { return true; }
-            default -> {}
+            default -> {
+                // Ignore non-user-facing events such as reasoning; Discord only renders visible text.
+            }
         }
         return false;
     }

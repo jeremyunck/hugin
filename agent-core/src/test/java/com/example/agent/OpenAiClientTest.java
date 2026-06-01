@@ -149,6 +149,31 @@ class OpenAiClientTest {
     }
 
     @Test
+    void chatUsesMaxReasoningByDefault() throws IOException {
+        String[] capturedBody = new String[1];
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            capturedBody[0] = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            byte[] body = SIMPLE_RESPONSE.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        var properties = new LlmProperties("test", "m",
+                Map.of("test", new LlmProperties.Provider("http://localhost:" + port + "/v1", null)));
+        OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
+
+        client.chat("m", List.of(ChatMessage.user("hello")), List.of());
+
+        assertThat(capturedBody[0]).contains("\"reasoning\"");
+        assertThat(capturedBody[0]).contains("\"effort\":\"max\"");
+    }
+
+    @Test
     void chatLogsDebugRequestAndResponse() throws IOException {
         // Enable DEBUG on the OpenAiClient logger to exercise LoggingInterceptor branches.
         ch.qos.logback.classic.Logger logger =

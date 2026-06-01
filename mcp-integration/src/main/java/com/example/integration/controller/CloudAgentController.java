@@ -83,6 +83,11 @@ public class CloudAgentController {
                     }
 
                     @Override
+                    public void onReasoning(String delta) {
+                        send(emitter, "reasoning", Map.of("text", delta));
+                    }
+
+                    @Override
                     public void onToolCall(String toolName, String arguments) {
                         send(emitter, "tool", Map.of("name", toolName, "args", arguments));
                     }

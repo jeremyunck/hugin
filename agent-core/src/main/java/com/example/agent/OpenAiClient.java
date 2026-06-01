@@ -4,6 +4,7 @@ import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ChatRequest;
 import com.example.agent.model.ChatResponse;
 import com.example.agent.model.ChatStreamChunk;
+import com.example.agent.model.ReasoningConfig;
 import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolDefinition;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -114,6 +115,7 @@ public class OpenAiClient {
                 messages,
                 hasTools ? tools : null,
                 hasTools ? "auto" : null,
+                ReasoningConfig.maxEffort(),
                 false
         );
 
@@ -140,12 +142,20 @@ public class OpenAiClient {
      */
     public ChatResponse chatStream(String model, List<ChatMessage> messages,
                                    List<ToolDefinition> tools, Consumer<String> onContentDelta) {
+        return chatStream(model, messages, tools, onContentDelta, delta -> {});
+    }
+
+    public ChatResponse chatStream(String model, List<ChatMessage> messages,
+                                   List<ToolDefinition> tools,
+                                   Consumer<String> onContentDelta,
+                                   Consumer<String> onReasoningDelta) {
         boolean hasTools = tools != null && !tools.isEmpty();
         ChatRequest request = new ChatRequest(
                 model,
                 messages,
                 hasTools ? tools : null,
                 hasTools ? "auto" : null,
+                ReasoningConfig.maxEffort(),
                 true
         );
 
@@ -197,7 +207,7 @@ public class OpenAiClient {
                 }
                 log.debug("← LLM stream POST {} status={}", endpoint, response.statusCode());
 
-                return parseStream(response.body(), onContentDelta);
+                return parseStream(response.body(), onContentDelta, onReasoningDelta);
             } catch (IllegalStateException e) {
                 throw e;
             } catch (IOException e) {
@@ -210,7 +220,8 @@ public class OpenAiClient {
         throw new IllegalStateException("Rate limited: max streaming retries exceeded", lastErr);
     }
 
-    private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta) throws IOException {
+    private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta,
+                                     Consumer<String> onReasoningDelta) throws IOException {
         StringBuilder content = new StringBuilder();
         StringBuilder reasoningContent = new StringBuilder();
         // Tool calls are keyed by their stream index so fragments can be merged in order.
@@ -257,6 +268,7 @@ public class OpenAiClient {
                 }
                 if (delta.reasoningContent() != null && !delta.reasoningContent().isEmpty()) {
                     reasoningContent.append(delta.reasoningContent());
+                    onReasoningDelta.accept(delta.reasoningContent());
                 }
                 if (delta.toolCalls() != null) {
                     for (ChatStreamChunk.ToolCallDelta tc : delta.toolCalls()) {

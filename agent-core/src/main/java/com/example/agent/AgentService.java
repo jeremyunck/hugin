@@ -153,7 +153,7 @@ public class AgentService {
             }
 
             ChatResponse response = stream
-                    ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent)
+                    ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent, listener::onReasoning)
                     : llmClient.chat(model, messages, toolDefinitions);
 
             // Guard against malformed/empty responses (null body, no choices, no message) so a

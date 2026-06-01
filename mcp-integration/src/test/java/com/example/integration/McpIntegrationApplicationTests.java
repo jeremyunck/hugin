@@ -114,9 +114,11 @@ class McpIntegrationApplicationTests {
     void agentStreamEndpointEmitsSseEvents() throws Exception {
         // Given: no tools and a streaming LLM that emits two text fragments then a final answer
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chatStream(anyString(), anyList(), anyList(), any()))
+        when(llmClient.chatStream(anyString(), anyList(), anyList(), any(), any()))
                 .thenAnswer(invocation -> {
                     java.util.function.Consumer<String> onDelta = invocation.getArgument(3);
+                    java.util.function.Consumer<String> onReasoning = invocation.getArgument(4);
+                    onReasoning.accept("Thinking...");
                     onDelta.accept("Hello");
                     onDelta.accept(" world");
                     return new ChatResponse(null, List.of(
@@ -138,6 +140,8 @@ class McpIntegrationApplicationTests {
                 .getContentAsString();
 
         assertThat(body).isNotNull();
+        assertThat(body).contains("event:reasoning");
+        assertThat(body).contains("\"text\":\"Thinking...\"");
         assertThat(body).contains("event:token");
         assertThat(body).contains("\"text\":\"Hello\"");
         assertThat(body).contains("event:done");
@@ -147,7 +151,7 @@ class McpIntegrationApplicationTests {
     @WithMockUser
     void agentStreamEndpointEmitsFinalAnswerWhenNoTokensStreamed() throws Exception {
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chatStream(anyString(), anyList(), anyList(), any()))
+        when(llmClient.chatStream(anyString(), anyList(), anyList(), any(), any()))
                 .thenReturn(new ChatResponse(null, List.of(
                         new ChatResponse.Choice(0, ChatMessage.assistant("Final answer"), "stop"))));
 

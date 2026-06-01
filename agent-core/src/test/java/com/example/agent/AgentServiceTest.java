@@ -421,7 +421,7 @@ class AgentServiceTest {
     void chatStreamDeliversTokensAndFinalAnswer() {
         // Given: no tools; the streaming call emits two text fragments
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
-        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
                 .thenAnswer(invocation -> {
                     java.util.function.Consumer<String> onDelta = invocation.getArgument(3);
                     onDelta.accept("Hel");
@@ -448,7 +448,7 @@ class AgentServiceTest {
         when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
         when(toolProvider.callTool(eq("server1"), eq("get_time"), anyMap())).thenReturn("12:00");
 
-        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any()))
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
                 .thenReturn(responseWithToolCall("call_1", "get_time", "{}"))
                 .thenReturn(responseWithContent("The time is 12:00."));
 

@@ -104,10 +104,13 @@ class OpenAiClientStreamTest {
                 """;
         OpenAiClient client = clientServing(sse);
 
+        List<String> reasoningTokens = new ArrayList<>();
         ChatResponse response = client.chatStream(
-                "m", List.of(ChatMessage.user("time?")), List.of(), delta -> {});
+                "m", List.of(ChatMessage.user("time?")), List.of(), delta -> {}, reasoningTokens::add);
 
         ChatMessage message = response.choices().get(0).message();
+        assertThat(reasoningTokens).containsExactly(
+                "First, I need to check the time. ", "Then I can answer.");
         assertThat(message.reasoningContent()).isEqualTo("First, I need to check the time. Then I can answer.");
         assertThat(message.content()).isEqualTo("The time is 12:00.");
     }
