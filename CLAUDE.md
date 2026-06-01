@@ -37,7 +37,7 @@ This boundary is enforced by the POMs (agent-core has no MCP dependency) and exi
 3. Sends to the configured LLM (`OpenAiClient`) advertising those tools. The model name comes from the request, falling back to `llm.model`.
 4. If the model returns `tool_calls`, executes each — local tools run in-process via `LocalToolRegistry`, otherwise routed to the owning server via `McpToolProvider.callTool` — appends results as `tool` messages, and repeats.
 5. On the final answer, persists the exchange to long-term memory (`MemoryService.remember`) and short-term conversation memory (`ConversationMemoryService.record`).
-6. Loop is bounded by `agent.max-iterations` (default 30) and a wall-clock `agent.request-timeout` (default 5m).
+6. Loop is bounded by `agent.max-iterations` (default 50) and a wall-clock `agent.request-timeout` (default 5m).
 
 Note: tool calls are handled whenever `tool_calls` are present **regardless of `finish_reason`** — some models set `stop` or null even with tool calls present. Preserve this behavior.
 

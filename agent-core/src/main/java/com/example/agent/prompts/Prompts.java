@@ -60,7 +60,12 @@ public final class Prompts {
             completed and their results are available before writing a complete, conversational \
             text response to the user that explains what you found or did. Never end on a tool \
             call alone — always follow up with a text answer after the results come back. \
-            If no tool is relevant, simply answer normally.""";
+            If no tool is relevant, simply answer normally.
+            \
+            ALWAYS WRITE A FINAL ANSWER: Your final reply to the user must be in the normal \
+            message content. Do not leave the message empty and do not put your answer only in \
+            a hidden reasoning/thinking channel — the user only sees the message content. Once \
+            you have enough information, stop calling tools and write the answer.""";
 
 
     // ── Long-term memory injection ────────────────────────────────────────────

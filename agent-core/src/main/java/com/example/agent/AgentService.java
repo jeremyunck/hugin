@@ -52,7 +52,7 @@ public class AgentService {
             ObjectMapper objectMapper,
             @Value("${agent.request-timeout:5m}") Duration requestTimeout,
             @Value("${llm.model:}") String defaultModel,
-            @Value("${agent.max-iterations:30}") int maxIterations,
+            @Value("${agent.max-iterations:50}") int maxIterations,
             WorkspaceRegistry workspaceRegistry,
             Optional<MemoryService> memoryService,
             Optional<ConversationMemoryService> conversationMemory,
@@ -194,7 +194,9 @@ public class AgentService {
                 if ((answer == null || answer.isBlank()) && hadToolCalls && !nudgedForEmptyResponse) {
                     messages.remove(messages.size() - 1);
                     nudgedForEmptyResponse = true;
-                    messages.add(ChatMessage.user("Please provide your answer."));
+                    messages.add(ChatMessage.user(
+                            "Please provide your answer now as a normal text message to the user, "
+                            + "summarising what you found or did using the tool results above."));
                     log.debug("Empty response after tool calls on iteration {}; nudging model for text answer", i);
                     continue;
                 }

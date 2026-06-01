@@ -212,6 +212,9 @@ public class OpenAiClient {
 
     private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta) throws IOException {
         StringBuilder content = new StringBuilder();
+        // Reasoning models stream chain-of-thought separately from content and occasionally never
+        // emit any content. Accumulated as a fallback so an answer-less "content" still yields text.
+        StringBuilder reasoning = new StringBuilder();
         // Tool calls are keyed by their stream index so fragments can be merged in order.
         Map<Integer, MutableToolCall> toolCalls = new LinkedHashMap<>();
         String finishReason = null;
@@ -254,6 +257,10 @@ public class OpenAiClient {
                     content.append(delta.content());
                     onContentDelta.accept(delta.content());
                 }
+                String reasoningDelta = delta.reasoning() != null ? delta.reasoning() : delta.reasoningContent();
+                if (reasoningDelta != null && !reasoningDelta.isEmpty()) {
+                    reasoning.append(reasoningDelta);
+                }
                 if (delta.toolCalls() != null) {
                     for (ChatStreamChunk.ToolCallDelta tc : delta.toolCalls()) {
                         toolCalls.computeIfAbsent(tc.index(), i -> new MutableToolCall()).merge(tc);
@@ -267,9 +274,20 @@ public class OpenAiClient {
             assembledToolCalls.add(tc.toToolCall());
         }
 
+        // Prefer real content; if the model emitted only reasoning (and no tool calls to continue
+        // the loop), fall back to it so the turn yields text instead of an empty assistant message.
+        String assembledContent = null;
+        if (!content.isEmpty()) {
+            assembledContent = content.toString();
+        } else if (assembledToolCalls.isEmpty() && reasoning.length() > 0) {
+            assembledContent = reasoning.toString();
+            log.debug("Stream produced no content; falling back to {} chars of reasoning text",
+                    reasoning.length());
+        }
+
         ChatMessage message = new ChatMessage(
                 "assistant",
-                content.isEmpty() ? null : content.toString(),
+                assembledContent,
                 assembledToolCalls.isEmpty() ? null : assembledToolCalls,
                 null);
         ChatResponse assembled = new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));

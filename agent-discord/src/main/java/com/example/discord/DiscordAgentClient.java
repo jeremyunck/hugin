@@ -74,33 +74,43 @@ public class DiscordAgentClient {
         parseSse(response.body(), handler);
     }
 
-    private void parseSse(InputStream stream, Handler handler) throws IOException {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+    private void parseSse(InputStream stream, Handler handler) {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, StandardCharsets.UTF_8));
+        try {
             String event = null;
             StringBuilder data = new StringBuilder();
             String line;
-            try {
-                while ((line = reader.readLine()) != null) {
-                    if (line.isEmpty()) {
-                        if (event != null) {
-                            if (dispatch(event, data.toString(), handler)) return;
-                        }
-                        event = null;
-                        data.setLength(0);
-                    } else if (line.startsWith("event:")) {
-                        event = line.substring("event:".length()).trim();
-                    } else if (line.startsWith("data:")) {
-                        if (data.length() > 0) data.append('\n');
-                        String payload = line.substring("data:".length());
-                        data.append(payload.startsWith(" ") ? payload.substring(1) : payload);
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) {
+                    if (event != null) {
+                        if (dispatch(event, data.toString(), handler)) return;
                     }
-                    // other SSE fields (id:, retry:, comments) are ignored
+                    event = null;
+                    data.setLength(0);
+                } else if (line.startsWith("event:")) {
+                    event = line.substring("event:".length()).trim();
+                } else if (line.startsWith("data:")) {
+                    if (data.length() > 0) data.append('\n');
+                    String payload = line.substring("data:".length());
+                    data.append(payload.startsWith(" ") ? payload.substring(1) : payload);
                 }
-            } catch (IOException e) {
-                // Stream closed prematurely (e.g. chunked-transfer EOF before "done" event).
-                // Any tokens already dispatched to the handler are still valid — treat as
-                // end-of-stream rather than propagating, so the caller sees a normal return.
+                // other SSE fields (id:, retry:, comments) are ignored
+            }
+        } catch (IOException e) {
+            // Stream closed prematurely (e.g. chunked-transfer EOF before "done" event).
+            // Any tokens already dispatched to the handler are still valid — treat as
+            // end-of-stream rather than propagating, so the caller sees a normal return.
+        } finally {
+            // Closing the reader is done explicitly (not via try-with-resources) because when we
+            // return early on the "done" event the underlying chunked HTTP stream has not been
+            // fully drained; the JDK HttpClient then throws "chunked transfer encoding,
+            // state: READING_LENGTH" / EOFException from close(). That close failure is benign —
+            // we already have every event we need — so swallow it instead of surfacing an error.
+            try {
+                reader.close();
+            } catch (IOException ignored) {
+                // benign: stream closed mid-chunk after we finished reading events
             }
         }
     }

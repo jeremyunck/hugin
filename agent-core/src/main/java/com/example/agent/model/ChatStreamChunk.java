@@ -24,6 +24,11 @@ public record ChatStreamChunk(List<Choice> choices) {
     public record Delta(
             String role,
             String content,
+            // Reasoning models (e.g. gpt-oss, deepseek) stream their chain-of-thought here and
+            // sometimes leave {@code content} empty entirely. Captured so the answer is not lost.
+            // OpenRouter uses "reasoning"; some providers use "reasoning_content".
+            String reasoning,
+            @JsonProperty("reasoning_content") String reasoningContent,
             @JsonProperty("tool_calls") List<ToolCallDelta> toolCalls
     ) {}
 
