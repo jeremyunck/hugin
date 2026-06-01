@@ -38,6 +38,7 @@ public class DiscordAgentClient {
     /** Receives streamed agent events in order. */
     public interface Handler {
         void onToken(String text);
+        default void onConfig(boolean developerMode) {}
         default void onToolCall(String name, String args) {}
         default void onToolResult(String name, String result) {}
         void onError(String message);
@@ -115,6 +116,7 @@ public class DiscordAgentClient {
         }
         switch (event) {
             case "token" -> handler.onToken(node.path("text").asText(""));
+            case "config" -> handler.onConfig(node.path("developerMode").asBoolean(false));
             case "tool" -> handler.onToolCall(node.path("name").asText(""), node.path("args").asText(""));
             case "tool_result" -> handler.onToolResult(node.path("name").asText(""), node.path("result").asText(""));
             case "error" -> { handler.onError(node.path("message").asText("unknown error")); return true; }

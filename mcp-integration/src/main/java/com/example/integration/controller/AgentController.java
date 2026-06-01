@@ -2,6 +2,7 @@ package com.example.integration.controller;
 
 import com.example.agent.AgentService;
 import com.example.agent.AgentStreamListener;
+import com.example.agent.DeveloperModeService;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,14 +45,17 @@ public class AgentController {
     private final ObjectMapper objectMapper;
     private final ExecutorService streamExecutor;
     private final long streamTimeoutMillis;
+    private final DeveloperModeService developerModeService;
 
     public AgentController(AgentService agentService,
                            ObjectMapper objectMapper,
                            ExecutorService agentStreamExecutor,
+                           DeveloperModeService developerModeService,
                            @Value("${agent.request-timeout:5m}") Duration requestTimeout) {
         this.agentService = agentService;
         this.objectMapper = objectMapper;
         this.streamExecutor = agentStreamExecutor;
+        this.developerModeService = developerModeService;
         // Allow a margin beyond the agent's own deadline before the SSE connection is torn down.
         this.streamTimeoutMillis = requestTimeout.plusSeconds(60).toMillis();
     }
@@ -72,6 +76,7 @@ public class AgentController {
         SseEmitter emitter = new SseEmitter(streamTimeoutMillis);
 
         streamExecutor.execute(() -> {
+            send(emitter, "config", Map.of("developerMode", developerModeService.isEnabled()));
             try {
                 StringBuilder streamedContent = new StringBuilder();
                 AgentResponse response = agentService.chatStream(request, new AgentStreamListener() {
