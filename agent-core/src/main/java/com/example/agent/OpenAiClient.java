@@ -5,6 +5,7 @@ import com.example.agent.model.ChatRequest;
 import com.example.agent.model.ChatResponse;
 import com.example.agent.model.ChatStreamChunk;
 import com.example.agent.model.ReasoningConfig;
+import com.example.agent.model.ThinkingConfig;
 import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolDefinition;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,6 +61,7 @@ public class OpenAiClient {
     private final ObjectMapper objectMapper;
     private final HttpClient streamingHttpClient;
     private final String apiKey;
+    private final boolean deepSeekCompat;
 
     public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -72,6 +74,7 @@ public class OpenAiClient {
         }
         this.endpoint = URI.create(stripTrailingSlash(baseUrl) + "/chat/completions");
         this.apiKey = provider.hasApiKey() ? provider.apiKey() : null;
+        this.deepSeekCompat = isDeepSeekEndpoint(baseUrl);
 
         var httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -110,14 +113,7 @@ public class OpenAiClient {
      */
     public ChatResponse chat(String model, List<ChatMessage> messages, List<ToolDefinition> tools) {
         boolean hasTools = tools != null && !tools.isEmpty();
-        ChatRequest request = new ChatRequest(
-                model,
-                messages,
-                hasTools ? tools : null,
-                hasTools ? "auto" : null,
-                ReasoningConfig.maxEffort(),
-                false
-        );
+        ChatRequest request = buildRequest(model, messages, tools, false);
 
         log.debug("Sending chat request: model={}, messages={}, tools={}",
                 model, messages.size(), hasTools ? tools.size() : 0);
@@ -150,14 +146,7 @@ public class OpenAiClient {
                                    Consumer<String> onContentDelta,
                                    Consumer<String> onReasoningDelta) {
         boolean hasTools = tools != null && !tools.isEmpty();
-        ChatRequest request = new ChatRequest(
-                model,
-                messages,
-                hasTools ? tools : null,
-                hasTools ? "auto" : null,
-                ReasoningConfig.maxEffort(),
-                true
-        );
+        ChatRequest request = buildRequest(model, messages, tools, true);
 
         log.debug("Sending streaming chat request: model={}, messages={}, tools={}",
                 model, messages.size(), hasTools ? tools.size() : 0);
@@ -341,6 +330,58 @@ public class OpenAiClient {
 
     private static String stripTrailingSlash(String url) {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    private ChatRequest buildRequest(String model, List<ChatMessage> messages, List<ToolDefinition> tools,
+                                     boolean stream) {
+        boolean hasTools = tools != null && !tools.isEmpty();
+        boolean deepSeek = deepSeekCompat || isDeepSeekModel(model);
+        List<ChatMessage> normalizedMessages = deepSeek ? normalizeForDeepSeek(messages) : messages;
+        return new ChatRequest(
+                model,
+                normalizedMessages,
+                hasTools ? tools : null,
+                deepSeek ? null : (hasTools ? "auto" : null),
+                deepSeek ? "max" : null,
+                deepSeek ? null : ReasoningConfig.maxEffort(),
+                deepSeek ? ThinkingConfig.enabled() : null,
+                stream
+        );
+    }
+
+    private static boolean isDeepSeekModel(String model) {
+        if (model == null) {
+            return false;
+        }
+        String lower = model.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("deepseek-v4") || lower.contains("deepseek-reasoner");
+    }
+
+    private static boolean isDeepSeekEndpoint(String baseUrl) {
+        try {
+            URI uri = URI.create(stripTrailingSlash(baseUrl));
+            String host = uri.getHost();
+            return host != null && host.toLowerCase(java.util.Locale.ROOT).contains("deepseek.com");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static List<ChatMessage> normalizeForDeepSeek(List<ChatMessage> messages) {
+        List<ChatMessage> normalized = new ArrayList<>(messages.size());
+        for (ChatMessage message : messages) {
+            if ("assistant".equals(message.role()) && message.toolCalls() != null && !message.toolCalls().isEmpty()) {
+                normalized.add(new ChatMessage(
+                        message.role(),
+                        message.content() == null ? "" : message.content(),
+                        message.reasoningContent() == null ? "" : message.reasoningContent(),
+                        message.toolCalls(),
+                        message.toolCallId()));
+            } else {
+                normalized.add(message);
+            }
+        }
+        return normalized;
     }
 
     /** Accumulates streamed fragments of a single tool call into a complete {@link ToolCall}. */

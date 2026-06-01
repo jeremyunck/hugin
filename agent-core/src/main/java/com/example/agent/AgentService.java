@@ -180,6 +180,8 @@ public class AgentService {
                 if (assistantMsg.content() != null && !assistantMsg.content().isEmpty()) {
                     lastAssistantContent = assistantMsg.content();
                 }
+                assistantMsg = normalizeToolCallAssistantMessage(assistantMsg);
+                messages.set(messages.size() - 1, assistantMsg);
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall, toolServerMap, request.sessionId());
@@ -314,5 +316,17 @@ public class AgentService {
             log.warn("Could not parse tool arguments '{}': {}", arguments, e.getMessage());
             return Map.of();
         }
+    }
+
+    private static ChatMessage normalizeToolCallAssistantMessage(ChatMessage message) {
+        if (message == null || message.toolCalls() == null || message.toolCalls().isEmpty()) {
+            return message;
+        }
+        return new ChatMessage(
+                message.role(),
+                message.content() == null ? "" : message.content(),
+                message.reasoningContent() == null ? "" : message.reasoningContent(),
+                message.toolCalls(),
+                message.toolCallId());
     }
 }

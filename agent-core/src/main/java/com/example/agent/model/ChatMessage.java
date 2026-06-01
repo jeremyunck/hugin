@@ -40,7 +40,7 @@ public record ChatMessage(
     }
 
     public static ChatMessage assistantWithToolCalls(List<ToolCall> toolCalls, String reasoningContent) {
-        return new ChatMessage("assistant", null, reasoningContent, toolCalls, null);
+        return new ChatMessage("assistant", "", reasoningContent, toolCalls, null);
     }
 
     public static ChatMessage tool(String toolCallId, String content) {

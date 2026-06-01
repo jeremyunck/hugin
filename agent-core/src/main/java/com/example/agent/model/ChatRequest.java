@@ -12,6 +12,8 @@ public record ChatRequest(
         List<ChatMessage> messages,
         List<ToolDefinition> tools,
         @JsonProperty("tool_choice") String toolChoice,
+        @JsonProperty("reasoning_effort") String reasoningEffort,
         ReasoningConfig reasoning,
+        ThinkingConfig thinking,
         boolean stream
 ) {}

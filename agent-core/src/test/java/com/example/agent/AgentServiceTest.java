@@ -114,6 +114,7 @@ class AgentServiceTest {
         List<ChatMessage> secondCallMessages = captor.getAllValues().get(1);
         assertThat(secondCallMessages).anySatisfy(msg -> {
             assertThat(msg.role()).isEqualTo("assistant");
+            assertThat(msg.content()).isNotNull();
             assertThat(msg.reasoningContent()).isEqualTo("I should check the time first.");
             assertThat(msg.toolCalls()).isNotNull();
         });
