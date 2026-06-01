@@ -170,7 +170,7 @@ class OpenAiClientTest {
         client.chat("m", List.of(ChatMessage.user("hello")), List.of());
 
         assertThat(capturedBody[0]).contains("\"reasoning\"");
-        assertThat(capturedBody[0]).contains("\"effort\":\"max\"");
+        assertThat(capturedBody[0]).contains("\"effort\":\"xhigh\"");
     }
 
     @Test
@@ -196,7 +196,7 @@ class OpenAiClientTest {
         client.chat("deepseek-v4-flash", List.of(ChatMessage.user("hello")), List.of());
 
         assertThat(capturedBody[0]).contains("\"thinking\":{\"type\":\"enabled\"}");
-        assertThat(capturedBody[0]).contains("\"reasoning_effort\":\"max\"");
+        assertThat(capturedBody[0]).contains("\"reasoning_effort\":\"xhigh\"");
         assertThat(capturedBody[0]).doesNotContain("\"tool_choice\"");
         assertThat(capturedBody[0]).doesNotContain("\"reasoning\":");
     }

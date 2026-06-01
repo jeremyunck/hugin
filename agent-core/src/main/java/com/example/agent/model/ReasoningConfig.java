@@ -10,6 +10,6 @@ public record ReasoningConfig(
         Boolean enabled
 ) {
     public static ReasoningConfig maxEffort() {
-        return new ReasoningConfig("max", Boolean.FALSE, Boolean.TRUE);
+        return new ReasoningConfig("xhigh", Boolean.FALSE, Boolean.TRUE);
     }
 }

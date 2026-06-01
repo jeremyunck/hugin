@@ -342,7 +342,7 @@ public class OpenAiClient {
                 normalizedMessages,
                 hasTools ? tools : null,
                 deepSeek ? null : (hasTools ? "auto" : null),
-                deepSeek ? "max" : null,
+                deepSeek ? "xhigh" : null,
                 deepSeek ? null : ReasoningConfig.maxEffort(),
                 deepSeek ? ThinkingConfig.enabled() : null,
                 stream
