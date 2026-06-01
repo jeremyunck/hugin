@@ -90,6 +90,28 @@ class OpenAiClientStreamTest {
         assertThat(response.choices().get(0).finishReason()).isEqualTo("tool_calls");
     }
 
+    @Test
+    void reassemblesReasoningContentFromStreamedFragments() throws IOException {
+        String sse = """
+                data: {"choices":[{"index":0,"delta":{"reasoning_content":"First, I need to check the time. "},"finish_reason":null}]}
+
+                data: {"choices":[{"index":0,"delta":{"reasoning_content":"Then I can answer."},"finish_reason":null}]}
+
+                data: {"choices":[{"index":0,"delta":{"content":"The time is 12:00."},"finish_reason":"stop"}]}
+
+                data: [DONE]
+
+                """;
+        OpenAiClient client = clientServing(sse);
+
+        ChatResponse response = client.chatStream(
+                "m", List.of(ChatMessage.user("time?")), List.of(), delta -> {});
+
+        ChatMessage message = response.choices().get(0).message();
+        assertThat(message.reasoningContent()).isEqualTo("First, I need to check the time. Then I can answer.");
+        assertThat(message.content()).isEqualTo("The time is 12:00.");
+    }
+
     private OpenAiClient clientServing(String sseBody) throws IOException {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {

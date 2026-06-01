@@ -24,6 +24,7 @@ public record ChatStreamChunk(List<Choice> choices) {
     public record Delta(
             String role,
             String content,
+            @JsonProperty("reasoning_content") String reasoningContent,
             @JsonProperty("tool_calls") List<ToolCallDelta> toolCalls
     ) {}
 

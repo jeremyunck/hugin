@@ -212,6 +212,7 @@ public class OpenAiClient {
 
     private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta) throws IOException {
         StringBuilder content = new StringBuilder();
+        StringBuilder reasoningContent = new StringBuilder();
         // Tool calls are keyed by their stream index so fragments can be merged in order.
         Map<Integer, MutableToolCall> toolCalls = new LinkedHashMap<>();
         String finishReason = null;
@@ -254,6 +255,9 @@ public class OpenAiClient {
                     content.append(delta.content());
                     onContentDelta.accept(delta.content());
                 }
+                if (delta.reasoningContent() != null && !delta.reasoningContent().isEmpty()) {
+                    reasoningContent.append(delta.reasoningContent());
+                }
                 if (delta.toolCalls() != null) {
                     for (ChatStreamChunk.ToolCallDelta tc : delta.toolCalls()) {
                         toolCalls.computeIfAbsent(tc.index(), i -> new MutableToolCall()).merge(tc);
@@ -270,6 +274,7 @@ public class OpenAiClient {
         ChatMessage message = new ChatMessage(
                 "assistant",
                 content.isEmpty() ? null : content.toString(),
+                reasoningContent.isEmpty() ? null : reasoningContent.toString(),
                 assembledToolCalls.isEmpty() ? null : assembledToolCalls,
                 null);
         ChatResponse assembled = new ChatResponse(null, List.of(new ChatResponse.Choice(0, message, finishReason)));

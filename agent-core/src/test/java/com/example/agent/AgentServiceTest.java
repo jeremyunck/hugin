@@ -92,6 +92,34 @@ class AgentServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void preservesReasoningContentAcrossToolLoops() {
+        // Given: DeepSeek-style reasoning content alongside a tool call
+        var availableTool = new AvailableTool("get_time", "Get the current time",
+                Map.of("type", "object", "properties", Map.of()));
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of("server1", List.of(availableTool)));
+        when(toolProvider.callTool(eq("server1"), eq("get_time"), anyMap())).thenReturn("12:00");
+
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithToolCall("call_1", "get_time", "{}", "I should check the time first."))
+                .thenReturn(responseWithContent("The time is 12:00."));
+
+        // When
+        AgentResponse result = agentService.chat(new AgentRequest(PROMPT, MODEL));
+
+        // Then: the assistant turn sent back to the model still includes reasoning_content
+        assertThat(result.response()).contains("The time is 12:00");
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient, times(2)).chat(eq(MODEL), captor.capture(), anyList());
+        List<ChatMessage> secondCallMessages = captor.getAllValues().get(1);
+        assertThat(secondCallMessages).anySatisfy(msg -> {
+            assertThat(msg.role()).isEqualTo("assistant");
+            assertThat(msg.reasoningContent()).isEqualTo("I should check the time first.");
+            assertThat(msg.toolCalls()).isNotNull();
+        });
+    }
+
+    @Test
     void shouldStopAfterMaxIterations() {
         // Given: tool always returns a result, model keeps requesting tool calls
         var availableTool = new AvailableTool("always_call", "Always calls",
@@ -636,10 +664,14 @@ class AgentServiceTest {
     }
 
     private static ChatResponse responseWithToolCall(String id, String name, String args) {
+        return responseWithToolCall(id, name, args, null);
+    }
+
+    private static ChatResponse responseWithToolCall(String id, String name, String args, String reasoningContent) {
         var toolCall = new ToolCall(id, "function", new ToolCall.FunctionCall(name, args));
         return new ChatResponse("id", List.of(
                 new ChatResponse.Choice(0,
-                        ChatMessage.assistantWithToolCalls(List.of(toolCall)),
+                        ChatMessage.assistantWithToolCalls(List.of(toolCall), reasoningContent),
                         "tool_calls")));
     }
 }
