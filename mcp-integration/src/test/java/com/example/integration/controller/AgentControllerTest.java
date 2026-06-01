@@ -266,6 +266,36 @@ class AgentControllerTest {
     }
 
     @Test
+    void chatStreamEmitsConfigEventUsingDeveloperModeState() throws InterruptedException {
+        when(developerModeService.isEnabled()).thenReturn(true);
+        var request = new AgentRequest("Hello", "llama3.2");
+        var latch = new CountDownLatch(1);
+
+        doAnswer(invocation -> { latch.countDown(); return null; })
+                .when(agentService).chatStream(eq(request), any(AgentStreamListener.class));
+
+        controller.chatStream(request);
+
+        assertThat(latch.await(2, TimeUnit.SECONDS)).isTrue();
+        verify(developerModeService).isEnabled();
+    }
+
+    @Test
+    void chatStreamEmitsConfigEventWhenDeveloperModeOff() throws InterruptedException {
+        when(developerModeService.isEnabled()).thenReturn(false);
+        var request = new AgentRequest("Hello", "llama3.2");
+        var latch = new CountDownLatch(1);
+
+        doAnswer(invocation -> { latch.countDown(); return null; })
+                .when(agentService).chatStream(eq(request), any(AgentStreamListener.class));
+
+        controller.chatStream(request);
+
+        assertThat(latch.await(2, TimeUnit.SECONDS)).isTrue();
+        verify(developerModeService).isEnabled();
+    }
+
+    @Test
     void chatStreamWithAllListenerCallbacks() throws InterruptedException {
         var request = new AgentRequest("Do stuff", "llama3.2");
         var latch = new CountDownLatch(1);

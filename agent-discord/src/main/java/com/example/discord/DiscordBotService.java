@@ -81,6 +81,8 @@ public class DiscordBotService implements DisposableBean {
      */
     private final ConcurrentHashMap<String, LinkedList<String>> conversationLogs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, LinkedList<String>> diagnosticLogs = new ConcurrentHashMap<>();
+    // Cached across streams so that if developer mode was already on, the next stream starts correctly.
+    private volatile boolean lastKnownDeveloperMode = false;
 
     @Autowired
     public DiscordBotService(DiscordProperties properties, DiscordAgentClient agentClient,
@@ -405,11 +407,12 @@ public class DiscordBotService implements DisposableBean {
         log.debug("Agent request — session={} author={}", sessionId, event.getAuthor().getName());
         String prompt = buildPromptWithContext(event, content);
         StringBuilder response = new StringBuilder();
-        AtomicBoolean developerMode = new AtomicBoolean(false);
+        AtomicBoolean developerMode = new AtomicBoolean(lastKnownDeveloperMode);
         try {
             agentClient.streamChat(prompt, sessionId, new DiscordAgentClient.Handler() {
                 @Override
                 public void onConfig(boolean enabled) {
+                    lastKnownDeveloperMode = enabled;
                     developerMode.set(enabled);
                 }
 
@@ -423,7 +426,8 @@ public class DiscordBotService implements DisposableBean {
                     logToolCall(sessionId, name, args);
                     if (!developerMode.get()) return;
                     event.getChannel().sendTyping().queue();
-                    event.getChannel().sendMessage("Calling **" + name + "**...").queue();
+                    event.getChannel().sendMessage("Calling **" + name + "**...").queue(
+                            null, err -> log.warn("Failed to post tool call to Discord: {}", err.getMessage()));
                 }
 
                 @Override
@@ -432,7 +436,8 @@ public class DiscordBotService implements DisposableBean {
                     logToolResult(sessionId, name, resultText);
                     if (!developerMode.get()) return;
                     String preview = resultText.length() > 200 ? resultText.substring(0, 200) + "..." : resultText;
-                    event.getChannel().sendMessage("**" + name + "** result:\n```\n" + preview + "\n```").queue();
+                    event.getChannel().sendMessage("**" + name + "** result:\n```\n" + preview + "\n```").queue(
+                            null, err -> log.warn("Failed to post tool result to Discord: {}", err.getMessage()));
                 }
 
                 @Override
