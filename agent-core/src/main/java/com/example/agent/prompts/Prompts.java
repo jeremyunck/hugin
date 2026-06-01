@@ -2,6 +2,10 @@ package com.example.agent.prompts;
 
 import com.example.agent.SystemFacts;
 
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+
 /**
  * Central home for every prompt string sent to the LLM.
  *
@@ -80,10 +84,15 @@ public final class Prompts {
      * model knows the host machine's capabilities without needing to probe it
      * at chat time.
      */
+    private static final DateTimeFormatter DT_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'");
+
     public static String systemFacts(SystemFacts f) {
         long totalMb = f.totalMemoryBytes() / (1024 * 1024);
         long freeGb  = f.freeDiskBytes()    / (1024 * 1024 * 1024);
         StringBuilder sb = new StringBuilder("System facts (this machine):\n");
+        sb.append("Current date/time: ")
+          .append(ZonedDateTime.now(ZoneOffset.UTC).format(DT_FMT)).append("\n");
         sb.append("OS: ").append(f.osName()).append(' ').append(f.osVersion())
           .append(" (").append(f.arch()).append(")\n");
         sb.append("CPU: ").append(f.availableProcessors()).append(" cores\n");
