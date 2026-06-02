@@ -5,6 +5,7 @@ import com.example.agent.prompts.Prompts;
 import com.example.agent.tool.LocalTool;
 import com.example.agent.tool.LocalToolProperties;
 import com.example.agent.tool.LocalToolRegistry;
+import com.example.agent.tool.ToolContext;
 import com.example.agent.tool.Workspace;
 import com.example.agent.tool.WorkspaceRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -551,6 +552,50 @@ class AgentServiceTest {
         assertThat(sent.get(1).content()).isEqualTo("Nice to meet you, Ada.");
         assertThat(sent.get(2).role()).isEqualTo("user");
         assertThat(sent.get(2).content()).isEqualTo("What is my name?");
+    }
+
+    @Test
+    void clientManagedContextSkipsConversationMemoryAndThreadsChannelHistoryToTools() {
+        // Given: short-term memory available, plus a local tool that records the channel history it sees
+        ConversationMemoryService conversation = mock(ConversationMemoryService.class);
+        RecordingChannelTool channelTool = new RecordingChannelTool();
+        var service = new AgentService(
+                llmClient, toolProvider, registry(channelTool), objectMapper, FIVE_MINUTES, DEFAULT_MODEL,
+                MAX_ITERATIONS, defaultRegistry(), Optional.empty(), Optional.of(conversation),
+                Optional.empty(), Optional.empty());
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithToolCall("call_1", "echo_channel", "{}"))
+                .thenReturn(responseWithContent("done"));
+
+        // When: the request carries its own recent-message context (as the Discord front-end does)
+        List<String> recent = List.of("Alice: hi", "Bob: yo");
+        AgentResponse result = service.chat(new AgentRequest(PROMPT, MODEL, SESSION_ID, recent));
+
+        // Then: server-side conversation memory is neither replayed nor recorded for the request,
+        // and the channel history is threaded through to the tool's ToolContext.
+        assertThat(result.response()).isEqualTo("done");
+        verify(conversation, never()).history(anyString());
+        verify(conversation, never()).record(anyString(), anyString(), anyString());
+        assertThat(channelTool.seen).isEqualTo(recent);
+    }
+
+    /** Local tool that captures the channel history visible in its {@link ToolContext}. */
+    private static class RecordingChannelTool implements LocalTool {
+        private List<String> seen;
+
+        @Override public String name() { return "echo_channel"; }
+        @Override public String description() { return "Echoes the channel history it can see."; }
+        @Override public Map<String, Object> inputSchema() {
+            return Map.of("type", "object", "properties", Map.of());
+        }
+        @Override public String execute(Map<String, Object> arguments) {
+            return execute(arguments, new ToolContext(null));
+        }
+        @Override public String execute(Map<String, Object> arguments, ToolContext ctx) {
+            this.seen = ctx.channelMessages();
+            return "ok";
+        }
     }
 
     @Test

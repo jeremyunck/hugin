@@ -63,6 +63,10 @@ public class DiscordBotService implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordBotService.class);
     private static final int DISCORD_MSG_LIMIT = 2000;
+    /** Recent channel messages injected into the prompt as Hugin's short-term context. */
+    private static final int CHANNEL_CONTEXT_MESSAGES = 2;
+    /** How many recent messages we fetch and forward; read_discord_channel can surface up to this many. */
+    private static final int CHANNEL_HISTORY_FETCH = 10;
     private static final int DIAGNOSTIC_WORD_LIMIT = 200;
     private static final int DIAGNOSTIC_LOG_LINES = 120;
     private static final int DIAGNOSTIC_LOG_CHAR_LIMIT = 24_000;
@@ -418,11 +422,12 @@ public class DiscordBotService implements DisposableBean {
             if (!isDm && !isAllowedChannel) return;
             if (isDm && !properties.isRespondToDms()) return;
 
-            // In guild channels, optionally gate on @mention
+            // In guild channels, optionally only respond when Hugin is directly addressed — either
+            // @mentioned or replied to. This is the default so Hugin stays quiet in busy channels.
             if (!isDm && properties.isMentionOnly()) {
                 boolean mentioned = event.getMessage().getMentions().getUsers().stream()
                         .anyMatch(u -> u.getIdLong() == jda.getSelfUser().getIdLong());
-                if (!mentioned) return;
+                if (!mentioned && !isReplyToSelf(event)) return;
             }
 
             String content = event.getMessage().getContentStripped().strip();
@@ -437,6 +442,13 @@ public class DiscordBotService implements DisposableBean {
 
             Thread.ofVirtual().start(() -> handleMessage(event, content, sessionId));
         }
+    }
+
+    /** True when {@code event} is a reply to one of Hugin's own messages. */
+    private boolean isReplyToSelf(MessageReceivedEvent event) {
+        var referenced = event.getMessage().getReferencedMessage();
+        return referenced != null && jda != null
+                && referenced.getAuthor().getIdLong() == jda.getSelfUser().getIdLong();
     }
 
     // ---- Button interaction listener ----
@@ -476,11 +488,15 @@ public class DiscordBotService implements DisposableBean {
 
     private void handleMessage(MessageReceivedEvent event, String content, String sessionId) {
         log.debug("Agent request — session={} author={}", sessionId, event.getAuthor().getName());
-        String prompt = buildPromptWithContext(event, content);
+        // Short-term context comes from the channel itself: the messages immediately preceding the
+        // one Hugin is replying to. We fetch up to CHANNEL_HISTORY_FETCH so the read_discord_channel
+        // tool can surface more on demand, but only inject CHANNEL_CONTEXT_MESSAGES into the prompt.
+        List<String> recentMessages = fetchRecentMessages(event, CHANNEL_HISTORY_FETCH);
+        String prompt = buildPromptWithContext(event, content, recentMessages);
         StringBuilder response = new StringBuilder();
         AtomicBoolean developerMode = new AtomicBoolean(lastKnownDeveloperMode);
         try {
-            agentClient.streamChat(prompt, sessionId, new DiscordAgentClient.Handler() {
+            agentClient.streamChat(prompt, sessionId, recentMessages, new DiscordAgentClient.Handler() {
                 @Override
                 public void onConfig(boolean enabled) {
                     lastKnownDeveloperMode = enabled;
@@ -548,9 +564,12 @@ public class DiscordBotService implements DisposableBean {
 
     /**
      * Prepends a compact Discord-context header to {@code content} so the model knows which
-     * channel or DM it is responding in without needing to call any tools to discover it.
+     * channel or DM it is responding in without needing to call any tools to discover it, followed
+     * by the last {@link #CHANNEL_CONTEXT_MESSAGES} messages that preceded the one being replied to
+     * as short-term context. (More history is available to the agent via {@code read_discord_channel}.)
      */
-    private String buildPromptWithContext(MessageReceivedEvent event, String content) {
+    private String buildPromptWithContext(MessageReceivedEvent event, String content,
+                                          List<String> recentMessages) {
         StringBuilder ctx = new StringBuilder("[Discord context: ");
         boolean isDm = event.getChannelType() == ChannelType.PRIVATE;
         if (isDm) {
@@ -562,8 +581,45 @@ public class DiscordBotService implements DisposableBean {
                 ctx.append(", server: ").append(event.getGuild().getName());
             }
         }
-        ctx.append("]\n").append(content);
+        ctx.append("]\n");
+        if (recentMessages != null && !recentMessages.isEmpty()) {
+            int from = Math.max(0, recentMessages.size() - CHANNEL_CONTEXT_MESSAGES);
+            ctx.append("[Recent channel messages (oldest first):");
+            for (String message : recentMessages.subList(from, recentMessages.size())) {
+                ctx.append("\n").append(message);
+            }
+            ctx.append("]\n");
+        }
+        ctx.append(content);
         return ctx.toString();
+    }
+
+    /**
+     * Fetches up to {@code limit} messages that immediately precede the triggering message, oldest
+     * first, formatted as {@code "Author: text"}. Empty messages are skipped; Hugin's own prior
+     * replies are kept so it has the back-and-forth context. Best-effort: returns an empty list if
+     * history can't be read.
+     */
+    private List<String> fetchRecentMessages(MessageReceivedEvent event, int limit) {
+        try {
+            List<net.dv8tion.jda.api.entities.Message> history = event.getChannel()
+                    .getHistoryBefore(event.getMessageId(), limit)
+                    .complete()
+                    .getRetrievedHistory();
+            List<String> result = new ArrayList<>();
+            // JDA returns history newest-first; walk it backwards to produce oldest-first.
+            for (int i = history.size() - 1; i >= 0; i--) {
+                net.dv8tion.jda.api.entities.Message message = history.get(i);
+                String text = message.getContentStripped().strip();
+                if (text.isBlank()) continue;
+                result.add(message.getAuthor().getEffectiveName() + ": " + text);
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("Could not fetch channel history for {}: {}",
+                    event.getChannel().getId(), e.getMessage());
+            return List.of();
+        }
     }
 
     /** Splits {@code text} on newlines first to avoid cutting mid-word, up to {@code limit} chars each. */

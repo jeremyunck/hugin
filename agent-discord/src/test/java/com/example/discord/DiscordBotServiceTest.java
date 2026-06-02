@@ -62,6 +62,12 @@ class DiscordBotServiceTest {
     }
 
     @Test
+    void discordProperties_mentionOnlyDefaultsToTrue() {
+        // By default Hugin stays quiet in guild channels unless @mentioned or replied to.
+        assertThat(new DiscordProperties().isMentionOnly()).isTrue();
+    }
+
+    @Test
     void truncateWords_capsLongTextAtWordLimit() {
         String text = "one two three four five";
         assertThat(DiscordBotService.truncateWords(text, 3))

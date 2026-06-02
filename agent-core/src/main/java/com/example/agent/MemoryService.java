@@ -35,15 +35,24 @@ public class MemoryService {
 
     /** Embeds {@code query} and returns the most similar stored memories (never throws). */
     public List<MemoryStore.ScoredMemory> recall(String query) {
+        return recall(query, properties.topK());
+    }
+
+    /**
+     * Embeds {@code query} and returns up to {@code topK} most similar stored memories (never throws).
+     * Used by the {@code recall_memory} tool so the agent can ask for more or fewer hits on demand.
+     */
+    public List<MemoryStore.ScoredMemory> recall(String query, int topK) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
+        int limit = topK > 0 ? topK : properties.topK();
         try {
             float[] embedding = embeddingClient.embed(query);
             List<MemoryStore.ScoredMemory> hits =
-                    store.search(embedding, properties.topK(), properties.minScore());
+                    store.search(embedding, limit, properties.minScore());
             log.debug("Recalled {} memories (top-k={}, min-score={})",
-                    hits.size(), properties.topK(), properties.minScore());
+                    hits.size(), limit, properties.minScore());
             return hits;
         } catch (Exception e) {
             log.warn("Memory recall failed: {}", e.getMessage());
