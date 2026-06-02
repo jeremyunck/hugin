@@ -143,8 +143,13 @@ public class AgentService {
                 messages.add(ChatMessage.system(formatMemories(recalled)));
             }
         });
-        // Replay the recent turns of this session (short-term memory) before the current prompt.
-        conversationMemory.ifPresent(cm -> messages.addAll(cm.history(request.sessionId())));
+        // When the caller supplies its own recent-message context (e.g. Discord), it manages its own
+        // short-term memory — so we neither replay nor record server-side conversation memory for it.
+        boolean clientManagedContext = request.recentMessages() != null;
+        if (!clientManagedContext) {
+            // Replay the recent turns of this session (short-term memory) before the current prompt.
+            conversationMemory.ifPresent(cm -> messages.addAll(cm.history(request.sessionId())));
+        }
         messages.add(ChatMessage.user(request.prompt()));
 
         String lastAssistantContent = null;
@@ -191,7 +196,8 @@ public class AgentService {
                 messages.set(messages.size() - 1, assistantMsg);
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
-                    String toolResult = executeToolCall(toolCall, toolServerMap, request.sessionId());
+                    String toolResult = executeToolCall(toolCall, toolServerMap,
+                            request.sessionId(), request.recentMessages());
                     listener.onToolResult(toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -215,7 +221,9 @@ public class AgentService {
                 }
                 final String finalAnswer = answer;
                 memoryService.ifPresent(memory -> memory.remember(request.prompt(), finalAnswer));
-                conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), finalAnswer));
+                if (!clientManagedContext) {
+                    conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), finalAnswer));
+                }
                 return new AgentResponse(answer, Collections.unmodifiableList(messages));
             }
         }
@@ -274,14 +282,16 @@ public class AgentService {
         return defaultModel;
     }
 
-    private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap, String sessionId) {
+    private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap,
+                                   String sessionId, List<String> channelMessages) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
         LocalTool localTool = localTools.find(toolName);
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
-            ToolContext ctx = new ToolContext(workspaceRegistry.resolve(sessionId), sessionId);
+            ToolContext ctx = new ToolContext(
+                    workspaceRegistry.resolve(sessionId), sessionId, channelMessages);
             try {
                 return localTool.execute(args, ctx);
             } catch (Exception e) {

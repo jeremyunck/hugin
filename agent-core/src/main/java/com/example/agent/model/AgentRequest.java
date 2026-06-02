@@ -1,5 +1,7 @@
 package com.example.agent.model;
 
+import java.util.List;
+
 /**
  * Request sent to the agent via the REST API.
  *
@@ -8,11 +10,22 @@ package com.example.agent.model;
  *
  * <p>{@code sessionId} is optional; when present, short-term conversation memory recalls the recent
  * turns of that session and stores this exchange back. When blank, the request is stateless.
+ *
+ * <p>{@code recentMessages} is an optional, client-supplied snapshot of the recent messages in the
+ * caller's channel (oldest first), used by front-ends like Discord that manage their own short-term
+ * context. When non-null the server treats the caller as managing its own short-term memory: it does
+ * <b>not</b> replay or record server-side conversation memory for the request, and the messages are
+ * exposed to the agent through the {@code read_discord_channel} tool.
  */
-public record AgentRequest(String prompt, String model, String sessionId) {
+public record AgentRequest(String prompt, String model, String sessionId, List<String> recentMessages) {
 
     /** Stateless request with no session memory. */
     public AgentRequest(String prompt, String model) {
-        this(prompt, model, null);
+        this(prompt, model, null, null);
+    }
+
+    /** Session-scoped request that uses server-side short-term conversation memory. */
+    public AgentRequest(String prompt, String model, String sessionId) {
+        this(prompt, model, sessionId, null);
     }
 }

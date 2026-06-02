@@ -23,10 +23,10 @@ public class DiscordProperties {
     private List<String> allowedChannelIds = new ArrayList<>();
 
     /**
-     * When {@code true}, the bot only responds in guild channels when directly {@literal @}mentioned.
-     * DM behaviour is unaffected by this flag.
+     * When {@code true} (the default), the bot only responds in guild channels when directly
+     * addressed — either {@literal @}mentioned or replied to. DM behaviour is unaffected by this flag.
      */
-    private boolean mentionOnly = false;
+    private boolean mentionOnly = true;
 
     /** When {@code true} (the default), the bot responds to direct messages. */
     private boolean respondToDms = true;

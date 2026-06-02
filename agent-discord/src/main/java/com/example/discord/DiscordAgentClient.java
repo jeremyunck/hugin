@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * HTTP client that calls the agent server's {@code /api/agent/stream} SSE endpoint and parses the
@@ -46,13 +47,25 @@ public class DiscordAgentClient {
 
     /**
      * Sends {@code prompt} to the agent and streams the response to {@code handler}. Blocks until
-     * the stream completes. {@code sessionId} scopes short-term conversation memory so the server
-     * recalls the recent turns of this session.
+     * the stream completes. {@code sessionId} identifies the originating channel/DM.
      */
     public void streamChat(String prompt, String sessionId, Handler handler)
             throws IOException, InterruptedException {
+        streamChat(prompt, sessionId, null, handler);
+    }
+
+    /**
+     * Streams a chat as {@link #streamChat(String, String, Handler)} but also forwards
+     * {@code recentMessages} — a snapshot of the channel's recent messages (oldest first). This both
+     * tells the server the caller manages its own short-term context (so server-side conversation
+     * memory is skipped) and feeds the {@code read_discord_channel} tool so the agent can pull back
+     * more history on demand.
+     */
+    public void streamChat(String prompt, String sessionId, List<String> recentMessages, Handler handler)
+            throws IOException, InterruptedException {
         String model = blankToNull(properties.getModel());
-        String requestBody = objectMapper.writeValueAsString(new AgentRequest(prompt, model, sessionId));
+        String requestBody = objectMapper.writeValueAsString(
+                new AgentRequest(prompt, model, sessionId, recentMessages));
 
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create(properties.getServerUrl() + "/api/agent/stream"))

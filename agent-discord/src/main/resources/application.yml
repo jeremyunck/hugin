@@ -22,9 +22,10 @@ discord:
   allowed-channel-ids: ["1510063052140056812"]
   #  - "1234567890123456789"
 
-  # When true, the bot only replies in guild channels when directly @mentioned.
+  # When true (the default), the bot only replies in guild channels when directly addressed —
+  # either @mentioned or replied to. Set to false to have it respond to every message.
   # DM behaviour is unaffected.
-  mention-only: false
+  mention-only: true
 
   # When true (the default), the bot responds to direct messages.
   respond-to-dms: true
