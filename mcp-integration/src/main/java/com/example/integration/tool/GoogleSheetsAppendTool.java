@@ -52,26 +52,24 @@ public class GoogleSheetsAppendTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
+            String range = requiredString(arguments, "range");
+            List<List<Object>> rows = GoogleSheetValues.toRows(arguments.get("values"));
 
-        String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
-        String range = requiredString(arguments, "range");
-        List<List<Object>> rows = GoogleSheetValues.toRows(arguments.get("values"));
+            AppendValuesResponse response = google.sheets().spreadsheets().values()
+                    .append(spreadsheetId, range, new ValueRange().setValues(rows))
+                    .setValueInputOption("USER_ENTERED")
+                    .setInsertDataOption("INSERT_ROWS")
+                    .execute();
 
-        AppendValuesResponse response = google.sheets().spreadsheets().values()
-                .append(spreadsheetId, range, new ValueRange().setValues(rows))
-                .setValueInputOption("USER_ENTERED")
-                .setInsertDataOption("INSERT_ROWS")
-                .execute();
-
-        String updatedRange = response.getUpdates() != null ? response.getUpdates().getUpdatedRange() : range;
-        Integer updatedCells = response.getUpdates() != null ? response.getUpdates().getUpdatedCells() : null;
-        return "Appended " + rows.size() + " row(s)"
-                + (updatedCells != null ? " (" + updatedCells + " cells)" : "")
-                + " to " + updatedRange + ".\n"
-                + "url: " + GoogleIds.sheetUrl(spreadsheetId);
+            String updatedRange = response.getUpdates() != null ? response.getUpdates().getUpdatedRange() : range;
+            Integer updatedCells = response.getUpdates() != null ? response.getUpdates().getUpdatedCells() : null;
+            return "Appended " + rows.size() + " row(s)"
+                    + (updatedCells != null ? " (" + updatedCells + " cells)" : "")
+                    + " to " + updatedRange + ".\n"
+                    + "url: " + GoogleIds.sheetUrl(spreadsheetId);
+        });
     }
 }

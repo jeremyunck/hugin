@@ -73,49 +73,47 @@ public class GoogleDocsEditTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String documentId = GoogleIds.extract(requiredString(arguments, "document_id"));
+            String operation = requiredString(arguments, "operation").trim().toLowerCase();
 
-        String documentId = GoogleIds.extract(requiredString(arguments, "document_id"));
-        String operation = requiredString(arguments, "operation").trim().toLowerCase();
+            Request request;
+            String summary;
+            switch (operation) {
+                case "append" -> {
+                    String text = requiredString(arguments, "text");
+                    request = new Request().setInsertText(new InsertTextRequest()
+                            .setText(text)
+                            .setEndOfSegmentLocation(new EndOfSegmentLocation()));
+                    summary = "Appended " + text.length() + " characters.";
+                }
+                case "insert" -> {
+                    String text = requiredString(arguments, "text");
+                    int index = optionalInt(arguments, "index", 1);
+                    request = new Request().setInsertText(new InsertTextRequest()
+                            .setText(text)
+                            .setLocation(new Location().setIndex(index)));
+                    summary = "Inserted " + text.length() + " characters at index " + index + ".";
+                }
+                case "replace" -> {
+                    String find = requiredString(arguments, "find");
+                    String text = optionalString(arguments, "text", "");
+                    boolean matchCase = optionalBoolean(arguments, "match_case", true);
+                    request = new Request().setReplaceAllText(new ReplaceAllTextRequest()
+                            .setContainsText(new SubstringMatchCriteria().setText(find).setMatchCase(matchCase))
+                            .setReplaceText(text));
+                    summary = "Replaced occurrences of '" + find + "'.";
+                }
+                default -> {
+                    return "Error: unknown operation '" + operation + "'. Use append, insert, or replace.";
+                }
+            }
 
-        Request request;
-        String summary;
-        switch (operation) {
-            case "append" -> {
-                String text = requiredString(arguments, "text");
-                request = new Request().setInsertText(new InsertTextRequest()
-                        .setText(text)
-                        .setEndOfSegmentLocation(new EndOfSegmentLocation()));
-                summary = "Appended " + text.length() + " characters.";
-            }
-            case "insert" -> {
-                String text = requiredString(arguments, "text");
-                int index = optionalInt(arguments, "index", 1);
-                request = new Request().setInsertText(new InsertTextRequest()
-                        .setText(text)
-                        .setLocation(new Location().setIndex(index)));
-                summary = "Inserted " + text.length() + " characters at index " + index + ".";
-            }
-            case "replace" -> {
-                String find = requiredString(arguments, "find");
-                String text = optionalString(arguments, "text", "");
-                boolean matchCase = optionalBoolean(arguments, "match_case", true);
-                request = new Request().setReplaceAllText(new ReplaceAllTextRequest()
-                        .setContainsText(new SubstringMatchCriteria().setText(find).setMatchCase(matchCase))
-                        .setReplaceText(text));
-                summary = "Replaced occurrences of '" + find + "'.";
-            }
-            default -> {
-                return "Error: unknown operation '" + operation + "'. Use append, insert, or replace.";
-            }
-        }
+            google.docs().documents().batchUpdate(documentId,
+                    new BatchUpdateDocumentRequest().setRequests(List.of(request))).execute();
 
-        google.docs().documents().batchUpdate(documentId,
-                new BatchUpdateDocumentRequest().setRequests(List.of(request))).execute();
-
-        return summary + "\nurl: " + GoogleIds.docUrl(documentId);
+            return summary + "\nurl: " + GoogleIds.docUrl(documentId);
+        });
     }
 }

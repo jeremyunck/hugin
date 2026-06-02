@@ -68,6 +68,31 @@ public class GoogleWorkspaceClientFactory {
         return file != null && !file.isBlank() && Files.exists(Path.of(file));
     }
 
+    /** A Google API operation run inside {@link #guarded(GoogleCall)}. */
+    @FunctionalInterface
+    public interface GoogleCall {
+        String run() throws Exception;
+    }
+
+    /**
+     * Runs a Google API operation behind the two checks every tool needs: it returns the
+     * {@link #unavailableMessage()} when no credentials are configured, and converts any Google
+     * API / credential failure into a concise, actionable message via {@link GoogleErrors} instead
+     * of letting a raw exception propagate. This keeps the individual tools free of boilerplate and
+     * gives the model useful guidance (e.g. "share the file with the service account") on failure.
+     */
+    public String guarded(GoogleCall call) {
+        if (!isConfigured()) {
+            return unavailableMessage();
+        }
+        try {
+            return call.run();
+        } catch (Exception e) {
+            log.warn("Google Workspace tool call failed: {}", e.getMessage());
+            return GoogleErrors.describe(e);
+        }
+    }
+
     /** A one-line explanation shown by the tools when {@link #isConfigured()} is false. */
     public String unavailableMessage() {
         return "Google Workspace tools are unavailable: no service-account credentials configured. "

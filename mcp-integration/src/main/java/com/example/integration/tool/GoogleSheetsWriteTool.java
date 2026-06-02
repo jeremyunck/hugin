@@ -53,21 +53,19 @@ public class GoogleSheetsWriteTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
+            String range = requiredString(arguments, "range");
+            List<List<Object>> rows = GoogleSheetValues.toRows(arguments.get("values"));
 
-        String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
-        String range = requiredString(arguments, "range");
-        List<List<Object>> rows = GoogleSheetValues.toRows(arguments.get("values"));
+            UpdateValuesResponse response = google.sheets().spreadsheets().values()
+                    .update(spreadsheetId, range, new ValueRange().setValues(rows))
+                    .setValueInputOption("USER_ENTERED")
+                    .execute();
 
-        UpdateValuesResponse response = google.sheets().spreadsheets().values()
-                .update(spreadsheetId, range, new ValueRange().setValues(rows))
-                .setValueInputOption("USER_ENTERED")
-                .execute();
-
-        return "Updated " + response.getUpdatedCells() + " cells in range " + response.getUpdatedRange() + ".\n"
-                + "url: " + GoogleIds.sheetUrl(spreadsheetId);
+            return "Updated " + response.getUpdatedCells() + " cells in range " + response.getUpdatedRange() + ".\n"
+                    + "url: " + GoogleIds.sheetUrl(spreadsheetId);
+        });
     }
 }

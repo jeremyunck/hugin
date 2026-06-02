@@ -53,37 +53,35 @@ public class GoogleDocsCreateTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String title = optionalString(arguments, "title", "Untitled document");
+            String text = optionalString(arguments, "text", "");
 
-        String title = optionalString(arguments, "title", "Untitled document");
-        String text = optionalString(arguments, "text", "");
+            Document created = google.docs().documents()
+                    .create(new Document().setTitle(title))
+                    .execute();
+            String documentId = created.getDocumentId();
 
-        Document created = google.docs().documents()
-                .create(new Document().setTitle(title))
-                .execute();
-        String documentId = created.getDocumentId();
+            if (!text.isBlank()) {
+                Request insert = new Request().setInsertText(new InsertTextRequest()
+                        .setText(text)
+                        .setEndOfSegmentLocation(new EndOfSegmentLocation()));
+                google.docs().documents().batchUpdate(documentId,
+                        new BatchUpdateDocumentRequest().setRequests(List.of(insert))).execute();
+            }
 
-        if (!text.isBlank()) {
-            Request insert = new Request().setInsertText(new InsertTextRequest()
-                    .setText(text)
-                    .setEndOfSegmentLocation(new EndOfSegmentLocation()));
-            google.docs().documents().batchUpdate(documentId,
-                    new BatchUpdateDocumentRequest().setRequests(List.of(insert))).execute();
-        }
+            String shareError = google.shareFile(documentId,
+                    optionalString(arguments, "share_with", google.defaultShareWith()), "writer");
 
-        String shareError = google.shareFile(documentId,
-                optionalString(arguments, "share_with", google.defaultShareWith()), "writer");
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Created Google Doc '").append(title).append("'.\n");
-        sb.append("documentId: ").append(documentId).append('\n');
-        sb.append("url: ").append(GoogleIds.docUrl(documentId));
-        if (shareError != null) {
-            sb.append("\nWarning: ").append(shareError);
-        }
-        return sb.toString();
+            StringBuilder sb = new StringBuilder();
+            sb.append("Created Google Doc '").append(title).append("'.\n");
+            sb.append("documentId: ").append(documentId).append('\n');
+            sb.append("url: ").append(GoogleIds.docUrl(documentId));
+            if (shareError != null) {
+                sb.append("\nWarning: ").append(shareError);
+            }
+            return sb.toString();
+        });
     }
 }

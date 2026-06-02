@@ -1,13 +1,19 @@
 package com.example.integration.tool;
 
+import com.example.integration.google.GoogleErrors;
 import com.example.integration.google.GoogleSheetValues;
 import com.example.integration.google.GoogleIds;
 import com.example.integration.google.GoogleWorkspaceClientFactory;
 import com.example.integration.google.GoogleWorkspaceProperties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.FileNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -93,5 +99,39 @@ class GoogleWorkspaceToolsTest {
         assertThatThrownBy(() -> GoogleSheetValues.toRows("not a list"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("2-D array");
+    }
+
+    @Test
+    void guardedShortCircuitsWhenUnconfigured() {
+        AtomicBoolean ran = new AtomicBoolean(false);
+        String msg = unconfiguredFactory().guarded(() -> {
+            ran.set(true);
+            return "should not run";
+        });
+        assertThat(msg).contains("unavailable");
+        assertThat(ran).isFalse();
+    }
+
+    @Test
+    void guardedMapsFailuresToFriendlyMessages(@TempDir Path tmp) throws Exception {
+        // A present (if dummy) credentials file makes isConfigured() true so guarded runs the call.
+        Path creds = Files.writeString(tmp.resolve("creds.json"), "{}");
+        GoogleWorkspaceClientFactory f = new GoogleWorkspaceClientFactory(
+                new GoogleWorkspaceProperties(creds.toString(), "Hugin", "", ""));
+        assertThat(f.isConfigured()).isTrue();
+
+        assertThat(f.guarded(() -> {
+            throw new FileNotFoundException("missing.json");
+        })).contains("credentials file not found").contains("missing.json");
+
+        assertThat(f.guarded(() -> {
+            throw new IllegalArgumentException("bad values");
+        })).contains("Google Workspace request failed").contains("bad values");
+    }
+
+    @Test
+    void errorsDescribeFallsBackForGenericException() {
+        assertThat(GoogleErrors.describe(new RuntimeException("boom")))
+                .contains("Google Workspace request failed").contains("boom");
     }
 }

@@ -45,31 +45,29 @@ public class GoogleDocsReadTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String documentId = GoogleIds.extract(requiredString(arguments, "document_id"));
+            Document doc = google.docs().documents().get(documentId).execute();
 
-        String documentId = GoogleIds.extract(requiredString(arguments, "document_id"));
-        Document doc = google.docs().documents().get(documentId).execute();
-
-        StringBuilder text = new StringBuilder();
-        if (doc.getBody() != null && doc.getBody().getContent() != null) {
-            for (StructuralElement element : doc.getBody().getContent()) {
-                if (element.getParagraph() != null && element.getParagraph().getElements() != null) {
-                    for (ParagraphElement pe : element.getParagraph().getElements()) {
-                        TextRun run = pe.getTextRun();
-                        if (run != null && run.getContent() != null) {
-                            text.append(run.getContent());
+            StringBuilder text = new StringBuilder();
+            if (doc.getBody() != null && doc.getBody().getContent() != null) {
+                for (StructuralElement element : doc.getBody().getContent()) {
+                    if (element.getParagraph() != null && element.getParagraph().getElements() != null) {
+                        for (ParagraphElement pe : element.getParagraph().getElements()) {
+                            TextRun run = pe.getTextRun();
+                            if (run != null && run.getContent() != null) {
+                                text.append(run.getContent());
+                            }
                         }
                     }
                 }
             }
-        }
 
-        String body = text.toString();
-        return "Title: " + doc.getTitle() + "\n"
-                + "url: " + GoogleIds.docUrl(documentId) + "\n\n"
-                + (body.isBlank() ? "(document is empty)" : body);
+            String body = text.toString();
+            return "Title: " + doc.getTitle() + "\n"
+                    + "url: " + GoogleIds.docUrl(documentId) + "\n\n"
+                    + (body.isBlank() ? "(document is empty)" : body);
+        });
     }
 }

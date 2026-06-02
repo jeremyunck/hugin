@@ -47,25 +47,23 @@ public class GoogleSheetsReadTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
+            String range = requiredString(arguments, "range");
 
-        String spreadsheetId = GoogleIds.extract(requiredString(arguments, "spreadsheet_id"));
-        String range = requiredString(arguments, "range");
+            ValueRange response = google.sheets().spreadsheets().values()
+                    .get(spreadsheetId, range).execute();
 
-        ValueRange response = google.sheets().spreadsheets().values()
-                .get(spreadsheetId, range).execute();
+            List<List<Object>> values = response.getValues();
+            if (values == null || values.isEmpty()) {
+                return "(no data in range " + range + ")";
+            }
 
-        List<List<Object>> values = response.getValues();
-        if (values == null || values.isEmpty()) {
-            return "(no data in range " + range + ")";
-        }
-
-        String body = values.stream()
-                .map(row -> row.stream().map(String::valueOf).collect(Collectors.joining("\t")))
-                .collect(Collectors.joining("\n"));
-        return "Range: " + response.getRange() + " (" + values.size() + " rows)\n" + body;
+            String body = values.stream()
+                    .map(row -> row.stream().map(String::valueOf).collect(Collectors.joining("\t")))
+                    .collect(Collectors.joining("\n"));
+            return "Range: " + response.getRange() + " (" + values.size() + " rows)\n" + body;
+        });
     }
 }

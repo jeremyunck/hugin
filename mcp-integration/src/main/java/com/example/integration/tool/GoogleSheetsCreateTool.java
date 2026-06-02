@@ -47,27 +47,25 @@ public class GoogleSheetsCreateTool implements LocalTool {
     }
 
     @Override
-    public String execute(Map<String, Object> arguments) throws Exception {
-        if (!google.isConfigured()) {
-            return google.unavailableMessage();
-        }
+    public String execute(Map<String, Object> arguments) {
+        return google.guarded(() -> {
+            String title = optionalString(arguments, "title", "Untitled spreadsheet");
+            Spreadsheet created = google.sheets().spreadsheets()
+                    .create(new Spreadsheet().setProperties(new SpreadsheetProperties().setTitle(title)))
+                    .execute();
+            String spreadsheetId = created.getSpreadsheetId();
 
-        String title = optionalString(arguments, "title", "Untitled spreadsheet");
-        Spreadsheet created = google.sheets().spreadsheets()
-                .create(new Spreadsheet().setProperties(new SpreadsheetProperties().setTitle(title)))
-                .execute();
-        String spreadsheetId = created.getSpreadsheetId();
+            String shareError = google.shareFile(spreadsheetId,
+                    optionalString(arguments, "share_with", google.defaultShareWith()), "writer");
 
-        String shareError = google.shareFile(spreadsheetId,
-                optionalString(arguments, "share_with", google.defaultShareWith()), "writer");
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Created Google Sheet '").append(title).append("'.\n");
-        sb.append("spreadsheetId: ").append(spreadsheetId).append('\n');
-        sb.append("url: ").append(GoogleIds.sheetUrl(spreadsheetId));
-        if (shareError != null) {
-            sb.append("\nWarning: ").append(shareError);
-        }
-        return sb.toString();
+            StringBuilder sb = new StringBuilder();
+            sb.append("Created Google Sheet '").append(title).append("'.\n");
+            sb.append("spreadsheetId: ").append(spreadsheetId).append('\n');
+            sb.append("url: ").append(GoogleIds.sheetUrl(spreadsheetId));
+            if (shareError != null) {
+                sb.append("\nWarning: ").append(shareError);
+            }
+            return sb.toString();
+        });
     }
 }
