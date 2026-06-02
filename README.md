@@ -53,11 +53,13 @@ curl -X POST http://localhost:8080/api/agent/chat \
 | `hugin terminal` | Launch the terminal client directly |
 
 Set `AGENT_HOME` to override the default install location (`~/.hugin`).
+Set `LLM_REASONING_EFFORT` to override the default reasoning effort sent to the model (`medium` by default).
 
 ## Prerequisites
 
 - **Java 21** and **Maven**
 - An **OpenAI-compatible LLM endpoint** with a tool-calling model. [OpenRouter](https://openrouter.ai) is recommended — set `OPEN_ROUTER_API_KEY`.
+- If you want to tune reasoning depth without editing the repo, set `LLM_REASONING_EFFORT` in `~/.hugin/hugin.env` or your shell environment. The default is `medium`.
 - Runtimes for the MCP servers you configure. The default `mcp-servers.json` uses:
   - `uvx` ([uv](https://docs.astral.sh/uv/)) for the time server
   - `python3` for the web search server (when `search.provider=openrouter`, the default)

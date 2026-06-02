@@ -128,7 +128,7 @@ class OpenAiClientStreamTest {
         server.start();
 
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider("http://localhost:" + port + "/v1", null)));
         return new OpenAiClient(properties, new ObjectMapper());
     }

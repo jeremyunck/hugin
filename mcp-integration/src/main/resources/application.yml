@@ -37,6 +37,8 @@ llm:
   # Must be a model that supports tool calling and be valid for the active provider
   # (e.g. llama3.2 / mistral-nemo for Ollama, openai/gpt-oss-120b for OpenRouter).
   model: openai/gpt-oss-120b
+  # Reasoning effort sent to providers that support it. DeepSeek V4 maps medium to high.
+  reasoning-effort: ${LLM_REASONING_EFFORT:medium}
   providers:
     # Local Ollama exposing the OpenAI-compatible API — no API key, so no auth header is sent.
     ollama:

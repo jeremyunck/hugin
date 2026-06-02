@@ -683,6 +683,7 @@ save_env() {
 
 OPEN_ROUTER_API_KEY=${OPENROUTER_KEY:-}
 LLM_MODEL=${LLM_MODEL:-}
+LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-medium}
 
 # Secure the /api/agent/** endpoints with an X-API-Key header (leave blank to disable).
 AGENT_API_KEY=${AGENT_API_KEY:-}
@@ -1448,6 +1449,7 @@ cmd_config() {
   cat > "$ENV_FILE" <<ENV
 OPEN_ROUTER_API_KEY=${new_key}
 LLM_MODEL=${LLM_MODEL:-openai/gpt-oss-120b}
+LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-medium}
 AGENT_API_KEY=${AGENT_API_KEY:-}
 MEMORY_ENABLED=${mem}
 REDIS_HOST=${rhost}

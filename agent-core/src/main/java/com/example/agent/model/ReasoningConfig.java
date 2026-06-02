@@ -9,7 +9,7 @@ public record ReasoningConfig(
         Boolean exclude,
     Boolean enabled
 ) {
-    public static ReasoningConfig maxEffort() {
-        return new ReasoningConfig("xhigh", Boolean.FALSE, Boolean.TRUE);
+    public static ReasoningConfig withEffort(String effort) {
+        return new ReasoningConfig(effort, Boolean.FALSE, Boolean.TRUE);
     }
 }

@@ -71,7 +71,7 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider("http://localhost:" + port + "/v1", null)));
         return new OpenAiClient(properties, new ObjectMapper());
     }
@@ -90,7 +90,7 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider(
                         "http://localhost:" + port + "/v1", apiKey)));
         return new OpenAiClient(properties, new ObjectMapper());
@@ -138,7 +138,7 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider(
                         "http://localhost:" + port + "/v1", null)));
         OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
@@ -149,7 +149,7 @@ class OpenAiClientTest {
     }
 
     @Test
-    void chatUsesMaxReasoningByDefault() throws IOException {
+    void chatUsesMediumReasoningByDefault() throws IOException {
         String[] capturedBody = new String[1];
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
@@ -163,14 +163,39 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider("http://localhost:" + port + "/v1", null)));
         OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
 
         client.chat("m", List.of(ChatMessage.user("hello")), List.of());
 
         assertThat(capturedBody[0]).contains("\"reasoning\"");
-        assertThat(capturedBody[0]).contains("\"effort\":\"xhigh\"");
+        assertThat(capturedBody[0]).contains("\"effort\":\"medium\"");
+    }
+
+    @Test
+    void chatUsesConfiguredReasoningEffort() throws IOException {
+        String[] capturedBody = new String[1];
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            capturedBody[0] = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            byte[] body = SIMPLE_RESPONSE.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        var properties = new LlmProperties("test", "m", "high",
+                Map.of("test", new LlmProperties.Provider("http://localhost:" + port + "/v1", null)));
+        OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
+
+        client.chat("m", List.of(ChatMessage.user("hello")), List.of());
+
+        assertThat(capturedBody[0]).contains("\"reasoning\"");
+        assertThat(capturedBody[0]).contains("\"effort\":\"high\"");
     }
 
     @Test
@@ -188,7 +213,7 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "deepseek-v4-flash",
+        var properties = new LlmProperties("test", "deepseek-v4-flash", "medium",
                 Map.of("test", new LlmProperties.Provider(
                         "http://localhost:" + port + "/v1", null)));
         OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
@@ -196,7 +221,7 @@ class OpenAiClientTest {
         client.chat("deepseek-v4-flash", List.of(ChatMessage.user("hello")), List.of());
 
         assertThat(capturedBody[0]).contains("\"thinking\":{\"type\":\"enabled\"}");
-        assertThat(capturedBody[0]).contains("\"reasoning_effort\":\"xhigh\"");
+        assertThat(capturedBody[0]).contains("\"reasoning_effort\":\"medium\"");
         assertThat(capturedBody[0]).doesNotContain("\"tool_choice\"");
         assertThat(capturedBody[0]).doesNotContain("\"reasoning\":");
     }
@@ -220,7 +245,7 @@ class OpenAiClientTest {
     @Test
     void chatThrowsOnMissingBaseUrl() {
         // Provider with blank base-url should throw at construction time.
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider("", null)));
 
         assertThatThrownBy(() -> new OpenAiClient(properties, new ObjectMapper()))
@@ -252,7 +277,7 @@ class OpenAiClientTest {
         int port = server.getAddress().getPort();
         // Use a shorter retry delay by overriding; since we can't override the static field,
         // we just verify the retry actually happened (request count > 1) and that it succeeded.
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider(
                         "http://localhost:" + port + "/v1", null)));
         OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
@@ -289,7 +314,7 @@ class OpenAiClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        var properties = new LlmProperties("test", "m",
+        var properties = new LlmProperties("test", "m", "medium",
                 Map.of("test", new LlmProperties.Provider(
                         "http://localhost:" + port + "/v1", "sk-stream-key")));
         OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());

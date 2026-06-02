@@ -61,6 +61,7 @@ public class OpenAiClient {
     private final ObjectMapper objectMapper;
     private final HttpClient streamingHttpClient;
     private final String apiKey;
+    private final String reasoningEffort;
     private final boolean deepSeekCompat;
 
     public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
@@ -74,6 +75,7 @@ public class OpenAiClient {
         }
         this.endpoint = URI.create(stripTrailingSlash(baseUrl) + "/chat/completions");
         this.apiKey = provider.hasApiKey() ? provider.apiKey() : null;
+        this.reasoningEffort = properties.reasoningEffort();
         this.deepSeekCompat = isDeepSeekEndpoint(baseUrl);
 
         var httpClient = HttpClient.newBuilder()
@@ -342,8 +344,8 @@ public class OpenAiClient {
                 normalizedMessages,
                 hasTools ? tools : null,
                 deepSeek ? null : (hasTools ? "auto" : null),
-                deepSeek ? "xhigh" : null,
-                deepSeek ? null : ReasoningConfig.maxEffort(),
+                deepSeek ? reasoningEffort : null,
+                deepSeek ? null : ReasoningConfig.withEffort(reasoningEffort),
                 deepSeek ? ThinkingConfig.enabled() : null,
                 stream
         );

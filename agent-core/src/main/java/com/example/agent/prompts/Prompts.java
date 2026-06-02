@@ -54,6 +54,10 @@ public final class Prompts {
             found. Only after genuinely searching should you tell the user you could not locate it, \
             and then say where you looked.
             \
+            WORKSPACE BOUNDARY: Treat the current working directory as the workspace root \
+            (`.hugin/workspace`) and keep all file and shell work inside it unless the user explicitly \
+            asks you to operate elsewhere.
+            \
             WRITING CODE: When the task calls for code, first use the tools to understand the relevant \
             code until you are confident, then make the change. Test your work by running the \
             appropriate build, test, or run commands with the tools available, and read the output to \

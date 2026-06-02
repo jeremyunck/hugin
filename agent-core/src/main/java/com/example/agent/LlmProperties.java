@@ -13,11 +13,15 @@ import java.util.Map;
  * Ollama instance) no auth header is sent.
  */
 @ConfigurationProperties("llm")
-public record LlmProperties(String provider, String model, Map<String, Provider> providers) {
+public record LlmProperties(String provider, String model, String reasoningEffort,
+                            Map<String, Provider> providers) {
 
     public LlmProperties {
         if (provider == null || provider.isBlank()) {
             provider = "ollama";
+        }
+        if (reasoningEffort == null || reasoningEffort.isBlank()) {
+            reasoningEffort = "medium";
         }
         if (providers == null) {
             providers = Map.of();
