@@ -172,6 +172,31 @@ class LocalToolsTest {
     }
 
     @Test
+    void runBashHonorsExplicitShellAndNonLoginMode() throws Exception {
+        var props = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000,
+                List.of(), "/bin/sh", false);
+        var bash = new BashCommandTool(workspace, props);
+
+        String result = bash.execute(Map.of("command", "echo no-login-shell"));
+
+        assertThat(result).contains("exit code: 0");
+        assertThat(result).contains("no-login-shell");
+    }
+
+    @Test
+    void runBashRunsThroughLoginShellByDefault() throws Exception {
+        // Default properties resolve to the user's login shell with -l, so the command still runs;
+        // login mode is what lets PATH entries from the user's profile (e.g. Homebrew) resolve.
+        var props = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(10), 30_000, List.of());
+        var bash = new BashCommandTool(workspace, props);
+
+        String result = bash.execute(Map.of("command", "echo login-shell-ok"));
+
+        assertThat(result).contains("exit code: 0");
+        assertThat(result).contains("login-shell-ok");
+    }
+
+    @Test
     void selfUpdateInputSchemaHasNoRequiredArgs() {
         var update = new SelfUpdateTool(workspace, properties, Optional.empty());
 

@@ -118,6 +118,15 @@ agent:
     workspace-root: .
     # Wall-clock limit for a single run_bash command.
     bash-timeout: 30s
+    # Shell binary run_bash invokes. Blank auto-detects the user's login shell from $SHELL
+    # (falling back to /bin/sh). Set explicitly to pin one, e.g. /bin/bash or /bin/zsh.
+    shell: ""
+    # Run commands through a login shell (-l) so the user's profile is sourced. Keep this true
+    # so PATH entries set up in ~/.zprofile / ~/.bash_profile resolve — this is what makes
+    # Homebrew tools like 'brew' (/opt/homebrew/bin, /usr/local/bin) runnable from run_bash.
+    # Trade-off: the profile may define aliases/functions or run side-effecting startup code;
+    # set to false to run a plain non-login shell if that is a concern.
+    login-shell: true
     # Cap on the size (characters) of any single tool result returned to the model.
     max-output-chars: 30000
     # Glob patterns (relative to workspace-root) that read_file, write_file, and edit_file

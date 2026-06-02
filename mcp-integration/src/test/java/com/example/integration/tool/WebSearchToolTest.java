@@ -60,6 +60,51 @@ class WebSearchToolTest {
     }
 
     @Test
+    void appendsCitationsFromRootCitationsArray() throws Exception {
+        doReturn(mockResponse(200, "{\"choices\":[{\"message\":{\"content\":\"Summary [1][2]\"}}],"
+                + "\"citations\":[\"https://example.com/a\",\"https://example.com/b\"]}"))
+                .when(httpClient).send(any(), any());
+
+        String result = tool.execute(Map.of("query", "test"));
+        assertThat(result)
+                .contains("Summary [1][2]")
+                .contains("Sources:")
+                .contains("[1] https://example.com/a")
+                .contains("[2] https://example.com/b");
+    }
+
+    @Test
+    void appendsCitationsFromMessageAnnotations() throws Exception {
+        doReturn(mockResponse(200, "{\"choices\":[{\"message\":{\"content\":\"Summary\","
+                + "\"annotations\":[{\"type\":\"url_citation\",\"url_citation\":"
+                + "{\"url\":\"https://example.com/a\",\"title\":\"Example A\"}}]}}]}"))
+                .when(httpClient).send(any(), any());
+
+        String result = tool.execute(Map.of("query", "test"));
+        assertThat(result)
+                .contains("Sources:")
+                .contains("[1] Example A - https://example.com/a");
+    }
+
+    @Test
+    void deduplicatesRepeatedCitationUrls() throws Exception {
+        doReturn(mockResponse(200, "{\"choices\":[{\"message\":{\"content\":\"Summary\"}}],"
+                + "\"citations\":[\"https://example.com/a\",\"https://example.com/a\"]}"))
+                .when(httpClient).send(any(), any());
+
+        String result = tool.execute(Map.of("query", "test"));
+        assertThat(result).containsOnlyOnce("https://example.com/a");
+    }
+
+    @Test
+    void omitsSourcesSectionWhenNoCitations() throws Exception {
+        doReturn(mockResponse(200, "{\"choices\":[{\"message\":{\"content\":\"Just a summary\"}}]}"))
+                .when(httpClient).send(any(), any());
+
+        assertThat(tool.execute(Map.of("query", "test"))).isEqualTo("Just a summary");
+    }
+
+    @Test
     void returnsUnavailableWhenApiKeyBlank() throws Exception {
         var noKeyTool = new WebSearchTool("", ENDPOINT, MODEL, objectMapper, httpClient);
 
