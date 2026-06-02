@@ -11,8 +11,8 @@ Hugin is an AI personal assistant built on Spring Boot that connects to [Model C
 Clone the repo and install the Hugin CLI:
 
 ```bash
-git clone https://github.com/jeremyunck/mcp-client.git && cd mcp-client
-npm install && npm install -g .
+git clone https://github.com/jeremyunck/hugin.git && cd hugin
+./install.sh
 ```
 
 Then run the interactive setup:

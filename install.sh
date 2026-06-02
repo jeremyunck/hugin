@@ -19,7 +19,8 @@ INSTALL_USER="$(id -un)"
 ENV_FILE="$HUGIN_HOME/hugin.env"
 CONFIG_YML="$HUGIN_HOME/config/application.yml"
 MCP_JSON="$HUGIN_HOME/config/mcp-servers.json"
-LAUNCHER_PATH="/usr/local/bin/${LAUNCHER_NAME}"
+AUTO_UPDATE_SCRIPT="$HUGIN_HOME/bin/hugin-auto-update.sh"
+AUTO_UPDATE_INTERVAL_SECS="${HUGIN_AUTO_UPDATE_INTERVAL_SECS:-300}"
 
 # ── colours ───────────────────────────────────────────────────────────────────
 info()    { printf '\033[1;34m[hugin]\033[0m %s\n' "$*"; }
@@ -37,6 +38,123 @@ resolve_hugin_version() {
     version=$(grep -m1 '"version"' "$package_json" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)
   fi
   [[ -n "$version" ]] && echo "$version" || echo "unknown"
+}
+
+repo_slug_from_origin() {
+  local remote
+  remote="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+  case "$remote" in
+    git@github.com:*.git)
+      remote="${remote#git@github.com:}"
+      remote="${remote%.git}"
+      ;;
+    git@github.com:*)
+      remote="${remote#git@github.com:}"
+      ;;
+    https://github.com/*.git)
+      remote="${remote#https://github.com/}"
+      remote="${remote%.git}"
+      ;;
+    https://github.com/*)
+      remote="${remote#https://github.com/}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  [[ -n "$remote" ]] || return 1
+  printf '%s\n' "$remote"
+}
+
+github_api_get() {
+  local url="$1"
+  local -a curl_args=(-fsSL -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  fi
+  curl "${curl_args[@]}" "$url"
+}
+
+json_get_field() {
+  local key="$1"
+  node -e '
+const fs = require("fs");
+const key = process.argv[1];
+const obj = JSON.parse(fs.readFileSync(0, "utf8"));
+const value = obj[key];
+if (value === undefined || value === null) process.exit(1);
+if (typeof value === "object") {
+  process.stdout.write(JSON.stringify(value));
+} else {
+  process.stdout.write(String(value));
+}
+' "$key"
+}
+
+json_find_asset_url() {
+  local asset_name="$1"
+  node -e '
+const fs = require("fs");
+const wanted = process.argv[1];
+const obj = JSON.parse(fs.readFileSync(0, "utf8"));
+const asset = (obj.assets || []).find(a => a.name === wanted);
+if (!asset || !asset.browser_download_url) process.exit(1);
+process.stdout.write(asset.browser_download_url);
+' "$asset_name"
+}
+
+download_release_bundle() {
+  local slug="${HUGIN_RELEASE_REPO_SLUG:-}"
+  local release_url="${HUGIN_RELEASE_API_URL:-}"
+  local release_json manifest_url manifest_json bundle_url sha_url source_sha bundle_tmp bundle_dir actual_sha expected_sha
+  if [[ -z "$slug" ]]; then
+    slug="$(repo_slug_from_origin)" || return 1
+  fi
+  if [[ -z "$release_url" ]]; then
+    release_url="https://api.github.com/repos/${slug}/releases/latest"
+  fi
+
+  release_json="$(github_api_get "$release_url")" || return 1
+  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-manifest.json")" || return 1
+  manifest_json="$(github_api_get "$manifest_url")" || return 1
+  source_sha="$(printf '%s' "$manifest_json" | json_get_field "source_sha")" || return 1
+  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz")" || return 1
+  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz.sha256" 2>/dev/null || true)"
+
+  bundle_tmp="$(mktemp -d)"
+  bundle_dir="$bundle_tmp/bundle"
+  mkdir -p "$bundle_dir"
+  curl -fsSL "$bundle_url" -o "$bundle_tmp/hugin-runtime.tar.gz"
+  if [[ -n "$sha_url" ]]; then
+    expected_sha="$(github_api_get "$sha_url" | awk '{print $1}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      actual_sha="$(sha256sum "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+    else
+      actual_sha="$(shasum -a 256 "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+    fi
+    if [[ "$expected_sha" != "$actual_sha" ]]; then
+      rm -rf "$bundle_tmp"
+      die "Release bundle checksum mismatch."
+    fi
+  fi
+  tar -xzf "$bundle_tmp/hugin-runtime.tar.gz" -C "$bundle_dir"
+
+  RELEASE_BUNDLE_SOURCE_SHA="$source_sha"
+  RELEASE_BUNDLE_TMP="$bundle_tmp"
+  RELEASE_BUNDLE_DIR="$bundle_dir"
+  RELEASE_BUNDLE_VERSION="$(printf '%s' "$manifest_json" | json_get_field "release_name" 2>/dev/null || true)"
+  return 0
+}
+
+install_release_bundle() {
+  local bundle_dir="$1"
+  cp "$bundle_dir"/mcp-integration.jar "$HUGIN_HOME/bin/mcp-integration.jar"
+  if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
+    cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
+  fi
+  if [[ -f "$bundle_dir/openrouter-search-mcp.py" ]]; then
+    cp "$bundle_dir/openrouter-search-mcp.py" "$HUGIN_HOME/bin/openrouter-search-mcp.py"
+  fi
 }
 
 # Run a command that requires sudo, retrying up to 3 times on auth failure.
@@ -69,6 +187,19 @@ sudo_retry() {
 OS_TYPE="linux"
 if [[ "$(uname -s)" == "Darwin" ]]; then
   OS_TYPE="macos"
+fi
+
+if [[ -n "${HUGIN_LAUNCHER_PATH:-}" ]]; then
+  LAUNCHER_PATH="${HUGIN_LAUNCHER_PATH}"
+else
+  existing_hugin="$(command -v hugin 2>/dev/null || true)"
+  if [[ -n "$existing_hugin" && "$existing_hugin" != "$REPO_DIR/hugin/bin/hugin.js" && "$existing_hugin" != "$REPO_DIR/install.sh" ]]; then
+    LAUNCHER_PATH="$existing_hugin"
+  elif [[ "$OS_TYPE" == "macos" ]]; then
+    LAUNCHER_PATH="/opt/homebrew/bin/${LAUNCHER_NAME}"
+  else
+    LAUNCHER_PATH="/usr/local/bin/${LAUNCHER_NAME}"
+  fi
 fi
 
 if [[ "$OS_TYPE" == "macos" ]]; then
@@ -133,6 +264,45 @@ PLIST
   svc_is_enabled(){ [[ -f "$PLIST_PATH" ]]; }
   svc_enable()    { launchctl load -w "$PLIST_PATH" 2>/dev/null || true; }
   svc_daemon_reload() { :; }  # no-op on macOS
+
+  UPDATE_PLIST_LABEL="com.hugin.autoupdate"
+  UPDATE_PLIST_PATH="$HOME/Library/LaunchAgents/${UPDATE_PLIST_LABEL}.plist"
+
+  update_svc_install() {
+    mkdir -p "$HOME/Library/LaunchAgents"
+    cat > "$UPDATE_PLIST_PATH" <<UPDATE_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>             <string>${UPDATE_PLIST_LABEL}</string>
+  <key>UserName</key>          <string>${INSTALL_USER}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HUGIN_HOME</key>  <string>${HUGIN_HOME}</string>
+  </dict>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec ${AUTO_UPDATE_SCRIPT}</string>
+  </array>
+  <key>WorkingDirectory</key>  <string>${HUGIN_HOME}</string>
+  <key>StandardOutPath</key>   <string>${HUGIN_HOME}/logs/hugin-update.log</string>
+  <key>StandardErrorPath</key> <string>${HUGIN_HOME}/logs/hugin-update.log</string>
+  <key>StartInterval</key>     <integer>${AUTO_UPDATE_INTERVAL_SECS}</integer>
+</dict>
+</plist>
+UPDATE_PLIST
+    launchctl unload "$UPDATE_PLIST_PATH" 2>/dev/null || true
+    launchctl load -w "$UPDATE_PLIST_PATH"
+  }
+
+  update_svc_uninstall() {
+    launchctl unload "$UPDATE_PLIST_PATH" 2>/dev/null || true
+    rm -f "$UPDATE_PLIST_PATH"
+  }
 
   DISCORD_PLIST_LABEL="com.hugin.discord"
   DISCORD_PLIST_PATH="$HOME/Library/LaunchAgents/${DISCORD_PLIST_LABEL}.plist"
@@ -312,6 +482,51 @@ SERVICE
   svc_enable()    { sudo systemctl enable "$SERVICE_NAME"; }
   svc_daemon_reload() { sudo systemctl daemon-reload; }
 
+  UPDATE_SERVICE_FILE="/etc/systemd/system/hugin-autoupdate.service"
+  UPDATE_TIMER_FILE="/etc/systemd/system/hugin-autoupdate.timer"
+
+  update_svc_install() {
+    sudo_retry --reason "write autoupdate systemd service file" tee "$UPDATE_SERVICE_FILE" > /dev/null <<UPDATE_SERVICE
+# Hugin auto-update service — managed by install.sh
+[Unit]
+Description=Hugin Auto Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${INSTALL_USER}
+Environment=HUGIN_HOME=${HUGIN_HOME}
+Environment=PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=${HUGIN_HOME}
+ExecStart=${AUTO_UPDATE_SCRIPT}
+StandardOutput=append:${HUGIN_HOME}/logs/hugin-update.log
+StandardError=append:${HUGIN_HOME}/logs/hugin-update.log
+UPDATE_SERVICE
+    sudo_retry --reason "write autoupdate systemd timer file" tee "$UPDATE_TIMER_FILE" > /dev/null <<UPDATE_TIMER
+# Hugin auto-update timer — managed by install.sh
+[Unit]
+Description=Run Hugin auto-update periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=${AUTO_UPDATE_INTERVAL_SECS}s
+Persistent=true
+Unit=hugin-autoupdate.service
+
+[Install]
+WantedBy=timers.target
+UPDATE_TIMER
+    sudo_retry --reason "reload systemd for autoupdate service" systemctl daemon-reload
+    sudo systemctl enable --now hugin-autoupdate.timer
+  }
+
+  update_svc_uninstall() {
+    sudo systemctl disable --now hugin-autoupdate.timer 2>/dev/null || true
+    sudo rm -f "$UPDATE_SERVICE_FILE" "$UPDATE_TIMER_FILE"
+    sudo systemctl daemon-reload
+  }
+
   svc_start_redis()    { sudo systemctl enable --now redis-server; }
   svc_is_active_redis(){ systemctl is-active --quiet redis-server 2>/dev/null; }
 
@@ -350,6 +565,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   info "Stopping and removing $SERVICE_NAME service..."
   svc_uninstall
   sudo_retry --reason "remove launcher from $LAUNCHER_PATH" rm -f "$LAUNCHER_PATH"
+  update_svc_uninstall
   success "Service and launcher removed."
 
   if [[ -d "$HUGIN_HOME" ]]; then
@@ -902,9 +1118,6 @@ else
 fi
 
 # ── 8. install the hugin launcher ────────────────────────────────────────────
-if [[ "$_force_reinstall" == "true" ]]; then
-  info "Skipping launcher reinstall (paths unchanged between updates)."
-else
 info "Installing $LAUNCHER_NAME launcher to $LAUNCHER_PATH..."
 HUGIN_VERSION="$(resolve_hugin_version)"
 _launcher_tmp=$(mktemp)
@@ -1046,6 +1259,123 @@ resolve_installed_version() {
   [[ -n "$version" ]] && echo "$version" || echo "$HUGIN_VERSION"
 }
 cmd_version() { resolve_installed_version; }
+
+repo_slug_from_origin() {
+  local remote
+  remote="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+  case "$remote" in
+    git@github.com:*.git)
+      remote="${remote#git@github.com:}"
+      remote="${remote%.git}"
+      ;;
+    git@github.com:*)
+      remote="${remote#git@github.com:}"
+      ;;
+    https://github.com/*.git)
+      remote="${remote#https://github.com/}"
+      remote="${remote%.git}"
+      ;;
+    https://github.com/*)
+      remote="${remote#https://github.com/}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  [[ -n "$remote" ]] || return 1
+  printf '%s\n' "$remote"
+}
+
+github_api_get() {
+  local url="$1"
+  local -a curl_args=(-fsSL -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  fi
+  curl "${curl_args[@]}" "$url"
+}
+
+json_get_field() {
+  local key="$1"
+  node -e '
+const fs = require("fs");
+const key = process.argv[1];
+const obj = JSON.parse(fs.readFileSync(0, "utf8"));
+const value = obj[key];
+if (value === undefined || value === null) process.exit(1);
+if (typeof value === "object") {
+  process.stdout.write(JSON.stringify(value));
+} else {
+  process.stdout.write(String(value));
+}
+' "$key"
+}
+
+json_find_asset_url() {
+  local asset_name="$1"
+  node -e '
+const fs = require("fs");
+const wanted = process.argv[1];
+const obj = JSON.parse(fs.readFileSync(0, "utf8"));
+const asset = (obj.assets || []).find(a => a.name === wanted);
+if (!asset || !asset.browser_download_url) process.exit(1);
+process.stdout.write(asset.browser_download_url);
+' "$asset_name"
+}
+
+download_release_bundle() {
+  local slug="${HUGIN_RELEASE_REPO_SLUG:-}"
+  local release_url="${HUGIN_RELEASE_API_URL:-}"
+  local release_json manifest_url manifest_json bundle_url sha_url source_sha bundle_tmp bundle_dir actual_sha expected_sha
+  if [[ -z "$slug" ]]; then
+    slug="$(repo_slug_from_origin)" || return 1
+  fi
+  if [[ -z "$release_url" ]]; then
+    release_url="https://api.github.com/repos/${slug}/releases/latest"
+  fi
+
+  release_json="$(github_api_get "$release_url")" || return 1
+  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-manifest.json")" || return 1
+  manifest_json="$(github_api_get "$manifest_url")" || return 1
+  source_sha="$(printf '%s' "$manifest_json" | json_get_field "source_sha")" || return 1
+  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz")" || return 1
+  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz.sha256" 2>/dev/null || true)"
+
+  bundle_tmp="$(mktemp -d)"
+  bundle_dir="$bundle_tmp/bundle"
+  mkdir -p "$bundle_dir"
+  curl -fsSL "$bundle_url" -o "$bundle_tmp/hugin-runtime.tar.gz"
+  if [[ -n "$sha_url" ]]; then
+    expected_sha="$(github_api_get "$sha_url" | awk '{print $1}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      actual_sha="$(sha256sum "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+    else
+      actual_sha="$(shasum -a 256 "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+    fi
+    if [[ "$expected_sha" != "$actual_sha" ]]; then
+      rm -rf "$bundle_tmp"
+      die "Release bundle checksum mismatch."
+    fi
+  fi
+  tar -xzf "$bundle_tmp/hugin-runtime.tar.gz" -C "$bundle_dir"
+
+  RELEASE_BUNDLE_SOURCE_SHA="$source_sha"
+  RELEASE_BUNDLE_TMP="$bundle_tmp"
+  RELEASE_BUNDLE_DIR="$bundle_dir"
+  RELEASE_BUNDLE_VERSION="$(printf '%s' "$manifest_json" | json_get_field "release_name" 2>/dev/null || true)"
+  return 0
+}
+
+install_release_bundle() {
+  local bundle_dir="$1"
+  cp "$bundle_dir"/mcp-integration.jar "$HUGIN_HOME/bin/mcp-integration.jar"
+  if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
+    cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
+  fi
+  if [[ -f "$bundle_dir/openrouter-search-mcp.py" ]]; then
+    cp "$bundle_dir/openrouter-search-mcp.py" "$HUGIN_HOME/bin/openrouter-search-mcp.py"
+  fi
+}
 
 cmd_config() {
   [[ -f "$ENV_FILE" ]] && load_env
@@ -1359,17 +1689,42 @@ cmd_update() {
     die "Repo not found at $REPO_DIR — cannot update. Re-run install.sh from the source directory."
   fi
 
-  info "Pulling latest code from $REPO_DIR..."
-  git -C "$REPO_DIR" pull --ff-only || die "git pull failed — resolve conflicts manually and retry."
+  local checkout_branch
+  checkout_branch="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  if [[ "$checkout_branch" == "main" ]]; then
+    info "Pulling latest code from origin/main..."
+    git -C "$REPO_DIR" pull --ff-only origin main || die "git pull failed — resolve conflicts manually and retry."
+  else
+    info "Repo checkout is on branch '$checkout_branch' — skipping git sync and updating the installed runtime from the current checkout."
+  fi
 
-  info "Building jars (this may take a minute)..."
-  MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" \
-    mvn -f "$REPO_DIR/pom.xml" \
-        -pl mcp-integration,agent-discord -am \
-        clean package -DskipTests -q \
-    || die "Maven build failed — check output above."
+  local current_head bundle_ready=false release_dir="" was_running=false discord_was_running=false
+  current_head="$(git -C "$REPO_DIR" rev-parse HEAD)"
 
-  local was_running=false
+  if download_release_bundle; then
+    if [[ "$RELEASE_BUNDLE_SOURCE_SHA" == "$current_head" ]]; then
+      bundle_ready=true
+      release_dir="$RELEASE_BUNDLE_DIR"
+      info "Using latest GitHub release bundle (${RELEASE_BUNDLE_SOURCE_SHA:0:7})."
+    else
+      warn "Latest release bundle is for ${RELEASE_BUNDLE_SOURCE_SHA:0:7}, but repo is at ${current_head:0:7}. Falling back to local build."
+      if [[ -n "${RELEASE_BUNDLE_TMP:-}" ]]; then
+        rm -rf "$RELEASE_BUNDLE_TMP"
+      fi
+    fi
+  else
+    info "No compatible release bundle found — falling back to local build."
+  fi
+
+  if [[ "$bundle_ready" == "false" ]]; then
+    info "Building jars (this may take a minute)..."
+    MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" \
+      mvn -f "$REPO_DIR/pom.xml" \
+          -pl mcp-integration,agent-discord -am \
+          clean package -DskipTests -q \
+      || die "Maven build failed — check output above."
+  fi
+
   if svc_is_active 2>/dev/null; then
     was_running=true
     info "Stopping service to swap jars..."
@@ -1377,7 +1732,6 @@ cmd_update() {
     sleep 1
   fi
 
-  local discord_was_running=false
   if discord_svc_is_active 2>/dev/null; then
     discord_was_running=true
     info "Stopping Discord bot service to swap jar..."
@@ -1385,9 +1739,14 @@ cmd_update() {
     sleep 1
   fi
 
-  cp "$REPO_DIR"/mcp-integration/target/mcp-integration-*.jar  "$HUGIN_HOME/bin/mcp-integration.jar"
-  cp "$REPO_DIR"/agent-discord/target/agent-discord-*.jar       "$HUGIN_HOME/bin/agent-discord.jar" 2>/dev/null || true
-  cp "$REPO_DIR/openrouter-search-mcp.py"                       "$HUGIN_HOME/bin/openrouter-search-mcp.py"
+  if [[ "$bundle_ready" == "true" ]]; then
+    install_release_bundle "$release_dir"
+  else
+    cp "$REPO_DIR"/mcp-integration/target/mcp-integration-*.jar  "$HUGIN_HOME/bin/mcp-integration.jar"
+    cp "$REPO_DIR"/agent-discord/target/agent-discord-*.jar       "$HUGIN_HOME/bin/agent-discord.jar" 2>/dev/null || true
+    cp "$REPO_DIR/openrouter-search-mcp.py"                       "$HUGIN_HOME/bin/openrouter-search-mcp.py"
+  fi
+
   local new_version
   new_version="$(resolve_installed_version)"
   if [[ -f "$ENV_FILE" ]]; then
@@ -1425,6 +1784,10 @@ cmd_update() {
     success "Discord bot service restarted."
   elif discord_has_token && [[ -f "$HUGIN_HOME/bin/agent-discord.jar" ]]; then
     info "Discord bot was not running — start it with: hugin discord start"
+  fi
+
+  if [[ -n "${RELEASE_BUNDLE_TMP:-}" ]]; then
+    rm -rf "$RELEASE_BUNDLE_TMP"
   fi
 }
 
@@ -1489,11 +1852,75 @@ SED_INPLACE \
   -e "s|__REPO_DIR__|${REPO_DIR}|g" \
   -e "s|__HUGIN_VERSION__|${HUGIN_VERSION}|g" \
   "$_launcher_tmp"
-sudo_retry --reason "install launcher to $LAUNCHER_PATH" cp "$_launcher_tmp" "$LAUNCHER_PATH"
+if [[ -w "$LAUNCHER_PATH" || -w "$(dirname "$LAUNCHER_PATH")" ]]; then
+  cp "$_launcher_tmp" "$LAUNCHER_PATH"
+  chmod 0755 "$LAUNCHER_PATH"
+else
+  sudo_retry --reason "install launcher to $LAUNCHER_PATH" cp "$_launcher_tmp" "$LAUNCHER_PATH"
+  sudo_retry --reason "make launcher executable" chmod 0755 "$LAUNCHER_PATH"
+fi
 rm -f "$_launcher_tmp"
-sudo_retry --reason "make launcher executable" chmod 0755 "$LAUNCHER_PATH"
 success "Launcher installed: $LAUNCHER_PATH"
-fi  # end skip-on-reinstall
+
+# ── 8b. install auto-update helper ────────────────────────────────────────────
+info "Installing auto-update helper..."
+_update_tmp=$(mktemp)
+cat > "$_update_tmp" <<'UPDATE_EOF'
+#!/usr/bin/env bash
+# hugin-auto-update — pull from origin/main when new commits are available.
+set -euo pipefail
+
+HUGIN_HOME="${HUGIN_HOME:-__HUGIN_HOME__}"
+REPO_DIR="__REPO_DIR__"
+LAUNCHER_PATH="__LAUNCHER_PATH__"
+
+info() { printf '\033[1;34m[hugin-update]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[hugin-update]\033[0m %s\n' "$*"; }
+die()  { printf '\033[1;31m[hugin-update]\033[0m %s\n' "$*" >&2; exit 1; }
+
+if [[ ! -d "$REPO_DIR/.git" ]]; then
+  die "Repo not found at $REPO_DIR."
+fi
+
+if [[ ! -x "$LAUNCHER_PATH" ]]; then
+  die "Launcher not found at $LAUNCHER_PATH."
+fi
+
+current_branch="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+if [[ "$current_branch" != "main" ]]; then
+  info "Skipping auto-update on branch '$current_branch'."
+  exit 0
+fi
+
+if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no 2>/dev/null || true)" ]]; then
+  warn "Skipping auto-update because $REPO_DIR has local changes."
+  exit 0
+fi
+
+info "Checking origin/main for new commits..."
+git -C "$REPO_DIR" fetch origin main --prune
+
+local_head="$(git -C "$REPO_DIR" rev-parse HEAD)"
+remote_head="$(git -C "$REPO_DIR" rev-parse origin/main)"
+if [[ "$local_head" == "$remote_head" ]]; then
+  info "Already up to date at ${local_head:0:7}."
+  exit 0
+fi
+
+info "New commit detected: ${local_head:0:7} -> ${remote_head:0:7}. Updating and restarting..."
+"$LAUNCHER_PATH" update
+
+info "Auto-update completed successfully."
+UPDATE_EOF
+SED_INPLACE \
+  -e "s|__HUGIN_HOME__|${HUGIN_HOME}|g" \
+  -e "s|__REPO_DIR__|${REPO_DIR}|g" \
+  -e "s|__LAUNCHER_PATH__|${LAUNCHER_PATH}|g" \
+  "$_update_tmp"
+cp "$_update_tmp" "$AUTO_UPDATE_SCRIPT"
+rm -f "$_update_tmp"
+chmod 0755 "$AUTO_UPDATE_SCRIPT"
+success "Auto-update helper installed: $AUTO_UPDATE_SCRIPT"
 
 # ── 9. install and start service ─────────────────────────────────────────────
 if [[ "$_force_reinstall" == "false" ]]; then
@@ -1511,6 +1938,9 @@ else
   svc_start 2>/dev/null || true
   info "Service started."
 fi
+
+info "Installing auto-update timer/service..."
+update_svc_install
 
 # ── 9b. Discord bot service ───────────────────────────────────────────────────
 info "Setting up Discord bot service..."
@@ -1530,6 +1960,7 @@ cat <<MSG
   Start chatting:       hugin
   Server in foreground: hugin serve
   Service status/logs:  hugin status  |  hugin logs
+  Auto-update logs:     tail -f $HUGIN_HOME/logs/hugin-update.log
   Health check:         hugin doctor
   Reconfigure:          hugin config
   Update (rebuild):     hugin update

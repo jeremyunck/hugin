@@ -7,9 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Maven multi-module project (Java 21, Spring Boot 3.5.x). Run from the repo root.
 
 ```bash
-hugin install # fresh install
+./install.sh   # fresh install
 
-hugin update # refresh code
+hugin update   # refresh code from origin/main
 ```
 
 Two modules have a main class: `mcp-integration` (`McpClientApplication`, the agent **server** on port 8080) and `agent-terminal` (`AgentTerminalApplication`, the terminal **client**). `agent-core` and `mcp-client` are libraries. The terminal connects to a running server, so start `mcp-integration` first.

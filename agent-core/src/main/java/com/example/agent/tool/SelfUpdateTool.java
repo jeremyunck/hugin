@@ -22,8 +22,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Runs {@code hugin update}, which fetches the latest published {@code hugin-agent}
- * npm package and rebuilds the jars, reusing existing credentials.
+ * Runs {@code hugin update}, which pulls {@code origin/main}, rebuilds the jars,
+ * and restarts the local services using the checked-out repository.
  */
 @Component
 public class SelfUpdateTool implements LocalTool {
@@ -54,7 +54,7 @@ public class SelfUpdateTool implements LocalTool {
 
     @Override
     public String description() {
-        return "Update Hugin agent to the latest version. No arguments needed";
+        return "Update Hugin agent from the latest main branch. No arguments needed";
     }
 
     @Override

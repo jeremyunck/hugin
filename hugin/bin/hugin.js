@@ -3,7 +3,7 @@
 
 const { Command } = require('commander');
 const { spawnSync, spawn } = require('child_process');
-const { existsSync } = require('fs');
+const { existsSync, readFileSync } = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
@@ -22,6 +22,33 @@ const installed       = () => existsSync(SERVER_JAR);
 const hasSystemd      = () => spawnSync('systemctl', ['--version'], { stdio: 'ignore' }).status === 0;
 const hasPlist        = () => existsSync(PLIST_PATH);
 const hasHuginLauncher = () => spawnSync('which', ['hugin'], { stdio: 'ignore' }).status === 0;
+
+function resolveInstalledLauncher() {
+  const candidates = [
+    process.env.HUGIN_LAUNCHER_PATH,
+    path.join(os.homedir(), '.hugin', 'hugin.env'),
+    IS_MACOS ? '/opt/homebrew/bin/hugin' : '/usr/local/bin/hugin',
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (candidate.endsWith('hugin.env')) {
+      if (!existsSync(candidate)) continue;
+      const env = readFileSync(candidate, 'utf8');
+      const match = env.match(/^HUGIN_LAUNCHER_PATH=(.+)$/m);
+      if (match && match[1]) {
+        const resolved = match[1].trim();
+        if (resolved && resolved !== __filename) return resolved;
+      }
+      continue;
+    }
+    if (candidate !== __filename && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return IS_MACOS ? '/usr/local/bin/hugin' : '/usr/local/bin/hugin';
+}
 
 function die(msg) {
   process.stderr.write(`\x1b[31m[hugin]\x1b[0m ${msg}\n`);
@@ -153,7 +180,7 @@ program
   .action(() => {
     const installScript = path.join(__dirname, '..', '..', 'install.sh');
     if (!existsSync(installScript)) {
-      die(`install.sh not found at ${installScript}.\n  Make sure you installed from the repo root: npm install -g .`);
+      die(`install.sh not found at ${installScript}.\n  Make sure you installed from the repo root and are running the local checkout.`);
     }
     sh('bash', [installScript]);
   });
@@ -162,19 +189,13 @@ program
 
 program
   .command('update')
-  .description('Pull the latest hugin-agent from npm then rebuild and reinstall jars (no prompts)')
+  .description('Pull the latest main branch, rebuild jars, and restart the service (no prompts)')
   .action(() => {
-    info('Fetching latest hugin-agent from npm...');
-    const npmResult = spawnSync('npm', ['install', '-g', 'hugin-agent@latest'], { stdio: 'inherit' });
-    if (npmResult.status !== 0) {
-      die('npm install failed — aborting update');
+    const launcher = resolveInstalledLauncher();
+    if (!existsSync(launcher)) {
+      die(`Installed launcher not found at ${launcher}`);
     }
-    // install.sh is resolved after the npm update so we get the freshly installed copy.
-    const installScript = path.join(__dirname, '..', '..', 'install.sh');
-    if (!existsSync(installScript)) {
-      die(`install.sh not found at ${installScript}`);
-    }
-    sh('bash', [installScript, '--reinstall']);
+    sh(launcher, ['update']);
   });
 
 // ── server subcommands ────────────────────────────────────────────────────────

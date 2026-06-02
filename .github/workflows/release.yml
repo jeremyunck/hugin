@@ -1,0 +1,79 @@
+name: Release Runtime
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build and test
+        run: mvn --batch-mode --no-transfer-progress -T 1C clean install
+
+      - name: Package runtime bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="release-main-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          release_name="Hugin runtime ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          source_sha="${GITHUB_SHA}"
+          source_ref="${GITHUB_REF_NAME}"
+          version="$(node -p "require('./package.json').version")"
+
+          dist_dir="dist/release"
+          bundle_dir="${dist_dir}/bundle"
+          mkdir -p "$bundle_dir"
+
+          cp mcp-integration/target/mcp-integration-*.jar "$bundle_dir/mcp-integration.jar"
+          cp agent-discord/target/agent-discord-*.jar "$bundle_dir/agent-discord.jar" 2>/dev/null || true
+          cp openrouter-search-mcp.py "$bundle_dir/openrouter-search-mcp.py"
+
+          tar -C "$bundle_dir" -czf "${dist_dir}/hugin-runtime.tar.gz" .
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${dist_dir}/hugin-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/hugin-runtime.tar.gz.sha256"
+          else
+            shasum -a 256 "${dist_dir}/hugin-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/hugin-runtime.tar.gz.sha256"
+          fi
+
+          bundle_sha256="$(cat "${dist_dir}/hugin-runtime.tar.gz.sha256")"
+          cat > "${dist_dir}/hugin-manifest.json" <<EOF
+          {
+            "release_tag": "${release_tag}",
+            "release_name": "${release_name}",
+            "source_ref": "${source_ref}",
+            "source_sha": "${source_sha}",
+            "package_version": "${version}",
+            "bundle_name": "hugin-runtime.tar.gz",
+            "bundle_sha256": "${bundle_sha256}"
+          }
+EOF
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-main-${{ github.run_id }}-${{ github.run_attempt }}
+          name: Hugin runtime ${{ github.run_id }}.${{ github.run_attempt }}
+          generate_release_notes: true
+          files: |
+            dist/release/hugin-runtime.tar.gz
+            dist/release/hugin-runtime.tar.gz.sha256
+            dist/release/hugin-manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
