@@ -15,7 +15,6 @@ import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +23,13 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -40,27 +44,34 @@ public class McpServerRegistryService {
     private final McpProperties properties;
     private final ObjectMapper objectMapper;
     private final McpJsonMapper mcpJsonMapper;
+    private final ExecutorService startupExecutor;
 
     private final Map<String, McpSyncClient> activeClients = new ConcurrentHashMap<>();
     private final Map<String, String> connectionErrors = new ConcurrentHashMap<>();
+
+    private static final AtomicInteger STARTUP_THREAD_IDS = new AtomicInteger();
 
     public McpServerRegistryService(McpProperties properties) {
         this.properties = properties;
         this.objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         this.mcpJsonMapper = McpJsonDefaults.getMapper();
+        this.startupExecutor = Executors.newCachedThreadPool(newStartupThreadFactory());
     }
 
     @PostConstruct
     public void init() {
         McpServersConfig config = loadConfig();
+        // Start MCP handshakes in the background so the web server can become healthy
+        // immediately instead of waiting for every configured server to finish initializing.
         config.mcpServers().forEach((name, def) -> {
             log.debug("Connecting to MCP server: {}", name);
-            connectServer(name, def);
+            startupExecutor.submit(() -> connectServer(name, def));
         });
     }
 
     @PreDestroy
     public void shutdown() {
+        startupExecutor.shutdownNow();
         activeClients.forEach((name, client) -> {
             try {
                 client.close();
@@ -218,6 +229,14 @@ public class McpServerRegistryService {
             connectionErrors.put(name, e.getMessage());
             log.warn("Failed to connect to MCP server '{}': {}", name, e.getMessage());
         }
+    }
+
+    private static ThreadFactory newStartupThreadFactory() {
+        return task -> {
+            Thread thread = new Thread(task, "mcp-startup-" + STARTUP_THREAD_IDS.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     private void disconnectServer(String name) {

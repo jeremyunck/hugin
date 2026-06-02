@@ -17,6 +17,7 @@ import java.util.NoSuchElementException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests for {@link McpServerRegistryService}. No real MCP servers are started; a
@@ -51,6 +52,31 @@ class McpServerRegistryServiceTest {
                 props(tmp.resolve("missing.json").toString()));
     }
 
+    private void awaitConnectionAttempt(McpServerRegistryService service, String name) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
+        while (System.nanoTime() < deadline) {
+            ServerInfo info = service.getServer(name);
+            if (info.connected() || info.error() != null) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        fail("Timed out waiting for MCP connection attempt for " + name);
+    }
+
+    @Test
+    void initReturnsQuicklyEvenWhenServerConnectionIsSlow() throws Exception {
+        var slow = new McpServerDefinition("/bin/sh", List.of("-lc", "sleep 2"), Map.of(), null, null);
+        var service = serviceWithConfig(new McpServersConfig(Map.of("slow", slow)));
+
+        long startNanos = System.nanoTime();
+        service.init();
+        long elapsedNanos = System.nanoTime() - startNanos;
+
+        assertThat(elapsedNanos).isLessThan(Duration.ofMillis(200).toNanos());
+        service.shutdown();
+    }
+
     @Test
     void initWithMissingConfigStartsEmpty() throws Exception {
         var service = serviceNoConfig();
@@ -64,6 +90,7 @@ class McpServerRegistryServiceTest {
         var def = new McpServerDefinition(NONEXISTENT_CMD, List.of(), Map.of(), null, null);
         var service = serviceWithConfig(new McpServersConfig(Map.of("srv1", def)));
         service.init();
+        awaitConnectionAttempt(service, "srv1");
 
         List<ServerInfo> servers = service.listServers();
         assertThat(servers).hasSize(1);
