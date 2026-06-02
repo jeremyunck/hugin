@@ -6,7 +6,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Tracks developer-mode state and applies the corresponding root log level. */
+/**
+ * Tracks developer-mode state and applies the corresponding root log level.
+ */
 @Service
 public class DeveloperModeService {
 

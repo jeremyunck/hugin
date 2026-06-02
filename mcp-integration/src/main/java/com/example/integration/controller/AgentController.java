@@ -81,6 +81,11 @@ public class AgentController {
                 StringBuilder streamedContent = new StringBuilder();
                 AgentResponse response = agentService.chatStream(request, new AgentStreamListener() {
                     @Override
+                    public void onConfig(boolean developerMode) {
+                        send(emitter, "config", Map.of("developerMode", developerMode));
+                    }
+
+                    @Override
                     public void onContent(String delta) {
                         streamedContent.append(delta);
                         send(emitter, "token", Map.of("text", delta));

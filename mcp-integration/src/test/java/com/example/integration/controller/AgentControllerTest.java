@@ -315,4 +315,5 @@ class AgentControllerTest {
         assertThat(latch.await(2, TimeUnit.SECONDS)).isTrue();
         assertThat(emitter).isNotNull();
     }
+
 }

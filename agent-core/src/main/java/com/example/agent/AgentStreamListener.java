@@ -14,6 +14,9 @@ public interface AgentStreamListener {
     /** A chunk of assistant reasoning streamed from the model. */
     default void onReasoning(String delta) {}
 
+    /** Emits one-time stream configuration before visible output begins. */
+    default void onConfig(boolean developerMode) {}
+
     /** The model requested a tool call; about to be executed. */
     default void onToolCall(String toolName, String arguments) {}
 

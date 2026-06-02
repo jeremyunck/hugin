@@ -90,7 +90,7 @@ public class DiscordBotService implements DisposableBean {
      */
     private final ConcurrentHashMap<String, LinkedList<String>> conversationLogs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, LinkedList<String>> diagnosticLogs = new ConcurrentHashMap<>();
-    // Cached across streams so that if developer mode was already on, the next stream starts correctly.
+    // Cache the last known mode so the next stream starts with the current visibility.
     private volatile boolean lastKnownDeveloperMode = false;
 
     @Autowired

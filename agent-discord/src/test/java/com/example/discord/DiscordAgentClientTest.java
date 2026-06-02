@@ -28,6 +28,9 @@ class DiscordAgentClientTest {
     @Test
     void ignoresReasoningEventsButKeepsVisibleOutput() throws Exception {
         String sse = """
+                event: config
+                data: {"developerMode":false}
+
                 event: reasoning
                 data: {"text":"Thinking..."}
 
@@ -56,8 +59,13 @@ class DiscordAgentClientTest {
 
         List<String> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        List<Boolean> developerModes = new ArrayList<>();
 
         client.streamChat("hello", "session-1", new DiscordAgentClient.Handler() {
+            @Override public void onConfig(boolean developerMode) {
+                developerModes.add(developerMode);
+            }
+
             @Override public void onToken(String text) {
                 tokens.add(text);
             }
@@ -67,6 +75,7 @@ class DiscordAgentClientTest {
             }
         });
 
+        assertThat(developerModes).containsExactly(false);
         assertThat(tokens).containsExactly("Hello world");
         assertThat(errors).isEmpty();
     }
