@@ -1,6 +1,7 @@
 package com.example.agent.tool;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.time.Duration;
 import java.util.List;
@@ -16,6 +17,15 @@ import java.util.List;
  *   <li>{@code maxOutputChars} — cap on the size of any single tool result.</li>
  *   <li>{@code denyList} — glob patterns (relative to workspace root) that read, write, and
  *       edit are forbidden from accessing. Examples: {@code **.env}, {@code secrets/**}.</li>
+ *   <li>{@code shell} — the shell executable {@code run_bash} invokes. Blank auto-detects the
+ *       user's login shell from the {@code SHELL} environment variable, falling back to
+ *       {@code /bin/sh}.</li>
+ *   <li>{@code loginShell} — when true (default) {@code run_bash} runs the command through a
+ *       login shell ({@code -l}) so the user's profile is sourced. This is what makes tools
+ *       installed via Homebrew ({@code brew}, {@code /opt/homebrew/bin}, {@code /usr/local/bin})
+ *       and other PATH entries set up in {@code ~/.zprofile} / {@code ~/.bash_profile} resolvable.
+ *       The trade-off: the profile may define aliases/functions or run side-effecting startup code.
+ *       Set this to false to run a plain non-login shell when that is a concern.</li>
  * </ul>
  */
 @ConfigurationProperties("agent.tools")
@@ -24,8 +34,11 @@ public record LocalToolProperties(
         String workspaceRoot,
         Duration bashTimeout,
         Integer maxOutputChars,
-        List<String> denyList) {
+        List<String> denyList,
+        String shell,
+        Boolean loginShell) {
 
+    @ConstructorBinding
     public LocalToolProperties {
         if (enabled == null) {
             enabled = true;
@@ -42,5 +55,21 @@ public record LocalToolProperties(
         if (denyList == null) {
             denyList = List.of();
         }
+        if (shell == null) {
+            shell = "";
+        }
+        if (loginShell == null) {
+            loginShell = true;
+        }
+    }
+
+    /** Backwards-compatible constructor without shell settings (auto-detect, login shell on). */
+    public LocalToolProperties(
+            Boolean enabled,
+            String workspaceRoot,
+            Duration bashTimeout,
+            Integer maxOutputChars,
+            List<String> denyList) {
+        this(enabled, workspaceRoot, bashTimeout, maxOutputChars, denyList, null, null);
     }
 }

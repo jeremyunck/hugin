@@ -7,22 +7,53 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/** Runs a shell command from the workspace root and returns its combined output. */
+/**
+ * Runs a shell command from the workspace root and returns its combined output.
+ *
+ * <p>By default commands run through a <em>login</em> shell ({@code -l}) so the user's profile is
+ * sourced and PATH-dependent tools (e.g. Homebrew's {@code brew}) resolve. The trade-off is that
+ * the profile may define aliases/functions or run side-effecting startup code, and runs in the
+ * environment the user's profile sets up. Set {@code agent.tools.login-shell=false} to run a plain
+ * non-login shell instead when that is a concern (note: like all built-in tools, {@code run_bash}
+ * already grants arbitrary shell access and is gated by {@code agent.tools.enabled}).
+ */
 @Component
 public class BashCommandTool implements LocalTool {
 
     private final Workspace workspace;
     private final Duration timeout;
     private final int maxChars;
+    private final String shell;
+    private final boolean loginShell;
 
     public BashCommandTool(Workspace workspace, LocalToolProperties properties) {
         this.workspace = workspace;
         this.timeout = properties.bashTimeout();
         this.maxChars = properties.maxOutputChars();
+        this.shell = resolveShell(properties.shell());
+        this.loginShell = properties.loginShell();
+    }
+
+    /**
+     * Resolves which shell binary to run. An explicit config value wins; otherwise we use the
+     * user's login shell from {@code $SHELL} (so {@code run_bash} behaves like the user's own
+     * terminal and finds PATH entries set up in their profile, e.g. Homebrew's {@code brew}),
+     * falling back to {@code /bin/sh}.
+     */
+    private static String resolveShell(String configured) {
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String envShell = System.getenv("SHELL");
+        if (envShell != null && !envShell.isBlank()) {
+            return envShell;
+        }
+        return "/bin/sh";
     }
 
     @Override
@@ -32,9 +63,11 @@ public class BashCommandTool implements LocalTool {
 
     @Override
     public String description() {
-        return "Run a shell command with 'sh -c' from the workspace root and return its exit code "
-                + "and combined stdout/stderr. Useful for building, running tests, git, or other CLI "
-                + "tasks. Commands are subject to a timeout of " + timeout.toSeconds() + "s.";
+        return "Run a shell command from the workspace root and return its exit code and combined "
+                + "stdout/stderr. The command runs through " + (loginShell ? "a login shell" : "a shell")
+                + ", so it sees the same PATH and environment as the user's terminal (tools installed "
+                + "via Homebrew such as 'brew' are available). Useful for building, running tests, git, "
+                + "or other CLI tasks. Commands are subject to a timeout of " + timeout.toSeconds() + "s.";
     }
 
     @Override
@@ -57,7 +90,17 @@ public class BashCommandTool implements LocalTool {
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException, InterruptedException {
         String command = requiredString(arguments, "command");
 
-        ProcessBuilder builder = new ProcessBuilder("sh", "-c", command);
+        List<String> commandLine = new ArrayList<>();
+        commandLine.add(shell);
+        if (loginShell) {
+            // Source the user's profile so PATH (e.g. Homebrew's /opt/homebrew/bin) is set up
+            // exactly as in their interactive terminal; without this 'brew' is not found.
+            commandLine.add("-l");
+        }
+        commandLine.add("-c");
+        commandLine.add(command);
+
+        ProcessBuilder builder = new ProcessBuilder(commandLine);
         builder.directory(ctx.workspace().root().toFile());
         builder.redirectErrorStream(true);
 

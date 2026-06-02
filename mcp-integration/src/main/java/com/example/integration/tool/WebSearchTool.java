@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -78,12 +79,19 @@ public class WebSearchTool implements LocalTool {
         }
 
         String query = requiredString(arguments, "query");
+        // Keep the formatting instruction in a system message, separate from the user-supplied
+        // query, so the query is treated as data to search for rather than instructions to follow.
         String requestBody = objectMapper.writeValueAsString(Map.of(
                 "model", model,
-                "messages", List.of(Map.of(
-                        "role", "user",
-                        "content", "Search the web and provide the latest information about: " + query
-                                + "\n\nReturn a concise summary of the most relevant and recent results.")),
+                "messages", List.of(
+                        Map.of(
+                                "role", "system",
+                                "content", "Search the web for the latest information about the user's query. "
+                                        + "Return a concise summary of the most relevant and recent results, "
+                                        + "and include the direct source URL for each fact you report."),
+                        Map.of(
+                                "role", "user",
+                                "content", query)),
                 "max_tokens", 1024));
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -102,12 +110,13 @@ public class WebSearchTool implements LocalTool {
 
                 if (status == 200) {
                     JsonNode root = objectMapper.readTree(response.body());
-                    JsonNode content = root.path("choices").path(0).path("message").path("content");
+                    JsonNode message = root.path("choices").path(0).path("message");
+                    JsonNode content = message.path("content");
                     if (content.isMissingNode() || content.isNull()) {
                         log.warn("OpenRouter search: missing content field in 200 response: {}", response.body());
                         return "Search failed: unexpected response structure (missing content field)";
                     }
-                    return content.asText();
+                    return content.asText() + formatSources(root, message);
                 }
 
                 if ((status == 429 || status >= 500) && attempt < MAX_ATTEMPTS) {
@@ -131,5 +140,57 @@ public class WebSearchTool implements LocalTool {
         }
 
         throw new IOException("OpenRouter search failed after " + MAX_ATTEMPTS + " attempts", lastNetworkError);
+    }
+
+    /**
+     * Builds a "Sources" list from the citation URLs the search model returns alongside the prose.
+     * Perplexity/OpenRouter put the actual links in separate fields — root {@code citations} /
+     * {@code search_results} and {@code message.annotations[].url_citation} — never inside
+     * {@code content}, which only carries bracketed markers like {@code [1]}. Without surfacing
+     * these the agent has no URL to hand back when asked for a direct link. Returns an empty string
+     * when no citations are present so behaviour is unchanged for models that don't supply them.
+     */
+    private String formatSources(JsonNode root, JsonNode message) {
+        // Preserve order and de-duplicate by URL; keep the first title we see for each.
+        Map<String, String> sources = new LinkedHashMap<>();
+
+        // Perplexity native: root-level "citations" is an array of URL strings.
+        for (JsonNode c : root.path("citations")) {
+            if (c.isTextual()) {
+                sources.putIfAbsent(c.asText(), "");
+            }
+        }
+        // Perplexity native: root-level "search_results" carries {url, title}.
+        for (JsonNode r : root.path("search_results")) {
+            addSource(sources, r.path("url"), r.path("title"));
+        }
+        // OpenRouter normalized: message.annotations[] of type "url_citation".
+        for (JsonNode a : message.path("annotations")) {
+            if ("url_citation".equals(a.path("type").asText())) {
+                JsonNode citation = a.path("url_citation");
+                addSource(sources, citation.path("url"), citation.path("title"));
+            }
+        }
+
+        if (sources.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder("\n\nSources:");
+        int i = 1;
+        for (Map.Entry<String, String> entry : sources.entrySet()) {
+            sb.append("\n[").append(i++).append("] ");
+            if (entry.getValue() != null && !entry.getValue().isBlank()) {
+                sb.append(entry.getValue()).append(" - ");
+            }
+            sb.append(entry.getKey());
+        }
+        return sb.toString();
+    }
+
+    private void addSource(Map<String, String> sources, JsonNode url, JsonNode title) {
+        if (url.isTextual() && !url.asText().isBlank()) {
+            sources.putIfAbsent(url.asText(), title.isTextual() ? title.asText() : "");
+        }
     }
 }
