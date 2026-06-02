@@ -134,4 +134,25 @@ class GoogleWorkspaceToolsTest {
         assertThat(GoogleErrors.describe(new RuntimeException("boom")))
                 .contains("Google Workspace request failed").contains("boom");
     }
+
+    /**
+     * Regression guard for google_docs_edit argument handling: 'text' is optional for the 'replace'
+     * operation (an empty/omitted text means "delete the matched text"), but required for 'append'.
+     * Each operation fetches 'text' inside its own switch branch, so a replace without text proceeds
+     * past argument parsing (failing only later at the dummy credentials/API step) rather than being
+     * rejected for a missing argument.
+     */
+    @Test
+    void docsEditTreatsTextAsOptionalForReplaceButRequiredForAppend(@TempDir Path tmp) throws Exception {
+        Path creds = Files.writeString(tmp.resolve("creds.json"), "{}");
+        GoogleDocsEditTool tool = new GoogleDocsEditTool(new GoogleWorkspaceClientFactory(
+                new GoogleWorkspaceProperties(creds.toString(), "Hugin", "", "")));
+
+        String replace = tool.execute(Map.of(
+                "document_id", "doc1", "operation", "replace", "find", "TODO"));
+        assertThat(replace).doesNotContain("Missing required argument");
+
+        String append = tool.execute(Map.of("document_id", "doc1", "operation", "append"));
+        assertThat(append).contains("Missing required argument").contains("text");
+    }
 }
