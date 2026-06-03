@@ -81,6 +81,19 @@ public final class Prompts {
             Relevant context recalled from long-term memory of past conversations. \
             Use it if it helps answer the user; ignore it if it is not relevant:""";
 
+    /**
+     * Prompt used by the routing classifier. It should reply with exactly one word:
+     * {@code simple} or {@code complex}.
+     */
+    public static final String ROUTING_DECISION = """
+            You are a routing classifier for an assistant.
+            Decide whether the user's task is simple or complex.
+            Reply with exactly one word: simple or complex.
+            Use complex for multi-step reasoning, coding, tool-heavy work, ambiguous requests,
+            or anything high-stakes.
+            Use simple for direct factual questions, short edits, or straightforward requests.
+            Do not explain your answer.""";
+
     // ── System-facts summary ──────────────────────────────────────────────────
 
     /**

@@ -110,6 +110,27 @@ class McpIntegrationApplicationTests {
     }
 
     @Test
+    void agentEndpointRoutesThroughDecisionModel() {
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chat(eq("decision-model"), anyList(), anyList()))
+                .thenReturn(new ChatResponse("decision", List.of(
+                        new ChatResponse.Choice(0, ChatMessage.assistant("simple"), "stop"))));
+        when(llmClient.chat(eq("simple-model"), anyList(), anyList()))
+                .thenReturn(new ChatResponse("simple", List.of(
+                        new ChatResponse.Choice(0, ChatMessage.assistant("Routed answer."), "stop"))));
+
+        var request = Map.of(
+                "prompt", "Tell me a joke",
+                "decision", "decision-model",
+                "complex", "complex-model",
+                "simple", "simple-model");
+        var response = restTemplate.postForEntity("/api/agent/chat", request, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("Routed answer.");
+    }
+
+    @Test
     @WithMockUser
     void agentStreamEndpointEmitsSseEvents() throws Exception {
         // Given: no tools and a streaming LLM that emits two text fragments then a final answer

@@ -361,6 +361,26 @@ class AgentServiceTest {
     }
 
     @Test
+    void shouldRoutePromptThroughDecisionModelAndSimpleModel() {
+        // Given: a routing-aware request where the decision model selects the simple path
+        when(toolProvider.getAllToolsByServer()).thenReturn(Map.of());
+        when(llmClient.chat(eq("decision-model"), anyList(), anyList()))
+                .thenReturn(responseWithContent("simple"));
+        when(llmClient.chat(eq("simple-model"), anyList(), anyList()))
+                .thenReturn(responseWithContent("Simple answer."));
+
+        // When
+        AgentResponse result = agentService.chat(new AgentRequest(
+                PROMPT, "decision-model", "complex-model", "simple-model"));
+
+        // Then: the classifier model is used first, and the simple model handles the actual chat
+        assertThat(result.response()).isEqualTo("Simple answer.");
+        verify(llmClient).chat(eq("decision-model"), anyList(), anyList());
+        verify(llmClient).chat(eq("simple-model"), anyList(), anyList());
+        verify(llmClient, never()).chat(eq("complex-model"), anyList(), anyList());
+    }
+
+    @Test
     void shouldRouteToBuiltinLocalToolWithoutMcpServer() {
         // Given: a built-in local tool and no MCP servers
         var recordingTool = new RecordingLocalTool("local_echo", "echoed: ok");

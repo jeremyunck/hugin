@@ -5,8 +5,13 @@ import java.util.List;
 /**
  * Request sent to the agent via the REST API.
  *
- * <p>{@code model} is optional; when blank the agent falls back to the configured default
- * ({@code llm.model}).
+ * <p>{@code decision} is an LLM used only to classify request complexity. If the caller supplies
+ * {@code decision}, {@code complex}, and {@code simple}, the agent asks {@code decision} to route
+ * the request to either {@code complex} or {@code simple}. When those routing fields are omitted,
+ * the agent falls back to the legacy single-model flow via {@code model}.
+ *
+ * <p>{@code model} is optional and remains a compatibility fallback for older callers. When blank,
+ * the agent falls back to the configured default ({@code llm.model}).
  *
  * <p>{@code sessionId} is optional; when present, short-term conversation memory recalls the recent
  * turns of that session and stores this exchange back. When blank, the request is stateless.
@@ -17,15 +22,32 @@ import java.util.List;
  * <b>not</b> replay or record server-side conversation memory for the request, and the messages are
  * exposed to the agent through the {@code read_discord_channel} tool.
  */
-public record AgentRequest(String prompt, String model, String sessionId, List<String> recentMessages) {
+public record AgentRequest(
+        String prompt,
+        String model,
+        String decision,
+        String complex,
+        String simple,
+        String sessionId,
+        List<String> recentMessages) {
 
     /** Stateless request with no session memory. */
     public AgentRequest(String prompt, String model) {
-        this(prompt, model, null, null);
+        this(prompt, model, model, model, model, null, null);
     }
 
     /** Session-scoped request that uses server-side short-term conversation memory. */
     public AgentRequest(String prompt, String model, String sessionId) {
-        this(prompt, model, sessionId, null);
+        this(prompt, model, model, model, model, sessionId, null);
+    }
+
+    /** Session-scoped request with client-managed recent message context. */
+    public AgentRequest(String prompt, String model, String sessionId, List<String> recentMessages) {
+        this(prompt, model, model, model, model, sessionId, recentMessages);
+    }
+
+    /** Routing-aware request that uses a decision model to select between simple and complex. */
+    public AgentRequest(String prompt, String decision, String complex, String simple) {
+        this(prompt, null, decision, complex, simple, null, null);
     }
 }

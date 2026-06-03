@@ -27,7 +27,12 @@ import java.util.concurrent.ExecutorService;
  * <p>Example request:
  * <pre>{@code
  * POST /api/agent/chat
- * { "prompt": "What time is it in Tokyo?", "model": "llama3.2" }
+ * {
+ *   "prompt": "What time is it in Tokyo?",
+ *   "decision": "llama3.2",
+ *   "complex": "openai/gpt-oss-120b",
+ *   "simple": "openai/gpt-oss-20b"
+ * }
  * }</pre>
  *
  * <p>{@code POST /api/agent/stream} returns the same agent run as a Server-Sent Events stream:

@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Core agent loop.
@@ -31,6 +33,7 @@ import java.util.*;
 public class AgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
+    private static final Pattern ROUTING_PATTERN = Pattern.compile("\\b(simple|complex)\\b");
     private final int maxIterations;
 
     private final OpenAiClient llmClient;
@@ -114,14 +117,16 @@ public class AgentService {
 
     private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream) {
         Instant deadline = Instant.now().plus(requestTimeout);
-        String model = resolveModel(request.model());
+        RoutingSelection routing = resolveModel(request);
+        String model = routing.model();
 
         // Build flattened tool list and a reverse lookup: tool name → server name.
         Map<String, String> toolServerMap = new LinkedHashMap<>();
         List<ToolDefinition> toolDefinitions = collectTools(toolServerMap);
 
-        log.debug("Agent chat: model={}, tools available={} (local={}), stream={}",
-                model, toolDefinitions.size(), localTools.tools().size(), stream);
+        log.debug("Agent chat: model={}, route={}, decisionModel={}, tools available={} (local={}), stream={}",
+                model, routing.route(), routing.decisionModel(), toolDefinitions.size(),
+                localTools.tools().size(), stream);
 
         List<ChatMessage> messages = new ArrayList<>();
         systemFactsService.ifPresent(sfs -> {
@@ -275,12 +280,74 @@ public class AgentService {
 
     private static final AgentStreamListener NO_OP_LISTENER = new AgentStreamListener() {};
 
-    private String resolveModel(String requested) {
-        if (requested != null && !requested.isBlank()) {
-            return requested;
+    private RoutingSelection resolveModel(AgentRequest request) {
+        String fallbackModel = firstNonBlank(request.model(), defaultModel);
+        String decisionModel = firstNonBlank(request.decision(), fallbackModel);
+        String complexModel = firstNonBlank(request.complex(), fallbackModel);
+        String simpleModel = firstNonBlank(request.simple(), fallbackModel);
+
+        if (shouldSkipRouting(request, decisionModel, complexModel, simpleModel)) {
+            return new RoutingSelection(fallbackModel, "legacy", decisionModel);
         }
-        return defaultModel;
+
+        String route = classifyRequest(request, decisionModel);
+        String selectedModel = "simple".equals(route) ? simpleModel : complexModel;
+        return new RoutingSelection(selectedModel, route, decisionModel);
     }
+
+    private String classifyRequest(AgentRequest request, String decisionModel) {
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(ChatMessage.system(Prompts.ROUTING_DECISION));
+        if (request.recentMessages() != null && !request.recentMessages().isEmpty()) {
+            messages.add(ChatMessage.system("Recent context:\n" + String.join("\n", request.recentMessages())));
+        }
+        messages.add(ChatMessage.user(request.prompt()));
+
+        try {
+            ChatResponse response = llmClient.chat(decisionModel, messages, List.of());
+            ChatResponse.Choice choice = firstChoice(response);
+            String content = choice != null && choice.message() != null ? choice.message().content() : null;
+            String route = parseRoutingChoice(content);
+            if (route != null) {
+                log.debug("Routing decision model selected '{}'", route);
+                return route;
+            }
+            log.warn("Routing decision model returned an unparseable response: {}", content);
+        } catch (Exception e) {
+            log.warn("Routing decision model '{}' failed; defaulting to complex: {}", decisionModel, e.getMessage());
+        }
+        return "complex";
+    }
+
+    private static String parseRoutingChoice(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        Matcher matcher = ROUTING_PATTERN.matcher(content.toLowerCase(Locale.ROOT));
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+
+    private static boolean shouldSkipRouting(AgentRequest request, String decisionModel,
+                                             String complexModel, String simpleModel) {
+        if (request.decision() == null && request.complex() == null && request.simple() == null) {
+            return true;
+        }
+        return Objects.equals(decisionModel, complexModel)
+                && Objects.equals(decisionModel, simpleModel)
+                && Objects.equals(complexModel, simpleModel);
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second;
+    }
+
+    private record RoutingSelection(String model, String route, String decisionModel) {}
 
     private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap,
                                    String sessionId, List<String> channelMessages) {

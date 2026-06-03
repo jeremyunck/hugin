@@ -38,7 +38,12 @@ The agent server is always available on **`:8080`** for direct API access too:
 ```bash
 curl -X POST http://localhost:8080/api/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "What can you do?"}'
+  -d '{
+    "prompt": "What can you do?",
+    "decision": "llama3.2",
+    "complex": "openai/gpt-oss-120b",
+    "simple": "openai/gpt-oss-20b"
+  }'
 ```
 
 ## Commands
@@ -141,7 +146,12 @@ Send a prompt to the agent (non-streaming):
 ```bash
 curl -X POST http://localhost:8080/api/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "What time is it in Tokyo?"}'
+  -d '{
+    "prompt": "What time is it in Tokyo?",
+    "decision": "llama3.2",
+    "complex": "openai/gpt-oss-120b",
+    "simple": "openai/gpt-oss-20b"
+  }'
 ```
 
 Or stream the response as Server-Sent Events (this is what the terminal uses):
@@ -150,10 +160,18 @@ Or stream the response as Server-Sent Events (this is what the terminal uses):
 curl -N -X POST http://localhost:8080/api/agent/stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
-  -d '{"prompt": "What time is it in Tokyo?"}'
+  -d '{
+    "prompt": "What time is it in Tokyo?",
+    "decision": "llama3.2",
+    "complex": "openai/gpt-oss-120b",
+    "simple": "openai/gpt-oss-20b"
+  }'
 ```
 
-`model` is optional and falls back to `llm.model` from configuration.
+`decision` is asked to classify the task as simple or complex, then the agent routes to
+`simple` or `complex` accordingly. `model` is still accepted as a legacy fallback for older
+callers, and if the routing fields are omitted the agent falls back to the configured default
+`llm.model`.
 
 Manage MCP servers at runtime:
 
