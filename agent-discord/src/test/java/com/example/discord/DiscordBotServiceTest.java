@@ -41,6 +41,38 @@ class DiscordBotServiceTest {
     }
 
     @Test
+    void formatForDiscord_convertsMarkdownTableToBullets() {
+        String input = """
+                Intro
+
+                | Catalyst | Why it matters |
+                | --- | --- |
+                | $100M CHIPS R&D LOI | Signals confidence |
+                | Q1 2026 earnings beat | Shows growth |
+                """;
+
+        String output = DiscordBotService.formatForDiscord(input);
+
+        assertThat(output).contains("Intro");
+        assertThat(output).doesNotContain("| Catalyst | Why it matters |");
+        assertThat(output).contains("**Catalyst / Why it matters**");
+        assertThat(output).contains("- **$100M CHIPS R&D LOI** — Signals confidence");
+        assertThat(output).contains("- **Q1 2026 earnings beat** — Shows growth");
+    }
+
+    @Test
+    void formatForDiscord_leavesCodeBlocksUntouched() {
+        String input = """
+                ```text
+                | Catalyst | Why it matters |
+                | --- | --- |
+                ```
+                """;
+
+        assertThat(DiscordBotService.formatForDiscord(input)).isEqualTo(input);
+    }
+
+    @Test
     void discordProperties_serverUrlStripsTrailingSlash() {
         DiscordProperties props = new DiscordProperties();
         props.setServerUrl("http://localhost:8080///");
