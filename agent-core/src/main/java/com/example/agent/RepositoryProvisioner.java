@@ -1,6 +1,7 @@
 package com.example.agent;
 
 import com.example.agent.model.ProvisionedRepo;
+import com.example.agent.model.AgentSandbox;
 
 import java.nio.file.Path;
 
@@ -14,12 +15,12 @@ import java.nio.file.Path;
 public interface RepositoryProvisioner {
 
     /**
-     * Clones {@code repoUrl} into a new subdirectory of {@code agentDir}, checks out
+     * Clones {@code repoUrl} into a new subdirectory of {@code sandbox.root()}, checks out
      * {@code sourceBranch} (or the default branch when blank/null), then creates and checks out
      * {@code newBranchName}.
      *
      * @return metadata describing the provisioned repository (working-tree path, branch, repo name).
      * @throws RuntimeException on clone/checkout failure (the message is surfaced to the caller).
      */
-    ProvisionedRepo provision(String repoUrl, Path agentDir, String sourceBranch, String newBranchName);
+    ProvisionedRepo provision(String repoUrl, AgentSandbox sandbox, String sourceBranch, String newBranchName);
 }

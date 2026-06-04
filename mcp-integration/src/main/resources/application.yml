@@ -152,13 +152,21 @@ agent:
 
 google:
   # Google Workspace integration powering the google_docs_* and google_sheets_* tools.
-  # Authentication uses a Google service account (the recommended method for a headless server):
+  #
+  # Preferred setup for a personal install:
   #   1. In a Google Cloud project, enable the Google Docs, Sheets and Drive APIs.
-  #   2. Create a service account and download its JSON key.
-  #   3. Point credentials-file at that JSON (or set GOOGLE_APPLICATION_CREDENTIALS).
-  #   4. Share the docs/sheets you want Hugin to access with the service account's email,
-  #      or set default-share-with so files Hugin creates are shared back to you.
+  #   2. Create an OAuth client for a desktop app and download its JSON.
+  #   3. Point oauth-client-secrets-file at that JSON (or set GOOGLE_OAUTH_CLIENT_SECRETS_FILE).
+  #   4. On first use, Hugin opens the browser for consent and caches refresh tokens in oauth-token-dir.
+  #
+  # Legacy Workspace setup:
+  #   1. Create a service account and download its JSON key.
+  #   2. Point credentials-file at that JSON (or set GOOGLE_APPLICATION_CREDENTIALS).
+  #   3. Share the docs/sheets you want Hugin to access with the service account's email.
   # When no credentials are configured the google_* tools report themselves unavailable (no startup failure).
+  oauth-client-secrets-file: ${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:}
+  oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.hugin/google-oauth}
+  oauth-local-server-port: ${GOOGLE_OAUTH_LOCAL_SERVER_PORT:8765}
   credentials-file: ${GOOGLE_APPLICATION_CREDENTIALS:}
   # Application name reported to the Google APIs (cosmetic).
   application-name: Hugin

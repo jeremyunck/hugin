@@ -37,8 +37,23 @@ public class DiscordProperties {
     /** Optional {@code X-API-Key} header value; required when the server has {@code agent.api-key} set. */
     private String apiKey;
 
-    /** Optional model override sent with every request; falls back to the server's {@code llm.model}. */
+    /**
+     * Optional model override sent with every request; falls back to the server's
+     * {@code llm.model} when routing is not configured.
+     */
     private String model;
+
+    /**
+     * Optional routing model used only to classify request complexity. When all three routing
+     * fields are configured, Discord sends them instead of the legacy single-model path.
+     */
+    private String decision;
+
+    /** Model used for complex requests when routing is enabled. */
+    private String complex;
+
+    /** Model used for simple requests when routing is enabled. */
+    private String simple;
 
     /** GitHub personal access token for creating issues. Set via {@code GITHUB_TOKEN}. */
     private String githubToken;
@@ -73,6 +88,21 @@ public class DiscordProperties {
 
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }
+
+    public String getDecision() { return decision; }
+    public void setDecision(String decision) { this.decision = decision; }
+
+    public String getComplex() { return complex; }
+    public void setComplex(String complex) { this.complex = complex; }
+
+    public String getSimple() { return simple; }
+    public void setSimple(String simple) { this.simple = simple; }
+
+    public boolean hasRoutingModels() {
+        return decision != null && !decision.isBlank()
+                && complex != null && !complex.isBlank()
+                && simple != null && !simple.isBlank();
+    }
 
     public String getGithubToken() { return githubToken; }
     public void setGithubToken(String githubToken) { this.githubToken = githubToken; }

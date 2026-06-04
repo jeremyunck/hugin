@@ -9,7 +9,11 @@
       "command": "uvx",
       "args": ["mcp-server-time"],
       "env": {}
+    },
+    "browser": {
+      "command": "python3",
+      "args": ["browser-mcp/server.py"],
+      "env": {}
     }
   }
 }
-

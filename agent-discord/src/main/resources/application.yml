@@ -36,6 +36,9 @@ discord:
   server-url: ${AGENT_SERVER_URL:http://localhost:8080}
   api-key: ${AGENT_API_KEY:}
   model: ${AGENT_MODEL:}
+  decision: ${AGENT_DECISION_MODEL:}
+  complex: ${AGENT_COMPLEX_MODEL:}
+  simple: ${AGENT_SIMPLE_MODEL:}
 
   # -----------------------------------------------------------------------
   # GitHub issue reporting (for the "Report Bug" button on agent responses).

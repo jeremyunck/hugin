@@ -21,11 +21,19 @@ public final class GoogleErrors {
             String detail = (g.getDetails() != null && g.getDetails().getMessage() != null)
                     ? g.getDetails().getMessage()
                     : g.getStatusMessage();
+            if ("The user's Drive storage quota has been exceeded.".equals(detail)
+                    || (g.getDetails() != null && g.getDetails().getErrors() != null
+                    && g.getDetails().getErrors().stream()
+                    .anyMatch(err -> "storageQuotaExceeded".equals(err.getReason())))) {
+                return "Google API error 403 (Drive storage quota exceeded for the service account). "
+                        + "Free space in the authenticated Google account's Drive or create the document in a shared drive, "
+                        + "then try again.";
+            }
             if (code == 403 || code == 404) {
                 return "Google API error " + code + " (" + detail + "). The document or spreadsheet may "
-                        + "not exist, or it has not been shared with the service account. Share the file "
-                        + "with the service account's client_email (or set google.default-share-with for "
-                        + "files Hugin creates), then try again.";
+                        + "not exist, or the authenticated Google account may not have access. Share the file "
+                        + "with that account (or set google.default-share-with for files Hugin creates), "
+                        + "then try again.";
             }
             return "Google API error " + code + ": " + detail;
         }
