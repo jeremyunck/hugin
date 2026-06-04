@@ -3,8 +3,8 @@
 **Goal:** turn this repo into the backend for a **$5/month bring-your-own-OpenRouter-key cloud
 agent**. A user connects a GitHub repo, gives an instruction, and the platform clones the repo into
 an isolated sandbox, runs the agent, and opens a pull request — Claude Code / Cursor style. A
-separate front-end app (out of scope for this repo) talks to this backend over HTTP. The
-`agent-terminal` module is being removed.
+separate front-end app (out of scope for this repo) talks to this backend over HTTP. The old
+terminal UI has been removed from this repo.
 
 This document audits what exists today, lists what must be **added** and **fixed**, compares the
 product to competitors, and recommends a hosting approach. It is a plan only — no code changes are
@@ -53,7 +53,7 @@ control-plane process and into the sandbox.
   `run_bash`, all confined to a `Workspace` root with symlink-escape protection (`Workspace.resolve`).
 - **Per-session workspace routing** (`WorkspaceRegistry` + `WorkspaceFactory`): already maps a
   session/agent id → its own cloned working tree. Good foundation for per-task isolation.
-- **MCP server registry** (`mcp-client`): full connect/disconnect/reconnect lifecycle + CRUD.
+- **MCP server registry**: full connect/disconnect/reconnect lifecycle + CRUD, now hosted inside `mcp-integration`.
 - **Memory layers**: in-process short-term conversation memory; optional Redis-backed long-term
   semantic memory. Both best-effort.
 - **Module boundary discipline**: `agent-core` has no MCP/transport/storage dependency; SPIs
@@ -218,17 +218,16 @@ hosting; architecturally:
 | 8 | Any caller can GET/DELETE any agent | `CloudAgentController` | Authorize by owner (§4.4) |
 | 9 | `run_bash` arbitrary shell in shared process | `BashCommandTool` | Run inside per-task sandbox only (§4.6) |
 | 10 | Single shared `agent.api-key` | `SecurityConfig` | Per-user tokens (§4.4) |
-| 11 | MCP stdio servers spawn host subprocesses | `mcp-client` registry | For cloud, restrict to remote/SSE MCP or run inside sandbox |
+| 11 | MCP stdio servers spawn host subprocesses | MCP registry | For cloud, restrict to remote/SSE MCP or run inside sandbox |
 | 12 | Secrets via plain env (`OPEN_ROUTER_API_KEY`, `GITHUB_TOKEN`) | `application.yml`, Docker | Secret manager + encryption at rest |
 
 ### Cleanup / removal
-- **Remove `agent-terminal`**: delete the module dir, drop it from the parent `pom.xml` `<modules>`,
-  and prune README/CLAUDE.md/`install.sh`/`scripts/` references. It depends only on `agent-core`'s
-  `AgentRequest`, so removal is low-risk.
+- **Keep the terminal UI removed.** The repo should stay server-focused; avoid reintroducing a
+  built-in terminal UI unless it is a separate project.
 - **Re-scope the Raspberry-Pi appliance story.** `docs/raspberry-pi-install-plan.md`, `install.sh`,
-  `scripts/mcp-agent*`, and the systemd unit target a single-user self-hosted appliance — a
-  different product from a multi-tenant SaaS. Keep them only if a self-host tier is intended;
-  otherwise retire to avoid confusion.
+  and the systemd unit target a single-user self-hosted appliance — a different product from a
+  multi-tenant SaaS. Keep them only if a self-host tier is intended; otherwise retire to avoid
+  confusion.
 - **Disable/guard memory layers per-tenant.** Long-term Redis memory is global; if offered, it must
   be namespaced per user, or left off for the cloud product.
 
@@ -324,7 +323,7 @@ Avoid plain shared-kernel containers as the *only* boundary for untrusted `run_b
 ## 8. Phased roadmap
 
 **Phase 0 — Repo cleanup (low risk)**
-- Remove `agent-terminal`; re-scope/retire the Pi appliance assets; tighten CORS and `/api/servers`
+- Remove the terminal UI; re-scope/retire the Pi appliance assets; tighten CORS and `/api/servers`
   auth; document the target API.
 
 **Phase 1 — MVP (single isolated runner, real PRs)**

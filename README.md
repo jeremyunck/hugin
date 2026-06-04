@@ -27,10 +27,10 @@ Onboarding will:
 - Prompt for a **Redis host** for long-term memory (leave blank to skip)
 - Build the fat jars, create `~/.hugin/`, and register a **systemd service** that starts on boot
 
-From then on, one command opens the chat:
+From then on, one command ensures the server is running:
 
 ```bash
-hugin        # starts the service if needed, waits for health, opens terminal
+hugin        # starts the service if needed and waits for health
 ```
 
 The agent server is always available on **`:8080`** for direct API access too:
@@ -50,12 +50,11 @@ curl -X POST http://localhost:8080/api/agent/chat \
 
 | Command | Description |
 |---|---|
-| `hugin` | Ensure server is running, then open terminal chat |
+| `hugin` | Ensure server is running |
 | `hugin onboard` | Run the interactive setup wizard |
 | `hugin server run` | Run the server in the foreground (no systemd) |
 | `hugin server start / stop / restart / status` | Manage the background service |
 | `hugin server logs` | Stream service logs (`journalctl -f`) |
-| `hugin terminal` | Launch the terminal client directly |
 
 Set `AGENT_HOME` to override the default install location (`~/.hugin`).
 Set `LLM_REASONING_EFFORT` to override the default reasoning effort sent to the model (`medium` by default).
@@ -115,29 +114,7 @@ Start the agent **server**:
 mvn -pl mcp-integration spring-boot:run
 ```
 
-The server starts on **port 8080**. `agent-core` and `mcp-client` are libraries.
-
-## Terminal front-end
-
-`agent-terminal` is an interactive terminal client — think Claude Code. With the server running, start it in another shell:
-
-```bash
-mvn -pl agent-terminal spring-boot:run
-```
-
-Type a prompt and the answer **streams back token-by-token** in real time; tool calls the agent makes are shown inline. Built-in commands:
-
-- `/help` — show help
-- `/model [name]` — show or change the model used for new prompts
-- `/exit` (also `/quit`, `exit`, `quit`, or Ctrl-D) — quit
-
-Configure it via the `terminal` block in `agent-terminal/src/main/resources/application.yml` (or environment variables):
-
-| Key | Env var | Description | Default |
-| --- | --- | --- | --- |
-| `terminal.server-url` | `AGENT_SERVER_URL` | Base URL of the running server | `http://localhost:8080` |
-| `terminal.api-key` | `AGENT_API_KEY` | Sent as `X-API-Key`; needed only if the server sets `agent.api-key` | _(blank)_ |
-| `terminal.model` | `AGENT_MODEL` | Default model; blank lets the server pick `llm.model` | _(blank)_ |
+The server starts on **port 8080**. `agent-core` is the shared logic library.
 
 ## Usage
 
@@ -154,7 +131,7 @@ curl -X POST http://localhost:8080/api/agent/chat \
   }'
 ```
 
-Or stream the response as Server-Sent Events (this is what the terminal uses):
+Or stream the response as Server-Sent Events:
 
 ```bash
 curl -N -X POST http://localhost:8080/api/agent/stream \
@@ -207,14 +184,29 @@ Web search is a built-in local tool (`web_search`) that calls `perplexity/sonar`
 
 Hugin can create, read, and edit Google Docs and Sheets through seven built-in local tools backed by the official Google API Java client libraries: `google_docs_create`, `google_docs_read`, `google_docs_edit`, `google_sheets_create`, `google_sheets_read`, `google_sheets_write`, and `google_sheets_append`.
 
-Authentication uses a **Google service account** (the recommended method for a headless server):
+`google_docs_create` accepts Markdown for its `text` field and renders it into Google Docs structure such as headings, bullets, block quotes, code blocks, and formatted inline text instead of inserting literal Markdown markers.
+
+Authentication can use either:
+
+- **OAuth with a Google user account** for a personal install, which is the preferred path now
+- **A Google service account** for Workspace/domain-wide delegation setups
+
+OAuth setup:
+
+1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, and **Drive** APIs.
+2. Create an OAuth client for a desktop app and download the JSON.
+3. Set `GOOGLE_OAUTH_CLIENT_SECRETS_FILE` to that JSON path (or `google.oauth-client-secrets-file` in `application.yml`).
+4. On first use, Hugin opens the browser for consent and caches refresh tokens in `GOOGLE_OAUTH_TOKEN_DIR` (default `~/.hugin/google-oauth`).
+5. Newly created docs/sheets are created as that Google user, so `share_with` is only needed if you want to share them with someone else.
+
+Service account setup is still supported for Workspace/domain-wide delegation:
 
 1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, and **Drive** APIs.
 2. Create a service account and download its JSON key.
 3. Set `GOOGLE_APPLICATION_CREDENTIALS` to the key's path (or `google.credentials-file` in `application.yml`).
-4. **Share** the docs/sheets you want Hugin to access with the service account's `client_email`. Files Hugin *creates* are owned by the service account, so pass a `share_with` email (or set `GOOGLE_DEFAULT_SHARE_WITH`) to make them visible to a person.
+4. Share the docs/sheets you want Hugin to access with the service account's email.
 
-When no credentials are configured the tools report themselves as unavailable rather than failing startup. Workspace domains can use domain-wide delegation via `GOOGLE_IMPERSONATE_USER`. See [`docs/skills/google-docs-sheets`](docs/skills/google-docs-sheets/SKILL.md) for usage details and the [Configuration](#configuration) table for the `google.*` settings.
+When no credentials are configured the tools report themselves as unavailable rather than failing startup. Workspace domains can still use domain-wide delegation via `GOOGLE_IMPERSONATE_USER` when using a service account. See [`docs/skills/google-docs-sheets`](docs/skills/google-docs-sheets/SKILL.md) for usage details and the [Configuration](#configuration) table for the `google.*` settings.
 
 ## Long-term memory
 
@@ -237,6 +229,9 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 | `mcp.config-file` | Path to the MCP servers JSON (supports `~/`) | `./mcp-servers.json` |
 | `agent.api-key` | If set, `/api/agent/**` requires the `X-API-Key` header; if blank, those endpoints are open | _(blank)_ |
 | `agent.request-timeout` | Per-request wall-clock budget for the agent loop | `5m` |
+| `google.oauth-client-secrets-file` | Path to a Google OAuth client-secrets JSON enabling browser-based Google user auth | _(blank)_ |
+| `google.oauth-token-dir` | Directory where OAuth refresh tokens are cached | `~/.hugin/google-oauth` |
+| `google.oauth-local-server-port` | Local loopback port used for the initial OAuth callback | `8765` |
 | `google.credentials-file` | Path to a Google service-account JSON key enabling the `google_docs_*`/`google_sheets_*` tools | `${GOOGLE_APPLICATION_CREDENTIALS:}` |
 | `google.application-name` | Application name reported to the Google APIs | `Hugin` |
 | `google.impersonate-user` | Optional user email to impersonate via domain-wide delegation | `${GOOGLE_IMPERSONATE_USER:}` |

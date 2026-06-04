@@ -14,8 +14,6 @@
     "agent-core/pom.xml",
     "agent-discord/src",
     "agent-discord/pom.xml",
-    "mcp-client/src",
-    "mcp-client/pom.xml",
     "openrouter-search-mcp.py",
     "mcp-integration/src/main/java",
     "mcp-integration/src/main/resources",

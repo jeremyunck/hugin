@@ -31,7 +31,7 @@ discord:
   respond-to-dms: true
 
   # -----------------------------------------------------------------------
-  # Agent server connection (same knobs as agent-terminal)
+  # Agent server connection (same knobs as the main server)
   # -----------------------------------------------------------------------
   server-url: ${AGENT_SERVER_URL:http://localhost:8080}
   api-key: ${AGENT_API_KEY:}

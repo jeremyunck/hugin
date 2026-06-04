@@ -12,16 +12,12 @@
 
     <artifactId>mcp-integration</artifactId>
     <name>mcp-integration</name>
-    <description>Spring Boot application – wires agent-core and mcp-client together</description>
+    <description>Spring Boot application – wires agent-core and the MCP registry together</description>
 
     <dependencies>
         <dependency>
             <groupId>com.example</groupId>
             <artifactId>agent-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.example</groupId>
-            <artifactId>mcp-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -39,6 +35,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.newrelic.telemetry</groupId>

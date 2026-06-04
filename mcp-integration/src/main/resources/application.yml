@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: mcp-client
+    name: mcp-integration
   ai:
     mcp:
       client:
@@ -94,7 +94,7 @@ agent:
   # A higher value gives the model more chances to use tools and refine its answer,
   # but also increases the maximum latency of a single request.
   max-iterations: 50
-  # Base-of-operations directory for the agent server (install.sh sets this to ~/.mcp-agent).
+  # Base-of-operations directory for the agent server (install.sh sets this to ~/.hugin).
   # Used by SystemFactsService for disk-space reporting and by CloudAgentService for agent directories.
   home: ${AGENT_HOME:.}
   # Cloud-agent feature: each POST /api/agents clones a repository and runs the agent loop against it.
