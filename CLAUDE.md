@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+When you finish a coding task in this repo, default to publishing the change as a pull request unless the user explicitly says not to. Keep the PR focused on the requested scope.
+
 ## Build & Test
 
 Maven multi-module project (Java 21, Spring Boot 3.5.x). Run from the repo root.

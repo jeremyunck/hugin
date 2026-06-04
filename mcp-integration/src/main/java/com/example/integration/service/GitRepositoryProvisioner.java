@@ -26,8 +26,8 @@ import java.util.regex.Pattern;
  * Git-CLI implementation of {@link RepositoryProvisioner}.
  *
  * <p>Shells out to the system {@code git} binary (same ProcessBuilder approach as
- * {@code BashCommandTool}). A {@code GITHUB_TOKEN} credential helper is configured so the token
- * is never written into {@code .git/config}.
+ * {@code BashCommandTool}). When a GitHub token is configured it is exposed only through a
+ * transient credential helper environment variable, not written into {@code .git/config}.
  */
 @Component
 @ConditionalOnProperty("agent.cloud.enabled")
@@ -98,7 +98,9 @@ public class GitRepositoryProvisioner implements RepositoryProvisioner {
                         "git " + label + " failed (exit " + exitCode + "):\n" + output);
             }
         } catch (IOException | InterruptedException e) {
-            Thread.currentThread().interrupt();
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new RuntimeException("git " + label + " error: " + e.getMessage(), e);
         }
     }

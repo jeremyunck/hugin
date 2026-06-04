@@ -64,8 +64,15 @@ public class DiscordAgentClient {
     public void streamChat(String prompt, String sessionId, List<String> recentMessages, Handler handler)
             throws IOException, InterruptedException {
         String model = blankToNull(properties.getModel());
-        String requestBody = objectMapper.writeValueAsString(
-                new AgentRequest(prompt, model, sessionId, recentMessages));
+        String decision = blankToNull(properties.getDecision());
+        String complex = blankToNull(properties.getComplex());
+        String simple = blankToNull(properties.getSimple());
+
+        AgentRequest agentRequest = properties.hasRoutingModels()
+                ? new AgentRequest(prompt, decision, complex, simple, sessionId, recentMessages)
+                : new AgentRequest(prompt, model, sessionId, recentMessages);
+
+        String requestBody = objectMapper.writeValueAsString(agentRequest);
 
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create(properties.getServerUrl() + "/api/agent/stream"))

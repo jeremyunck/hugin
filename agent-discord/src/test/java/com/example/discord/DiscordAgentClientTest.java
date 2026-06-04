@@ -10,6 +10,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -157,6 +158,53 @@ class DiscordAgentClientTest {
         });
 
         assertThat(order).containsExactly("config:true", "tool:read_file");
+    }
+
+    @Test
+    void streamChatSendsRoutingModelsWhenConfigured() throws Exception {
+        String sse = """
+                event: token
+                data: {"text":"ok"}
+
+                event: done
+                data: {}
+
+                """;
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/api/agent/stream", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] body = sse.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        server.start();
+
+        DiscordProperties props = new DiscordProperties();
+        props.setServerUrl("http://localhost:" + server.getAddress().getPort());
+        props.setDecision("decision-model");
+        props.setComplex("complex-model");
+        props.setSimple("simple-model");
+        props.setModel("legacy-model");
+
+        DiscordAgentClient client = new DiscordAgentClient(props, new ObjectMapper());
+        client.streamChat("hello", "session-1", List.of("recent one", "recent two"), new DiscordAgentClient.Handler() {
+            @Override public void onToken(String text) {}
+            @Override public void onError(String message) {}
+        });
+
+        var json = new ObjectMapper().readTree(requestBody.get());
+        assertThat(json.get("prompt").asText()).isEqualTo("hello");
+        assertThat(json.get("decision").asText()).isEqualTo("decision-model");
+        assertThat(json.get("complex").asText()).isEqualTo("complex-model");
+        assertThat(json.get("simple").asText()).isEqualTo("simple-model");
+        assertThat(json.get("sessionId").asText()).isEqualTo("session-1");
+        assertThat(json.get("recentMessages")).isNotNull();
+        assertThat(json.get("recentMessages").size()).isEqualTo(2);
+        assertThat(json.has("model")).isFalse();
     }
 
     private HttpServer startServer(String sseBody) throws IOException {

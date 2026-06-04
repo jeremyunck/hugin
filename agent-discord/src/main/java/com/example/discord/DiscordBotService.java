@@ -2,6 +2,7 @@ package com.example.discord;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import com.example.agent.ChatMessagePublisher;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
@@ -59,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Intents):</b> enable <b>Message Content Intent</b> or the bot will see empty message text.
  */
 @Service
-public class DiscordBotService implements DisposableBean {
+public class DiscordBotService implements DisposableBean, ChatMessagePublisher {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordBotService.class);
     private static final int DISCORD_MSG_LIMIT = 2000;
@@ -70,6 +71,13 @@ public class DiscordBotService implements DisposableBean {
     private static final int DIAGNOSTIC_WORD_LIMIT = 200;
     private static final int DIAGNOSTIC_LOG_LINES = 120;
     private static final int DIAGNOSTIC_LOG_CHAR_LIMIT = 24_000;
+    /**
+     * Discord renders only a subset of Markdown. Tables are not supported, so we steer the model
+     * away from them and post-process any that still appear.
+     */
+    private static final String DISCORD_FORMATTING_NOTE =
+            "Discord does not render Markdown tables. Use headings, bullets, numbered lists, "
+                    + "short paragraphs, and fenced code blocks instead.";
     /**
      * Per-session sliding window for the in-memory conversation and diagnostic logs. These grow for
      * the lifetime of a session, so without a cap a long-lived channel's bug report keeps growing
@@ -167,7 +175,7 @@ public class DiscordBotService implements DisposableBean {
         if (target == null || jda == null) {
             return;
         }
-        String body = (result == null || result.isBlank()) ? "(no result)" : result;
+        String body = formatForDiscord((result == null || result.isBlank()) ? "(no result)" : result);
         String header = "⏰ **Scheduled result**"
                 + (prompt == null || prompt.isBlank() ? "" : " for: " + oneLine(prompt));
         String message = header + "\n\n" + body;
@@ -194,6 +202,50 @@ public class DiscordBotService implements DisposableBean {
         } else {
             log.debug("Ignoring scheduled delivery for non-Discord target '{}'", target);
         }
+    }
+
+    @Override
+    public java.util.Optional<String> send(String target, String message) {
+        if (target == null || target.isBlank() || jda == null) {
+            return java.util.Optional.empty();
+        }
+        List<String> chunks = splitMessage(message == null ? "" : message, DISCORD_MSG_LIMIT);
+        if (target.startsWith("discord-channel-")) {
+            String channelId = target.substring("discord-channel-".length());
+            var channel = jda.getTextChannelById(channelId);
+            if (channel == null) {
+                return java.util.Optional.empty();
+            }
+            try {
+                chunks.forEach(c -> channel.sendMessage(c).complete());
+            } catch (Exception e) {
+                log.warn("Cannot send Discord channel message to {}: {}", channelId, e.getMessage());
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(target);
+        }
+        if (target.startsWith("discord-dm-")) {
+            String userId = target.substring("discord-dm-".length());
+            try {
+                var channel = jda.openPrivateChannelById(userId).complete();
+                chunks.forEach(c -> channel.sendMessage(c).complete());
+            } catch (Exception e) {
+                log.warn("Cannot send Discord DM to {}: {}", userId, e.getMessage());
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(target);
+        }
+        var channel = jda.getTextChannelById(target);
+        if (channel != null) {
+            try {
+                chunks.forEach(c -> channel.sendMessage(c).complete());
+            } catch (Exception e) {
+                log.warn("Cannot send Discord channel message to {}: {}", target, e.getMessage());
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(target);
+        }
+        return java.util.Optional.empty();
     }
 
     // ---- Conversation log helpers ----
@@ -548,7 +600,7 @@ public class DiscordBotService implements DisposableBean {
 
         logAgentResponse(sessionId, text);
 
-        List<String> chunks = splitMessage(text, DISCORD_MSG_LIMIT);
+        List<String> chunks = splitMessage(formatForDiscord(text), DISCORD_MSG_LIMIT);
         Button reportButton = Button.danger("report_bug:" + sessionId, "Report Bug");
 
         for (int i = 0; i < chunks.size(); i++) {
@@ -590,6 +642,7 @@ public class DiscordBotService implements DisposableBean {
             }
             ctx.append("]\n");
         }
+        ctx.append("[Discord formatting note: ").append(DISCORD_FORMATTING_NOTE).append("]\n");
         ctx.append(content);
         return ctx.toString();
     }
@@ -633,5 +686,146 @@ public class DiscordBotService implements DisposableBean {
         }
         if (!text.isEmpty()) result.add(text);
         return result;
+    }
+
+    /**
+     * Discord's Markdown subset does not support tables, so convert GitHub-flavored table blocks
+     * into bullet lists before sending the content to the client.
+     */
+    static String formatForDiscord(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        String[] lines = text.split("\\R", -1);
+        StringBuilder out = new StringBuilder(text.length());
+        boolean inFence = false;
+
+        for (int i = 0; i < lines.length; ) {
+            String line = lines[i];
+
+            if (isFenceLine(line)) {
+                inFence = !inFence;
+                out.append(line);
+                if (i < lines.length - 1) {
+                    out.append('\n');
+                }
+                i++;
+                continue;
+            }
+
+            if (!inFence && isTableHeaderLine(line)
+                    && i + 1 < lines.length && isTableSeparatorLine(lines[i + 1])) {
+                int j = i + 2;
+                List<String> rowLines = new ArrayList<>();
+                while (j < lines.length && isTableRowLine(lines[j])) {
+                    rowLines.add(lines[j]);
+                    j++;
+                }
+                out.append(formatTableBlock(line, rowLines));
+                if (j < lines.length) {
+                    out.append('\n');
+                }
+                i = j;
+                continue;
+            }
+
+            out.append(line);
+            if (i < lines.length - 1) {
+                out.append('\n');
+            }
+            i++;
+        }
+
+        return out.toString();
+    }
+
+    private static String formatTableBlock(String headerLine, List<String> rowLines) {
+        List<String> headers = parseTableRow(headerLine);
+        if (headers.isEmpty()) {
+            return headerLine;
+        }
+
+        StringBuilder out = new StringBuilder();
+        if (headers.size() == 1) {
+            out.append("**").append(headers.get(0).strip()).append("**");
+        } else {
+            out.append("**").append(String.join(" / ", headers)).append("**");
+        }
+
+        for (String rowLine : rowLines) {
+            List<String> cells = parseTableRow(rowLine);
+            if (cells.isEmpty()) {
+                continue;
+            }
+            out.append('\n').append("- **").append(cells.get(0).strip()).append("**");
+            if (cells.size() > 1) {
+                out.append(" — ").append(String.join(" — ", cells.subList(1, cells.size())));
+            }
+        }
+
+        return out.toString();
+    }
+
+    private static List<String> parseTableRow(String line) {
+        if (line == null) {
+            return List.of();
+        }
+        String trimmed = line.strip();
+        if (trimmed.startsWith("|")) {
+            trimmed = trimmed.substring(1);
+        }
+        if (trimmed.endsWith("|")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        if (trimmed.isBlank()) {
+            return List.of();
+        }
+
+        List<String> cells = new ArrayList<>();
+        for (String cell : trimmed.split("\\s*\\|\\s*")) {
+            cells.add(cell.strip());
+        }
+        return cells;
+    }
+
+    private static boolean isFenceLine(String line) {
+        String trimmed = line == null ? "" : line.strip();
+        return trimmed.startsWith("```");
+    }
+
+    private static boolean isTableHeaderLine(String line) {
+        String trimmed = line == null ? "" : line.strip();
+        return trimmed.startsWith("|") && trimmed.contains("|") && !isTableSeparatorLine(trimmed);
+    }
+
+    private static boolean isTableSeparatorLine(String line) {
+        String trimmed = line == null ? "" : line.strip();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        String normalized = trimmed;
+        if (normalized.startsWith("|")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.endsWith("|")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        String[] parts = normalized.split("\\|");
+        if (parts.length == 0) {
+            return false;
+        }
+        for (String part : parts) {
+            String cell = part.strip();
+            if (cell.isEmpty() || !cell.matches(":?-{3,}:?")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isTableRowLine(String line) {
+        String trimmed = line == null ? "" : line.strip();
+        return trimmed.startsWith("|") && trimmed.contains("|") && !isTableSeparatorLine(trimmed);
     }
 }

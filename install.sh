@@ -40,6 +40,14 @@ resolve_hugin_version() {
   [[ -n "$version" ]] && echo "$version" || echo "unknown"
 }
 
+resolve_hugin_source_sha() {
+  if [[ -d "$REPO_DIR/.git" ]]; then
+    git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown
+  else
+    echo unknown
+  fi
+}
+
 repo_slug_from_origin() {
   local remote
   remote="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
@@ -677,6 +685,7 @@ fi
 save_env() {
   mkdir -p "$HUGIN_HOME/db"
   local current_hugin_version="${HUGIN_VERSION:-$(resolve_hugin_version)}"
+  local current_hugin_source_sha="${HUGIN_UPDATE_SOURCE_SHA:-$(resolve_hugin_source_sha)}"
   cat > "$ENV_FILE" <<EOF
 # Hugin environment — sourced by the service and the hugin launcher.
 # Permissions: 600 (owner-read-only).  Do not commit this file.
@@ -708,6 +717,7 @@ NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
 AGENT_HOME=${HUGIN_HOME}
 HUGIN_HOME=${HUGIN_HOME}
 HUGIN_VERSION=${current_hugin_version}
+HUGIN_UPDATE_SOURCE_SHA=${current_hugin_source_sha}
 HUGIN_REPO_DIR=${REPO_DIR}
 HUGIN_LAUNCHER_PATH=${LAUNCHER_PATH}
 
@@ -1751,11 +1761,20 @@ cmd_update() {
 
   local new_version
   new_version="$(resolve_installed_version)"
+  local new_source_sha="$current_head"
+  if [[ "$bundle_ready" == "true" && -n "${RELEASE_BUNDLE_SOURCE_SHA:-}" ]]; then
+    new_source_sha="$RELEASE_BUNDLE_SOURCE_SHA"
+  fi
   if [[ -f "$ENV_FILE" ]]; then
     if grep -q '^HUGIN_VERSION=' "$ENV_FILE"; then
       sed -i.bak -E "s|^HUGIN_VERSION=.*|HUGIN_VERSION=${new_version}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
     else
       printf '\nHUGIN_VERSION=%s\n' "$new_version" >> "$ENV_FILE"
+    fi
+    if grep -q '^HUGIN_UPDATE_SOURCE_SHA=' "$ENV_FILE"; then
+      sed -i.bak -E "s|^HUGIN_UPDATE_SOURCE_SHA=.*|HUGIN_UPDATE_SOURCE_SHA=${new_source_sha}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    else
+      printf 'HUGIN_UPDATE_SOURCE_SHA=%s\n' "$new_source_sha" >> "$ENV_FILE"
     fi
     if ! grep -q '^HUGIN_REPO_DIR=' "$ENV_FILE"; then
       printf 'HUGIN_REPO_DIR=%s\n' "$REPO_DIR" >> "$ENV_FILE"
@@ -1888,29 +1907,34 @@ if [[ ! -x "$LAUNCHER_PATH" ]]; then
   die "Launcher not found at $LAUNCHER_PATH."
 fi
 
-current_branch="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-if [[ "$current_branch" != "main" ]]; then
-  info "Skipping auto-update on branch '$current_branch'."
-  exit 0
-fi
-
-if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no 2>/dev/null || true)" ]]; then
-  warn "Skipping auto-update because $REPO_DIR has local changes."
-  exit 0
-fi
-
 info "Checking origin/main for new commits..."
 git -C "$REPO_DIR" fetch origin main --prune
 
-local_head="$(git -C "$REPO_DIR" rev-parse HEAD)"
 remote_head="$(git -C "$REPO_DIR" rev-parse origin/main)"
-if [[ "$local_head" == "$remote_head" ]]; then
-  info "Already up to date at ${local_head:0:7}."
+installed_head=""
+if [[ -f "$HUGIN_HOME/hugin.env" ]]; then
+  installed_head="$(grep -E '^HUGIN_UPDATE_SOURCE_SHA=' "$HUGIN_HOME/hugin.env" 2>/dev/null | cut -d= -f2- || true)"
+fi
+
+if [[ -n "$installed_head" && "$installed_head" == "$remote_head" ]]; then
+  info "Already up to date at ${remote_head:0:7}."
   exit 0
 fi
 
-info "New commit detected: ${local_head:0:7} -> ${remote_head:0:7}. Updating and restarting..."
-"$LAUNCHER_PATH" update
+tmp_worktree=""
+cleanup() {
+  if [[ -n "$tmp_worktree" && -d "$tmp_worktree" ]]; then
+    git -C "$REPO_DIR" worktree remove --force "$tmp_worktree" >/dev/null 2>&1 || rm -rf "$tmp_worktree"
+  fi
+}
+trap cleanup EXIT
+
+tmp_worktree="$(mktemp -d "${TMPDIR:-/tmp}/hugin-update.XXXXXX")"
+info "Checking out origin/main at ${remote_head:0:7} into a temporary worktree..."
+git -C "$REPO_DIR" worktree add --detach "$tmp_worktree" "$remote_head" >/dev/null
+
+info "Running installer from temporary main checkout..."
+bash "$tmp_worktree/install.sh" --reinstall
 
 info "Auto-update completed successfully."
 UPDATE_EOF

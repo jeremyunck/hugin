@@ -1,5 +1,7 @@
 package com.example.agent.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.List;
 
 /**
@@ -22,6 +24,7 @@ import java.util.List;
  * <b>not</b> replay or record server-side conversation memory for the request, and the messages are
  * exposed to the agent through the {@code read_discord_channel} tool.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record AgentRequest(
         String prompt,
         String model,
@@ -49,5 +52,11 @@ public record AgentRequest(
     /** Routing-aware request that uses a decision model to select between simple and complex. */
     public AgentRequest(String prompt, String decision, String complex, String simple) {
         this(prompt, null, decision, complex, simple, null, null);
+    }
+
+    /** Routing-aware session request that uses a decision model to select between simple and complex. */
+    public AgentRequest(String prompt, String decision, String complex, String simple,
+                        String sessionId, List<String> recentMessages) {
+        this(prompt, null, decision, complex, simple, sessionId, recentMessages);
     }
 }
