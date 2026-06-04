@@ -6,12 +6,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Configuration for the Google Workspace tools (Docs, Sheets, Drive).
  *
  * <ul>
- *   <li>{@code credentialsFile} — path to a Google <b>service-account</b> JSON key file. This is the
- *       recommended way to authenticate a headless server like Hugin: create a service account in a
- *       Google Cloud project, enable the Docs/Sheets/Drive APIs, download the JSON key, and point this
- *       at it. Defaults to the standard {@code GOOGLE_APPLICATION_CREDENTIALS} environment variable.
- *       When blank/missing, the google_* tools report themselves as unavailable rather than failing
- *       startup.</li>
+ *   <li>{@code oauthClientSecretsFile} — path to a Google OAuth client-secrets JSON file. This is the
+ *       preferred way to authenticate a personal Hugin install. Create a desktop OAuth client in a
+ *       Google Cloud project, enable the Docs/Sheets/Drive APIs, download the JSON, and point this at
+ *       it. When first used, Hugin opens the browser for user consent and stores refresh tokens in
+ *       {@code oauthTokenDir}.</li>
+ *   <li>{@code oauthTokenDir} — directory where OAuth refresh tokens are cached. Defaults to a
+ *       directory under {@code ~/.hugin} so the consent flow only needs to run once.</li>
+ *   <li>{@code oauthLocalServerPort} — local loopback port used for the OAuth callback during the
+ *       initial consent flow.</li>
+ *   <li>{@code credentialsFile} — optional path to a Google <b>service-account</b> JSON key file for
+ *       legacy Workspace/domain-wide delegation setups. When blank/missing, the oauth_* flow is used
+ *       if configured; otherwise the google_* tools report themselves as unavailable rather than
+ *       failing startup.</li>
  *   <li>{@code applicationName} — the application name sent to Google APIs (cosmetic, for quotas/logs).</li>
  *   <li>{@code impersonateUser} — optional. For Google Workspace domains using
  *       <a href="https://developers.google.com/identity/protocols/oauth2/service-account#delegatingauthority">
@@ -27,6 +34,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("google")
 public record GoogleWorkspaceProperties(
         String credentialsFile,
+        String oauthClientSecretsFile,
+        String oauthTokenDir,
+        Integer oauthLocalServerPort,
         String applicationName,
         String impersonateUser,
         String defaultShareWith) {
@@ -34,6 +44,15 @@ public record GoogleWorkspaceProperties(
     public GoogleWorkspaceProperties {
         if (credentialsFile == null) {
             credentialsFile = "";
+        }
+        if (oauthClientSecretsFile == null) {
+            oauthClientSecretsFile = "";
+        }
+        if (oauthTokenDir == null || oauthTokenDir.isBlank()) {
+            oauthTokenDir = System.getProperty("user.home") + "/.hugin/google-oauth";
+        }
+        if (oauthLocalServerPort == null || oauthLocalServerPort <= 0) {
+            oauthLocalServerPort = 8765;
         }
         if (applicationName == null || applicationName.isBlank()) {
             applicationName = "Hugin";

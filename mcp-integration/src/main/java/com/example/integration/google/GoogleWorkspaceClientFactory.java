@@ -1,10 +1,18 @@
 package com.example.integration.google;
 
+import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
+import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.util.store.FileDataStoreFactory;
+import com.google.api.services.calendar.Calendar;
+import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.docs.v1.Docs;
 import com.google.api.services.docs.v1.DocsScopes;
 import com.google.api.services.drive.Drive;
@@ -22,8 +30,10 @@ import org.springframework.stereotype.Component;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.List;
 
@@ -43,9 +53,11 @@ import java.util.List;
 public class GoogleWorkspaceClientFactory {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleWorkspaceClientFactory.class);
+    private static final String OAUTH_USER_ID = "hugin";
 
     /** Full read/write scopes for the three APIs the tools use. */
     private static final List<String> SCOPES = List.of(
+            CalendarScopes.CALENDAR,
             DocsScopes.DOCUMENTS,
             SheetsScopes.SPREADSHEETS,
             DriveScopes.DRIVE);
@@ -54,6 +66,8 @@ public class GoogleWorkspaceClientFactory {
     private final JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
 
     private NetHttpTransport transport;
+    private HttpRequestInitializer requestInitializer;
+    private Calendar calendar;
     private Docs docs;
     private Sheets sheets;
     private Drive drive;
@@ -62,10 +76,9 @@ public class GoogleWorkspaceClientFactory {
         this.properties = properties;
     }
 
-    /** True when a service-account credentials file is configured and present on disk. */
+    /** True when OAuth client secrets or a service-account credentials file is configured and present. */
     public boolean isConfigured() {
-        String file = properties.credentialsFile();
-        return file != null && !file.isBlank() && Files.exists(Path.of(file));
+        return hasOauthClientSecrets() || hasServiceAccountCredentials();
     }
 
     /** A Google API operation run inside {@link #guarded(GoogleCall)}. */
@@ -95,9 +108,9 @@ public class GoogleWorkspaceClientFactory {
 
     /** A one-line explanation shown by the tools when {@link #isConfigured()} is false. */
     public String unavailableMessage() {
-        return "Google Workspace tools are unavailable: no service-account credentials configured. "
-                + "Set the GOOGLE_APPLICATION_CREDENTIALS environment variable (or google.credentials-file) "
-                + "to the path of a service-account JSON key with the Docs, Sheets and Drive APIs enabled.";
+        return "Google Workspace tools are unavailable: no Google OAuth client secrets or service-account "
+                + "credentials configured. Set GOOGLE_OAUTH_CLIENT_SECRETS_FILE for OAuth (preferred) or "
+                + "GOOGLE_APPLICATION_CREDENTIALS for a service-account JSON key.";
     }
 
     public synchronized Docs docs() throws IOException, GeneralSecurityException {
@@ -125,6 +138,15 @@ public class GoogleWorkspaceClientFactory {
                     .build();
         }
         return drive;
+    }
+
+    public synchronized Calendar calendar() throws IOException, GeneralSecurityException {
+        if (calendar == null) {
+            calendar = new Calendar.Builder(transport(), jsonFactory, requestInitializer())
+                    .setApplicationName(properties.applicationName())
+                    .build();
+        }
+        return calendar;
     }
 
     /**
@@ -164,19 +186,57 @@ public class GoogleWorkspaceClientFactory {
         return transport;
     }
 
-    private HttpRequestInitializer requestInitializer() throws IOException {
-        return new HttpCredentialsAdapter(credentials());
+    private HttpRequestInitializer requestInitializer() throws IOException, GeneralSecurityException {
+        if (requestInitializer == null) {
+            requestInitializer = createRequestInitializer();
+        }
+        return requestInitializer;
+    }
+
+    private HttpRequestInitializer createRequestInitializer() throws IOException, GeneralSecurityException {
+        if (hasOauthClientSecrets()) {
+            return authorizeViaOAuth();
+        }
+        if (hasServiceAccountCredentials()) {
+            return new HttpCredentialsAdapter(serviceAccountCredentials());
+        }
+        throw new IOException("No Google OAuth client secrets or service-account credentials configured.");
+    }
+
+    private HttpRequestInitializer authorizeViaOAuth() throws IOException, GeneralSecurityException {
+        Path secretsPath = expandHome(properties.oauthClientSecretsFile());
+        Path tokenDir = expandHome(properties.oauthTokenDir());
+        Files.createDirectories(tokenDir);
+
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(secretsPath.toFile()),
+                StandardCharsets.UTF_8)) {
+            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(jsonFactory, reader);
+            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                    transport(), jsonFactory, clientSecrets, SCOPES)
+                    .setDataStoreFactory(new FileDataStoreFactory(tokenDir.toFile()))
+                    .setAccessType("offline")
+                    .build();
+
+            Credential existing = flow.loadCredential(OAUTH_USER_ID);
+            if (existing != null) {
+                return existing;
+            }
+
+            LocalServerReceiver receiver = new LocalServerReceiver.Builder()
+                    .setHost("127.0.0.1")
+                    .setPort(properties.oauthLocalServerPort())
+                    .build();
+            return new AuthorizationCodeInstalledApp(flow, receiver).authorize(OAUTH_USER_ID);
+        }
     }
 
     /**
      * Loads the service-account credentials from the configured file, applies optional domain-wide
-     * delegation, and scopes them to the Docs/Sheets/Drive APIs. The credentials file is the single
-     * source of truth — {@link #isConfigured()} gates every call on its presence, so this is only
-     * reached when a file is configured (keeping the two in agreement).
+     * delegation, and scopes them to the Docs/Sheets/Drive APIs.
      */
-    private GoogleCredentials credentials() throws IOException {
+    private GoogleCredentials serviceAccountCredentials() throws IOException {
         GoogleCredentials base;
-        try (InputStream in = new FileInputStream(properties.credentialsFile())) {
+        try (InputStream in = new FileInputStream(expandHome(properties.credentialsFile()).toFile())) {
             base = GoogleCredentials.fromStream(in);
         }
 
@@ -185,5 +245,25 @@ public class GoogleWorkspaceClientFactory {
             base = sac.createDelegated(impersonate);
         }
         return base.createScoped(SCOPES);
+    }
+
+    private boolean hasOauthClientSecrets() {
+        String file = properties.oauthClientSecretsFile();
+        return file != null && !file.isBlank() && Files.exists(expandHome(file));
+    }
+
+    private boolean hasServiceAccountCredentials() {
+        String file = properties.credentialsFile();
+        return file != null && !file.isBlank() && Files.exists(expandHome(file));
+    }
+
+    private Path expandHome(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Path.of(raw == null ? "" : raw);
+        }
+        String expanded = raw.startsWith("~/")
+                ? System.getProperty("user.home") + raw.substring(1)
+                : raw;
+        return Path.of(expanded);
     }
 }
