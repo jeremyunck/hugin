@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -70,21 +72,32 @@ public class AgentController {
         return agentService.availableTools();
     }
 
-    @PostMapping("/chat")
     public ResponseEntity<?> chat(@RequestBody AgentRequest request) {
-        AgentResponse response = agentService.chat(request);
+        return chat(request, null);
+    }
+
+    @PostMapping("/chat")
+    public ResponseEntity<?> chat(@RequestBody AgentRequest request, @AuthenticationPrincipal Jwt jwt) {
+        String owner = owner(jwt);
+        AgentResponse response = agentService.chat(scopedRequest(request, owner), owner);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody AgentRequest request) {
+        return chatStream(request, null);
+    }
+
+    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(@RequestBody AgentRequest request, @AuthenticationPrincipal Jwt jwt) {
+        String owner = owner(jwt);
+        AgentRequest scoped = scopedRequest(request, owner);
         SseEmitter emitter = new SseEmitter(streamTimeoutMillis);
 
         streamExecutor.execute(() -> {
             send(emitter, "config", Map.of("developerMode", developerModeService.isEnabled()));
             try {
                 StringBuilder streamedContent = new StringBuilder();
-                AgentResponse response = agentService.chatStream(request, new AgentStreamListener() {
+                AgentResponse response = agentService.chatStream(scoped, new AgentStreamListener() {
                     @Override
                     public void onConfig(boolean developerMode) {
                         send(emitter, "config", Map.of("developerMode", developerMode));
@@ -110,7 +123,7 @@ public class AgentController {
                     public void onToolResult(String toolName, String result) {
                         send(emitter, "tool_result", Map.of("name", toolName, "result", result));
                     }
-                });
+                }, owner);
                 if (streamedContent.isEmpty()
                         && response != null
                         && response.response() != null
@@ -128,6 +141,31 @@ public class AgentController {
         });
 
         return emitter;
+    }
+
+    private static String owner(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null || jwt.getSubject().isBlank()) {
+            return "global";
+        }
+        return jwt.getSubject();
+    }
+
+    private static AgentRequest scopedRequest(AgentRequest request, String owner) {
+        if (request == null) {
+            return null;
+        }
+        String sessionId = request.sessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            return request;
+        }
+        return new AgentRequest(
+                request.prompt(),
+                request.model(),
+                request.decision(),
+                request.complex(),
+                request.simple(),
+                owner + ":" + sessionId,
+                request.recentMessages());
     }
 
     private void send(SseEmitter emitter, String event, Map<String, ?> data) {

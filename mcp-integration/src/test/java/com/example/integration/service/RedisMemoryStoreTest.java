@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +52,7 @@ class RedisMemoryStoreTest {
 
         store.save(record);
 
-        verify(hashOps).put(eq("memory:records"), eq("id1"), any(String.class));
+        verify(hashOps).put(eq(hashKey("global")), eq("id1"), any(String.class));
     }
 
     @Test
@@ -60,7 +62,7 @@ class RedisMemoryStoreTest {
         ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
         store.save(record);
 
-        verify(hashOps).put(eq("memory:records"), eq("id42"), jsonCaptor.capture());
+        verify(hashOps).put(eq(hashKey("global")), eq("id42"), jsonCaptor.capture());
         String json = jsonCaptor.getValue();
         assertThat(json).contains("id42");
         assertThat(json).contains("hello world");
@@ -68,7 +70,7 @@ class RedisMemoryStoreTest {
 
     @Test
     void searchReturnsEmptyWhenNoEntries() {
-        when(hashOps.entries("memory:records")).thenReturn(Map.of());
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of());
 
         List<ScoredMemory> results = store.search(new float[]{0.1f}, 5, 0.0);
 
@@ -79,7 +81,7 @@ class RedisMemoryStoreTest {
     void searchRanksAndFiltersByScore() throws Exception {
         var record = new MemoryRecord("id1", "user", new float[]{1.0f, 0.0f}, Instant.now());
         String json = objectMapper.writeValueAsString(record);
-        when(hashOps.entries("memory:records")).thenReturn(Map.of("id1", json));
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of("id1", json));
 
         // Query with same direction = cosine similarity 1.0
         List<ScoredMemory> results = store.search(new float[]{1.0f, 0.0f}, 5, 0.0);
@@ -94,7 +96,7 @@ class RedisMemoryStoreTest {
         // Record embedding perpendicular to query => cosine similarity = 0.0
         var record = new MemoryRecord("id1", "irrelevant", new float[]{0.0f, 1.0f}, Instant.now());
         String json = objectMapper.writeValueAsString(record);
-        when(hashOps.entries("memory:records")).thenReturn(Map.of("id1", json));
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of("id1", json));
 
         // Require minimum score of 0.5 – perpendicular vectors have similarity 0.0
         List<ScoredMemory> results = store.search(new float[]{1.0f, 0.0f}, 5, 0.5);
@@ -110,7 +112,7 @@ class RedisMemoryStoreTest {
         String json1 = objectMapper.writeValueAsString(record1);
         String json2 = objectMapper.writeValueAsString(record2);
         String json3 = objectMapper.writeValueAsString(record3);
-        when(hashOps.entries("memory:records")).thenReturn(Map.of(
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of(
                 "id1", json1, "id2", json2, "id3", json3
         ));
 
@@ -124,7 +126,7 @@ class RedisMemoryStoreTest {
 
     @Test
     void searchSkipsMalformedJsonEntries() {
-        when(hashOps.entries("memory:records")).thenReturn(Map.of(
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of(
                 "bad", "not-valid-json{{{",
                 "also-bad", "null"
         ));
@@ -142,23 +144,23 @@ class RedisMemoryStoreTest {
         var capStore = new RedisMemoryStore(redisTemplate, objectMapper, props);
 
         // Return size=2 (over cap of 1)
-        when(hashOps.size("memory:records")).thenReturn(2L);
+        when(hashOps.size(hashKey("global"))).thenReturn(2L);
         var oldRecord = new MemoryRecord("old-id", "old text", new float[]{0.1f}, Instant.now().minusSeconds(100));
         var newRecord = new MemoryRecord("new-id", "new text", new float[]{0.2f}, Instant.now());
         String oldJson = objectMapper.writeValueAsString(oldRecord);
         String newJson = objectMapper.writeValueAsString(newRecord);
-        when(hashOps.values("memory:records")).thenReturn(List.of(oldJson, newJson));
+        when(hashOps.values(hashKey("global"))).thenReturn(List.of(oldJson, newJson));
 
         var recordToSave = new MemoryRecord("save-id", "save text", new float[]{0.3f}, Instant.now());
         capStore.save(recordToSave);
 
         // Verify the oldest record was deleted
-        verify(hashOps).delete("memory:records", "old-id");
+        verify(hashOps).delete(hashKey("global"), "old-id");
     }
 
     @Test
     void saveDoesNotEvictWhenUnderCap() {
-        when(hashOps.size("memory:records")).thenReturn(5L);
+        when(hashOps.size(hashKey("global"))).thenReturn(5L);
         var props = new MemoryProperties(true, "memory", 5, 0.0, 100);
         var capStore = new RedisMemoryStore(redisTemplate, objectMapper, props);
 
@@ -178,7 +180,7 @@ class RedisMemoryStoreTest {
         var record1 = new MemoryRecord("id1", "best", new float[]{1.0f, 0.0f}, Instant.now());
         var record2 = new MemoryRecord("id2", "medium", new float[]{0.707f, 0.707f}, Instant.now());
         var record3 = new MemoryRecord("id3", "worst", new float[]{0.5f, 0.866f}, Instant.now());
-        when(hashOps.entries("memory:records")).thenReturn(Map.of(
+        when(hashOps.entries(hashKey("global"))).thenReturn(Map.of(
                 "id1", objectMapper.writeValueAsString(record1),
                 "id2", objectMapper.writeValueAsString(record2),
                 "id3", objectMapper.writeValueAsString(record3)
@@ -192,5 +194,10 @@ class RedisMemoryStoreTest {
             assertThat(results.get(i).score())
                     .isGreaterThanOrEqualTo(results.get(i + 1).score());
         }
+    }
+
+    private static String hashKey(String owner) {
+        return "memory:records:" + Base64.getUrlEncoder().withoutPadding()
+                .encodeToString((owner == null || owner.isBlank() ? "global" : owner).getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -76,7 +76,10 @@ public class RecallMemoryTool implements LocalTool {
         }
         limit = Math.min(limit, MAX_LIMIT);
 
-        List<MemoryStore.ScoredMemory> hits = memoryService.recall(query, limit);
+        String owner = ctx != null && ctx.username() != null && !ctx.username().isBlank()
+                ? ctx.username()
+                : "global";
+        List<MemoryStore.ScoredMemory> hits = memoryService.recall(owner, query, limit);
         if (hits.isEmpty()) {
             return "No relevant memories found for: " + query;
         }

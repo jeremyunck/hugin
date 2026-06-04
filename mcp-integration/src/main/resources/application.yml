@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: mcp-integration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hugin}
+    username: ${SPRING_DATASOURCE_USERNAME:hugin}
+  sql:
+    init:
+      mode: always
   ai:
     mcp:
       client:
@@ -135,6 +141,14 @@ agent:
     # will refuse to access. Patterns follow Java glob syntax; ** matches across directories.
     # Examples:  **/.env  secrets/**  **/*.key  .git/**
     deny-list: []
+
+auth:
+  jwt:
+    # Optional base64-encoded HMAC key used to sign JWTs.
+    # If blank, Hugin generates an ephemeral key on startup.
+    secret-base64: ${AUTH_JWT_SECRET_BASE64:}
+    issuer: hugin
+    token-ttl: 12h
   # Self-scheduling: the schedule_prompt / list_scheduled_prompts / cancel_scheduled_prompt tools
   # let the agent set a prompt to run later (one-shot or recurring cron). When it fires, the prompt
   # runs through the full agent and the result is delivered back to the origin (the session it was
@@ -151,10 +165,11 @@ agent:
     default-zone: ${SCHEDULER_DEFAULT_ZONE:}
 
 google:
-  # Google Workspace integration powering the google_docs_* and google_sheets_* tools.
+  # Google Workspace integration powering the google_docs_*, google_sheets_*,
+  # google_calendar_* and google_gmail_* tools.
   #
   # Preferred setup for a personal install:
-  #   1. In a Google Cloud project, enable the Google Docs, Sheets and Drive APIs.
+  #   1. In a Google Cloud project, enable the Google Docs, Sheets, Drive, Calendar and Gmail APIs.
   #   2. Create an OAuth client for a desktop app and download its JSON.
   #   3. Point oauth-client-secrets-file at that JSON (or set GOOGLE_OAUTH_CLIENT_SECRETS_FILE).
   #   4. On first use, Hugin opens the browser for consent and caches refresh tokens in oauth-token-dir.
@@ -162,7 +177,7 @@ google:
   # Legacy Workspace setup:
   #   1. Create a service account and download its JSON key.
   #   2. Point credentials-file at that JSON (or set GOOGLE_APPLICATION_CREDENTIALS).
-  #   3. Share the docs/sheets you want Hugin to access with the service account's email.
+  #   3. Share the docs/sheets/email data you want Hugin to access with the service account's email.
   # When no credentials are configured the google_* tools report themselves unavailable (no startup failure).
   oauth-client-secrets-file: ${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:}
   oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.hugin/google-oauth}

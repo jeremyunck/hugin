@@ -21,26 +21,26 @@ class RecallMemoryToolTest {
 
     @Test
     void formatsRecalledMemoriesWithScores() {
-        when(memory.recall("weather", 5)).thenReturn(List.of(new MemoryStore.ScoredMemory(
+        when(memory.recall("alice", "weather", 5)).thenReturn(List.of(new MemoryStore.ScoredMemory(
                 new MemoryRecord("1", "User: hi\nAssistant: hello", new float[]{0.1f}, Instant.now()),
                 0.912)));
 
-        String out = tool.execute(Map.of("query", "weather"), new ToolContext(null));
+        String out = tool.execute(Map.of("query", "weather"), new ToolContext(null, null, "alice"));
 
         assertThat(out).contains("User: hi").contains("Assistant: hello").contains("0.91");
     }
 
     @Test
     void reportsWhenNothingRelevantFound() {
-        when(memory.recall("nope", 5)).thenReturn(List.of());
-        assertThat(tool.execute(Map.of("query", "nope"), new ToolContext(null)))
+        when(memory.recall("alice", "nope", 5)).thenReturn(List.of());
+        assertThat(tool.execute(Map.of("query", "nope"), new ToolContext(null, null, "alice")))
                 .contains("No relevant memories");
     }
 
     @Test
     void capsRequestedLimitAtMax() {
-        when(memory.recall("q", 20)).thenReturn(List.of());
-        tool.execute(Map.of("query", "q", "limit", 100), new ToolContext(null));
-        verify(memory).recall("q", 20);
+        when(memory.recall("alice", "q", 20)).thenReturn(List.of());
+        tool.execute(Map.of("query", "q", "limit", 100), new ToolContext(null, null, "alice"));
+        verify(memory).recall("alice", "q", 20);
     }
 }
