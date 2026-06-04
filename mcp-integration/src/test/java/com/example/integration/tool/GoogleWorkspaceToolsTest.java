@@ -32,7 +32,7 @@ class GoogleWorkspaceToolsTest {
     /** A factory with no credentials configured -> isConfigured() is false. */
     private GoogleWorkspaceClientFactory unconfiguredFactory() {
         return new GoogleWorkspaceClientFactory(
-                new GoogleWorkspaceProperties("", "Hugin", "", ""));
+                new GoogleWorkspaceProperties("", "", "", 8765, "Hugin", "", ""));
     }
 
     @Test
@@ -121,7 +121,7 @@ class GoogleWorkspaceToolsTest {
         // A present (if dummy) credentials file makes isConfigured() true so guarded runs the call.
         Path creds = Files.writeString(tmp.resolve("creds.json"), "{}");
         GoogleWorkspaceClientFactory f = new GoogleWorkspaceClientFactory(
-                new GoogleWorkspaceProperties(creds.toString(), "Hugin", "", ""));
+                new GoogleWorkspaceProperties(creds.toString(), "", "", 8765, "Hugin", "", ""));
         assertThat(f.isConfigured()).isTrue();
 
         assertThat(f.guarded(() -> {
@@ -142,9 +142,9 @@ class GoogleWorkspaceToolsTest {
     @Test
     void errorsDescribeAddsSharingHintFor403And404() {
         assertThat(GoogleErrors.describe(googleError(403, "The caller does not have permission")))
-                .contains("403").contains("shared with the service account");
+                .contains("403").contains("authenticated Google account");
         assertThat(GoogleErrors.describe(googleError(404, "Requested entity was not found")))
-                .contains("404").contains("shared with the service account");
+                .contains("404").contains("authenticated Google account");
     }
 
     @Test
@@ -179,7 +179,7 @@ class GoogleWorkspaceToolsTest {
     void docsEditTreatsTextAsOptionalForReplaceButRequiredForAppend(@TempDir Path tmp) throws Exception {
         Path creds = Files.writeString(tmp.resolve("creds.json"), "{}");
         GoogleDocsEditTool tool = new GoogleDocsEditTool(new GoogleWorkspaceClientFactory(
-                new GoogleWorkspaceProperties(creds.toString(), "Hugin", "", "")));
+                new GoogleWorkspaceProperties(creds.toString(), "", "", 8765, "Hugin", "", "")));
 
         String replace = tool.execute(Map.of(
                 "document_id", "doc1", "operation", "replace", "find", "TODO"));

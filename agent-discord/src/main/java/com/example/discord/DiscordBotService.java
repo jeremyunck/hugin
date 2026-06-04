@@ -2,6 +2,7 @@ package com.example.discord;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import com.example.agent.ChatMessagePublisher;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
@@ -59,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Intents):</b> enable <b>Message Content Intent</b> or the bot will see empty message text.
  */
 @Service
-public class DiscordBotService implements DisposableBean {
+public class DiscordBotService implements DisposableBean, ChatMessagePublisher {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordBotService.class);
     private static final int DISCORD_MSG_LIMIT = 2000;
@@ -194,6 +195,36 @@ public class DiscordBotService implements DisposableBean {
         } else {
             log.debug("Ignoring scheduled delivery for non-Discord target '{}'", target);
         }
+    }
+
+    @Override
+    public java.util.Optional<String> send(String target, String message) {
+        if (target == null || target.isBlank() || jda == null) {
+            return java.util.Optional.empty();
+        }
+        List<String> chunks = splitMessage(message == null ? "" : message, DISCORD_MSG_LIMIT);
+        if (target.startsWith("discord-channel-")) {
+            String channelId = target.substring("discord-channel-".length());
+            var channel = jda.getTextChannelById(channelId);
+            if (channel == null) {
+                return java.util.Optional.empty();
+            }
+            chunks.forEach(c -> channel.sendMessage(c).queue());
+            return java.util.Optional.of(target);
+        }
+        if (target.startsWith("discord-dm-")) {
+            String userId = target.substring("discord-dm-".length());
+            jda.openPrivateChannelById(userId).queue(
+                    channel -> chunks.forEach(c -> channel.sendMessage(c).queue()),
+                    err -> log.warn("Cannot send Discord DM to {}: {}", userId, err.getMessage()));
+            return java.util.Optional.of(target);
+        }
+        var channel = jda.getTextChannelById(target);
+        if (channel != null) {
+            chunks.forEach(c -> channel.sendMessage(c).queue());
+            return java.util.Optional.of(target);
+        }
+        return java.util.Optional.empty();
     }
 
     // ---- Conversation log helpers ----
