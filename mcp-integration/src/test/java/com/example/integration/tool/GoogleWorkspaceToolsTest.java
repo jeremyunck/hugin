@@ -1,20 +1,32 @@
 package com.example.integration.tool;
 
 import com.example.integration.google.GoogleErrors;
+import com.example.integration.google.GmailMessageFormatter;
+import com.example.integration.google.GmailMessageComposer;
 import com.example.integration.google.GoogleSheetValues;
 import com.example.integration.google.GoogleIds;
 import com.example.integration.google.GoogleWorkspaceClientFactory;
 import com.example.integration.google.GoogleWorkspaceProperties;
+import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.MessagePart;
+import com.google.api.services.gmail.model.MessagePartBody;
+import com.google.api.services.gmail.model.MessagePartHeader;
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpResponseException;
+import jakarta.mail.Address;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,7 +62,10 @@ class GoogleWorkspaceToolsTest {
                 new GoogleSheetsCreateTool(f),
                 new GoogleSheetsReadTool(f),
                 new GoogleSheetsWriteTool(f),
-                new GoogleSheetsAppendTool(f));
+                new GoogleSheetsAppendTool(f),
+                new GoogleGmailSearchTool(f),
+                new GoogleGmailReadTool(f),
+                new GoogleGmailSendTool(f));
 
         for (var tool : tools) {
             // document_id/spreadsheet_id are required by some tools but the unavailable check runs first.
@@ -72,10 +87,29 @@ class GoogleWorkspaceToolsTest {
         assertThat(new GoogleSheetsReadTool(f).name()).isEqualTo("google_sheets_read");
         assertThat(new GoogleSheetsWriteTool(f).name()).isEqualTo("google_sheets_write");
         assertThat(new GoogleSheetsAppendTool(f).name()).isEqualTo("google_sheets_append");
+        assertThat(new GoogleGmailSearchTool(f).name()).isEqualTo("google_gmail_search");
+        assertThat(new GoogleGmailReadTool(f).name()).isEqualTo("google_gmail_read");
+        assertThat(new GoogleGmailSendTool(f).name()).isEqualTo("google_gmail_send");
 
         @SuppressWarnings("unchecked")
         var props = (Map<String, ?>) new GoogleSheetsReadTool(f).inputSchema().get("properties");
         assertThat(props).containsKeys("spreadsheet_id", "range");
+    }
+
+    @Test
+    void gmailToolSchemasExposeExpectedFields() {
+        GoogleWorkspaceClientFactory f = unconfiguredFactory();
+        @SuppressWarnings("unchecked")
+        var searchProps = (Map<String, ?>) new GoogleGmailSearchTool(f).inputSchema().get("properties");
+        assertThat(searchProps).containsKeys("query", "max_results", "include_spam_trash", "label_ids", "page_token");
+
+        @SuppressWarnings("unchecked")
+        var readProps = (Map<String, ?>) new GoogleGmailReadTool(f).inputSchema().get("properties");
+        assertThat(readProps).containsKey("message_id");
+
+        @SuppressWarnings("unchecked")
+        var sendProps = (Map<String, ?>) new GoogleGmailSendTool(f).inputSchema().get("properties");
+        assertThat(sendProps).containsKeys("to", "subject", "body", "cc", "bcc", "reply_to_message_id", "thread_id");
     }
 
     @Test
@@ -161,11 +195,107 @@ class GoogleWorkspaceToolsTest {
                 new HttpResponseException.Builder(code, message, new HttpHeaders()), details);
     }
 
+    private static String encodeBase64Url(String value) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static MimeMessage decode(com.google.api.services.gmail.model.Message message) throws Exception {
+        byte[] raw = Base64.getUrlDecoder().decode(message.getRaw());
+        return new MimeMessage(Session.getInstance(new java.util.Properties()), new ByteArrayInputStream(raw));
+    }
+
+    private static List<String> addresses(MimeMessage mime, jakarta.mail.Message.RecipientType type) throws Exception {
+        Address[] recipients = mime.getRecipients(type);
+        if (recipients == null) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(recipients)
+                .map(Address::toString)
+                .map(String::trim)
+                .toList();
+    }
+
+    private static String subject(MimeMessage mime) throws Exception {
+        return mime.getSubject();
+    }
+
     @Test
     void shareFileIsANoopForBlankEmail() {
         GoogleWorkspaceClientFactory f = unconfiguredFactory();
         assertThat(f.shareFile("file1", "", "writer")).isNull();
         assertThat(f.shareFile("file1", null, "writer")).isNull();
+    }
+
+    @Test
+    void gmailMessageFormatterPrefersPlainTextBody() {
+        MessagePart plainPart = new MessagePart()
+                .setMimeType("text/plain")
+                .setBody(new MessagePartBody().setData(encodeBase64Url("Hello from plain text")));
+        MessagePart htmlPart = new MessagePart()
+                .setMimeType("text/html")
+                .setBody(new MessagePartBody().setData(encodeBase64Url("<p>Hello from <b>HTML</b></p>")));
+        Message message = new Message()
+                .setId("msg-1")
+                .setThreadId("thread-1")
+                .setSnippet("Snippet")
+                .setLabelIds(List.of("INBOX", "UNREAD"))
+                .setPayload(new MessagePart()
+                        .setHeaders(List.of(
+                                new MessagePartHeader().setName("From").setValue("Alice <alice@example.com>"),
+                                new MessagePartHeader().setName("Subject").setValue("Test subject"),
+                                new MessagePartHeader().setName("Date").setValue("Mon, 1 Jan 2026 12:00:00 -0600")))
+                        .setParts(List.of(plainPart, htmlPart)));
+
+        String formatted = GmailMessageFormatter.formatMessage(message);
+        assertThat(formatted).contains("Message id: msg-1");
+        assertThat(formatted).contains("from: Alice <alice@example.com>");
+        assertThat(formatted).contains("subject: Test subject");
+        assertThat(formatted).contains("Hello from plain text");
+    }
+
+    @Test
+    void gmailMessageComposerBuildsNewMessage() throws Exception {
+        com.google.api.services.gmail.model.Message message = GmailMessageComposer.composePlainTextMessage(
+                List.of("alice@example.com"),
+                "Hello",
+                "Body text",
+                List.of("cc@example.com"),
+                List.of("bcc@example.com"),
+                null,
+                null);
+
+        MimeMessage mime = decode(message);
+        assertThat(subject(mime)).isEqualTo("Hello");
+        assertThat(addresses(mime, jakarta.mail.Message.RecipientType.TO)).containsExactly("alice@example.com");
+        assertThat(addresses(mime, jakarta.mail.Message.RecipientType.CC)).containsExactly("cc@example.com");
+        assertThat(addresses(mime, jakarta.mail.Message.RecipientType.BCC)).containsExactly("bcc@example.com");
+    }
+
+    @Test
+    void gmailMessageComposerBuildsReplyMessage() throws Exception {
+        Message original = new Message()
+                .setThreadId("thread-123")
+                .setPayload(new MessagePart()
+                        .setHeaders(List.of(
+                                new MessagePartHeader().setName("From").setValue("Bob <bob@example.com>"),
+                                new MessagePartHeader().setName("Subject").setValue("Status update"),
+                                new MessagePartHeader().setName("Message-ID").setValue("<orig@example.com>"))));
+
+        com.google.api.services.gmail.model.Message message = GmailMessageComposer.composePlainTextMessage(
+                List.of(),
+                "",
+                "Reply text",
+                List.of(),
+                List.of(),
+                original,
+                null);
+
+        MimeMessage mime = decode(message);
+        assertThat(message.getThreadId()).isEqualTo("thread-123");
+        assertThat(subject(mime)).isEqualTo("Re: Status update");
+        assertThat(addresses(mime, jakarta.mail.Message.RecipientType.TO)).containsExactly("Bob <bob@example.com>");
+        assertThat(mime.getHeader("In-Reply-To", null)).isEqualTo("<orig@example.com>");
+        assertThat(mime.getHeader("References", null)).isEqualTo("<orig@example.com>");
     }
 
     /**

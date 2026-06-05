@@ -3,14 +3,14 @@ package com.example.integration.google;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration for the Google Workspace tools (Docs, Sheets, Drive).
+ * Configuration for the Google Workspace tools (Docs, Sheets, Drive, Calendar and Gmail).
  *
  * <ul>
  *   <li>{@code oauthClientSecretsFile} — path to a Google OAuth client-secrets JSON file. This is the
  *       preferred way to authenticate a personal Hugin install. Create a desktop OAuth client in a
- *       Google Cloud project, enable the Docs/Sheets/Drive APIs, download the JSON, and point this at
- *       it. When first used, Hugin opens the browser for user consent and stores refresh tokens in
- *       {@code oauthTokenDir}.</li>
+ *       Google Cloud project, enable the Docs/Sheets/Drive/Gmail APIs, download the JSON, and point
+ *       this at it. When first used, Hugin opens the browser for user consent and stores refresh
+ *       tokens in {@code oauthTokenDir}.</li>
  *   <li>{@code oauthTokenDir} — directory where OAuth refresh tokens are cached. Defaults to a
  *       directory under {@code ~/.hugin} so the consent flow only needs to run once.</li>
  *   <li>{@code oauthLocalServerPort} — local loopback port used for the OAuth callback during the

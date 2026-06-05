@@ -180,9 +180,9 @@ To add another OpenAI-compatible provider, add an entry under `llm.providers` wi
 
 Web search is a built-in local tool (`web_search`) that calls `perplexity/sonar` via OpenRouter for real-time results. It activates automatically when `OPEN_ROUTER_API_KEY` is set and `agent.tools.enabled` is `true` (the default). No extra runtime dependencies are required.
 
-## Google Docs & Sheets
+## Google Workspace
 
-Hugin can create, read, and edit Google Docs and Sheets through seven built-in local tools backed by the official Google API Java client libraries: `google_docs_create`, `google_docs_read`, `google_docs_edit`, `google_sheets_create`, `google_sheets_read`, `google_sheets_write`, and `google_sheets_append`.
+Hugin can create, read, and edit Google Docs and Sheets, create Calendar events, and search/read/send Gmail through built-in local tools backed by the official Google API Java client libraries.
 
 `google_docs_create` accepts Markdown for its `text` field and renders it into Google Docs structure such as headings, bullets, block quotes, code blocks, and formatted inline text instead of inserting literal Markdown markers.
 
@@ -193,7 +193,7 @@ Authentication can use either:
 
 OAuth setup:
 
-1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, and **Drive** APIs.
+1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, **Drive**, **Calendar**, and **Gmail** APIs.
 2. Create an OAuth client for a desktop app and download the JSON.
 3. Set `GOOGLE_OAUTH_CLIENT_SECRETS_FILE` to that JSON path (or `google.oauth-client-secrets-file` in `application.yml`).
 4. On first use, Hugin opens the browser for consent and caches refresh tokens in `GOOGLE_OAUTH_TOKEN_DIR` (default `~/.hugin/google-oauth`).
@@ -201,12 +201,24 @@ OAuth setup:
 
 Service account setup is still supported for Workspace/domain-wide delegation:
 
-1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, and **Drive** APIs.
+1. In a Google Cloud project, enable the Google **Docs**, **Sheets**, **Drive**, **Calendar**, and **Gmail** APIs.
 2. Create a service account and download its JSON key.
 3. Set `GOOGLE_APPLICATION_CREDENTIALS` to the key's path (or `google.credentials-file` in `application.yml`).
-4. Share the docs/sheets you want Hugin to access with the service account's email.
+4. Share the docs/sheets/email data you want Hugin to access with the service account's email.
 
-When no credentials are configured the tools report themselves as unavailable rather than failing startup. Workspace domains can still use domain-wide delegation via `GOOGLE_IMPERSONATE_USER` when using a service account. See [`docs/skills/google-docs-sheets`](docs/skills/google-docs-sheets/SKILL.md) for usage details and the [Configuration](#configuration) table for the `google.*` settings.
+Gmail support adds three tools:
+
+- `google_gmail_search` to search the mailbox with Gmail query syntax and return matching messages
+- `google_gmail_read` to read a specific message in detail
+- `google_gmail_send` to send a new message or reply to an existing thread
+
+Common Gmail workflows:
+
+- Inbox triage: search unread mail with `google_gmail_search`, then read the most important items with `google_gmail_read`.
+- Reply workflow: read a message, decide on the response, then call `google_gmail_send` with `reply_to_message_id` and the response body.
+- Follow-up workflow: search for older unresolved threads with queries like `is:unread older_than:7d`, summarize the open items, and send replies from the same tool.
+
+When no credentials are configured the tools report themselves as unavailable rather than failing startup. Workspace domains can still use domain-wide delegation via `GOOGLE_IMPERSONATE_USER` when using a service account. See [`docs/skills/google-docs-sheets`](docs/skills/google-docs-sheets/SKILL.md) and [`docs/skills/google-gmail`](docs/skills/google-gmail/SKILL.md) for usage details and the [Configuration](#configuration) table for the `google.*` settings.
 
 ## Long-term memory
 
@@ -232,7 +244,7 @@ Settings live in `mcp-integration/src/main/resources/application.yml`:
 | `google.oauth-client-secrets-file` | Path to a Google OAuth client-secrets JSON enabling browser-based Google user auth | _(blank)_ |
 | `google.oauth-token-dir` | Directory where OAuth refresh tokens are cached | `~/.hugin/google-oauth` |
 | `google.oauth-local-server-port` | Local loopback port used for the initial OAuth callback | `8765` |
-| `google.credentials-file` | Path to a Google service-account JSON key enabling the `google_docs_*`/`google_sheets_*` tools | `${GOOGLE_APPLICATION_CREDENTIALS:}` |
+| `google.credentials-file` | Path to a Google service-account JSON key enabling the Google Workspace tools | `${GOOGLE_APPLICATION_CREDENTIALS:}` |
 | `google.application-name` | Application name reported to the Google APIs | `Hugin` |
 | `google.impersonate-user` | Optional user email to impersonate via domain-wide delegation | `${GOOGLE_IMPERSONATE_USER:}` |
 | `google.default-share-with` | Optional email that newly created docs/sheets are auto-shared with | `${GOOGLE_DEFAULT_SHARE_WITH:}` |

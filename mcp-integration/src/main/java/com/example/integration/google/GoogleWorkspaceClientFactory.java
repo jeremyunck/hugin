@@ -13,6 +13,8 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.CalendarScopes;
+import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.docs.v1.Docs;
 import com.google.api.services.docs.v1.DocsScopes;
 import com.google.api.services.drive.Drive;
@@ -39,8 +41,9 @@ import java.awt.GraphicsEnvironment;
 import java.util.List;
 
 /**
- * Builds authenticated Google {@link Docs}, {@link Sheets} and {@link Drive} service clients from a
- * service-account credential, and provides a small {@link #shareFile} helper.
+ * Builds authenticated Google {@link Docs}, {@link Sheets}, {@link Drive}, {@link Calendar} and
+ * {@link Gmail} service clients from a service-account credential, and provides a small
+ * {@link #shareFile} helper.
  *
  * <p>This is the single place that touches the Google API SDK and credentials. The individual
  * {@code google_*} tools depend on it and treat {@link #isConfigured()} as a gate: when no credentials
@@ -56,10 +59,12 @@ public class GoogleWorkspaceClientFactory {
     private static final Logger log = LoggerFactory.getLogger(GoogleWorkspaceClientFactory.class);
     private static final String OAUTH_USER_ID = "hugin";
 
-    /** Full read/write scopes for the three APIs the tools use. */
+    /** Scopes for the Google APIs the built-in Workspace tools use. */
     private static final List<String> SCOPES = List.of(
             CalendarScopes.CALENDAR,
             DocsScopes.DOCUMENTS,
+            GmailScopes.GMAIL_READONLY,
+            GmailScopes.GMAIL_SEND,
             SheetsScopes.SPREADSHEETS,
             DriveScopes.DRIVE);
 
@@ -70,6 +75,7 @@ public class GoogleWorkspaceClientFactory {
     private HttpRequestInitializer requestInitializer;
     private Calendar calendar;
     private Docs docs;
+    private Gmail gmail;
     private Sheets sheets;
     private Drive drive;
 
@@ -148,6 +154,15 @@ public class GoogleWorkspaceClientFactory {
                     .build();
         }
         return calendar;
+    }
+
+    public synchronized Gmail gmail() throws IOException, GeneralSecurityException {
+        if (gmail == null) {
+            gmail = new Gmail.Builder(transport(), jsonFactory, requestInitializer())
+                    .setApplicationName(properties.applicationName())
+                    .build();
+        }
+        return gmail;
     }
 
     /**

@@ -63,7 +63,7 @@
             <version>2.8.9</version>
         </dependency>
         <!--
-            Google Workspace integration (Docs + Sheets + Drive) for the built-in google_* tools.
+            Google Workspace integration (Docs + Sheets + Drive + Calendar + Gmail) for the built-in google_* tools.
             Uses the official Google API Java client libraries — the canonical, best-supported way
             to talk to these APIs from Java. Service-account authentication is provided by
             google-auth-library-oauth2-http. These deps live here (not agent-core) so the agent core

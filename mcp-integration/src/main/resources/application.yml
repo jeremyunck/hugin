@@ -177,7 +177,8 @@ google:
   # Legacy Workspace setup:
   #   1. Create a service account and download its JSON key.
   #   2. Point credentials-file at that JSON (or set GOOGLE_APPLICATION_CREDENTIALS).
-  #   3. Share the docs/sheets/email data you want Hugin to access with the service account's email.
+  #   3. Share the docs/sheets/calendar/email data you want Hugin to access with the service account's email.
+  # Gmail write support requires gmail.send scope in addition to gmail.readonly.
   # When no credentials are configured the google_* tools report themselves unavailable (no startup failure).
   oauth-client-secrets-file: ${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:}
   oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.hugin/google-oauth}
