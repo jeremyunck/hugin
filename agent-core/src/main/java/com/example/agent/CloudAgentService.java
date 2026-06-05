@@ -93,7 +93,8 @@ public class CloudAgentService {
         }
 
         String agentId = UUID.randomUUID().toString();
-        Path agentDir = agentHome.resolve("agents").resolve(agentId);
+        AgentSandbox sandbox = sandbox(agentId);
+        Path agentDir = sandbox.root();
 
         // Derive branch name: <prefix>/<slug>-<short-id>
         String slug = slugify(task);
@@ -106,9 +107,11 @@ public class CloudAgentService {
         persistAgentInfo(agentDir, info);
 
         try {
-            Files.createDirectories(agentDir);
+            Files.createDirectories(sandbox.repoRoot());
+            Files.createDirectories(sandbox.homeDir());
+            Files.createDirectories(sandbox.tmpDir());
             ProvisionedRepo repo = provisioner.get()
-                    .provision(repoUrl, agentDir, sourceBranch, newBranch);
+                    .provision(repoUrl, sandbox, sourceBranch, newBranch);
 
             workspaceRegistry.register(agentId, workspaceFactory.create(repo.workingTree()));
             log.info("Cloud agent {} provisioned: repo={}, branch={}, tree={}",
@@ -137,7 +140,7 @@ public class CloudAgentService {
             throw new NoSuchElementException("Agent not found: " + agentId);
         }
 
-        Path agentDir = agentHome.resolve("agents").resolve(agentId);
+        Path agentDir = sandbox(agentId).root();
         try {
             AgentRequest request = new AgentRequest(info.task(), model, agentId);
             AgentResponse response = agentService.chatStream(request, listener);
@@ -251,6 +254,11 @@ public class CloudAgentService {
             throw new IOException("git command failed (" + process.exitValue() + "): " + output);
         }
         return output;
+    }
+
+    private AgentSandbox sandbox(String agentId) {
+        Path root = agentHome.resolve("agents").resolve(agentId);
+        return new AgentSandbox(root, root.resolve("repo"), root.resolve("home"), root.resolve("tmp"));
     }
 
     private static String buildCommitMessage(AgentInfo info) {

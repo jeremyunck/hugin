@@ -10,7 +10,7 @@ client libraries. They run in-process in the `mcp-integration` server (no MCP se
 
 | Tool | Purpose |
 | --- | --- |
-| `google_docs_create` | Create a new Doc (optional title + initial text). |
+| `google_docs_create` | Create a new Doc (optional title + Markdown body rendered into Docs formatting). |
 | `google_docs_read` | Read a Doc's plain-text content. |
 | `google_docs_edit` | Append / insert / replace text in a Doc. |
 | `google_sheets_create` | Create a new spreadsheet. |
@@ -27,8 +27,17 @@ the URL back to the user.
 
 ## Authentication & sharing (important)
 
-The tools authenticate as a **service account** (configured via `GOOGLE_APPLICATION_CREDENTIALS`).
-This has two consequences you must keep in mind:
+The tools can authenticate either as a **Google user via OAuth** or as a **service account**.
+OAuth is the preferred setup for a personal install; service accounts are still supported for
+Workspace/domain-wide delegation.
+
+OAuth has one important consequence:
+
+- On first use, Hugin opens a browser for consent and caches refresh tokens in `google.oauth-token-dir`.
+- Files Hugin creates belong to the authenticated Google user, so `share_with` is only needed when you
+  want to share the new doc/sheet with someone else.
+
+Service account auth has two consequences you must keep in mind:
 
 - **To read or edit an existing file**, that file must be shared with the service account's email
   address (the `client_email` in the credentials JSON). If a call fails with a 403/404, the most
@@ -44,8 +53,10 @@ that to the user; it is a setup step, not something to work around.
 
 ## Creating
 
-```
-google_docs_create   { "title": "Q3 Notes", "text": "Initial body...", "share_with": "user@example.com" }
+`google_docs_create` treats `text` as Markdown and renders common structure cleanly in Docs:
+
+```text
+google_docs_create   { "title": "Q3 Notes", "text": "# Heading\n- Bullet\n\n> Quote", "share_with": "user@example.com" }
 google_sheets_create { "title": "Budget 2026", "share_with": "user@example.com" }
 ```
 
@@ -113,11 +124,18 @@ google_sheets_append { "spreadsheet_id": "<id>", "range": "Sheet1",
 
 Configured under the `google:` prefix in `mcp-integration`'s `application.yml`:
 
+- `google.oauth-client-secrets-file` (`GOOGLE_OAUTH_CLIENT_SECRETS_FILE`) — path to the OAuth client-secrets JSON.
+- `google.oauth-token-dir` (`GOOGLE_OAUTH_TOKEN_DIR`) — directory where OAuth refresh tokens are cached.
+- `google.oauth-local-server-port` (`GOOGLE_OAUTH_LOCAL_SERVER_PORT`) — local loopback port for the OAuth callback.
 - `google.credentials-file` (`GOOGLE_APPLICATION_CREDENTIALS`) — path to the service-account JSON key.
 - `google.application-name` — name reported to Google APIs.
 - `google.impersonate-user` (`GOOGLE_IMPERSONATE_USER`) — for Workspace domain-wide delegation.
 - `google.default-share-with` (`GOOGLE_DEFAULT_SHARE_WITH`) — email new files are auto-shared with.
 
-Setup: enable the Docs, Sheets and Drive APIs in a Google Cloud project, create a service account,
-download its JSON key, point `GOOGLE_APPLICATION_CREDENTIALS` at it, and share target files with the
-service account's `client_email`.
+Setup:
+
+- OAuth: enable the Docs, Sheets and Drive APIs, create a desktop OAuth client, download the JSON,
+  point `GOOGLE_OAUTH_CLIENT_SECRETS_FILE` at it, and complete the one-time browser consent flow.
+- Service account: enable the Docs, Sheets and Drive APIs, create a service account, download its JSON
+  key, point `GOOGLE_APPLICATION_CREDENTIALS` at it, and share target files with the service account's
+  `client_email`.

@@ -6,10 +6,10 @@ Derived from `cloud-platform-audit.md`. Items are ordered by priority: Phase 0 (
 
 ## Phase 0 — Repo Cleanup *(low risk, do first)*
 
-- [ ] Remove `agent-terminal` module — delete module dir, remove from parent `pom.xml`, prune `README`/`CLAUDE.md`/`install.sh`/`scripts/` references
+- [x] Remove the terminal UI and launcher plumbing — deleted the module/references and removed the obsolete `scripts/mcp-agent*` assets
 - [ ] Tighten CORS — replace `allowedOriginPatterns("*")` + `allowCredentials(true)` in `SecurityConfig.corsConfigurationSource` with explicit front-end origins
 - [ ] Authenticate `/api/servers/**` — currently fully unauthenticated; gate it or remove from public surface
-- [ ] Re-scope or retire the Raspberry Pi appliance assets (`docs/raspberry-pi-install-plan.md`, `install.sh`, `scripts/mcp-agent*`, systemd unit) — keep only if a self-host tier is intended
+- [ ] Re-scope or retire the Raspberry Pi appliance assets (`docs/raspberry-pi-install-plan.md`, `install.sh`, the systemd unit) — keep only if a self-host tier is intended
 - [ ] Document the target API (`/api/v1/...`) with springdoc/OpenAPI; version the existing endpoints
 
 ---

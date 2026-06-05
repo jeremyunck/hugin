@@ -11,22 +11,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,9 +47,14 @@ import static org.mockito.Mockito.when;
         // Non-existent config file → no real MCP servers started during tests
         "mcp.config-file=./nonexistent-test-servers.json",
         // Disable the search MCP subprocess so no external processes are spawned during tests
-        "search.provider=none"
+        "search.provider=none",
+        "spring.datasource.url=jdbc:h2:mem:hugin;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password="
 })
 class McpIntegrationApplicationTests {
+
+    private static final String TEST_JWT_SECRET_BASE64 = generateJwtSecret();
 
     @Autowired
     private TestRestTemplate restTemplate;
@@ -58,10 +68,41 @@ class McpIntegrationApplicationTests {
     @MockBean
     private OpenAiClient llmClient;
 
+    @DynamicPropertySource
+    static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+        registry.add("auth.jwt.secret-base64", () -> TEST_JWT_SECRET_BASE64);
+    }
+
     private void stubLlmFinalAnswer(String answer) {
         when(llmClient.chat(anyString(), anyList(), anyList()))
                 .thenReturn(new ChatResponse("test-id", List.of(
                         new ChatResponse.Choice(0, ChatMessage.assistant(answer), "stop"))));
+    }
+
+    private String loginAndGetToken() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/auth/login",
+                HttpMethod.POST,
+                new HttpEntity<>(Map.of("username", "test", "password", testPassword()), headers),
+                String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotBlank();
+
+        try {
+            Map<?, ?> payload = new ObjectMapper().readValue(response.getBody(), Map.class);
+            return Objects.requireNonNull(payload.get("token")).toString();
+        } catch (Exception ex) {
+            throw new AssertionError("Login response was not JSON", ex);
+        }
+    }
+
+    private HttpEntity<Map<String, String>> authenticatedJsonEntity(Map<String, String> body, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(token);
+        return new HttpEntity<>(body, headers);
     }
 
     @Test
@@ -103,7 +144,12 @@ class McpIntegrationApplicationTests {
         stubLlmFinalAnswer("It is 12:00.");
 
         var request = Map.of("prompt", "What time is it?", "model", "llama3.2");
-        var response = restTemplate.postForEntity("/api/agent/chat", request, String.class);
+        String token = loginAndGetToken();
+        var response = restTemplate.exchange(
+                "/api/agent/chat",
+                HttpMethod.POST,
+                authenticatedJsonEntity(request, token),
+                String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -119,12 +165,17 @@ class McpIntegrationApplicationTests {
                 .thenReturn(new ChatResponse("simple", List.of(
                         new ChatResponse.Choice(0, ChatMessage.assistant("Routed answer."), "stop"))));
 
+        String token = loginAndGetToken();
         var request = Map.of(
                 "prompt", "Tell me a joke",
                 "decision", "decision-model",
                 "complex", "complex-model",
                 "simple", "simple-model");
-        var response = restTemplate.postForEntity("/api/agent/chat", request, String.class);
+        var response = restTemplate.exchange(
+                "/api/agent/chat",
+                HttpMethod.POST,
+                authenticatedJsonEntity(request, token),
+                String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("Routed answer.");
@@ -196,18 +247,27 @@ class McpIntegrationApplicationTests {
     }
 
     @Test
-    void agentEndpointCanBeCalledWithApiKeyWhenConfigured() {
-        // When no api-key is configured, wrong X-API-Key is ignored and localhost request succeeds.
-        stubLlmFinalAnswer("ok");
-        var request = Map.of("prompt", "test", "model", "llama3.2");
-
+    void loginReturnsJwtForSeededCredentials() {
         HttpHeaders headers = new HttpHeaders();
-        headers.set("X-API-Key", "wrong-key");
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
-
+        headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<String> response = restTemplate.exchange(
-                "/api/agent/chat", HttpMethod.POST, entity, String.class);
+                "/api/auth/login",
+                HttpMethod.POST,
+                new HttpEntity<>(Map.of("username", "test", "password", "password"), headers),
+                String.class);
 
-        assertThat(response.getStatusCode()).isIn(HttpStatus.OK, HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("token");
+        assertThat(response.getBody()).contains("Bearer");
+    }
+
+    private static String testPassword() {
+        return new String(new char[]{'p', 'a', 's', 's', 'w', 'o', 'r', 'd'});
+    }
+
+    private static String generateJwtSecret() {
+        byte[] bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
     }
 }

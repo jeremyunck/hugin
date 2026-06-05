@@ -42,19 +42,19 @@ public class RedisMemoryStore implements MemoryStore {
     }
 
     @Override
-    public void save(MemoryRecord record) {
+    public void save(String owner, MemoryRecord record) {
         try {
             String json = objectMapper.writeValueAsString(record);
-            redis.opsForHash().put(hashKey, record.id(), json);
-            evictIfNeeded();
+            redis.opsForHash().put(hashKey(owner), record.id(), json);
+            evictIfNeeded(owner);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to persist memory record: " + e.getMessage(), e);
         }
     }
 
     @Override
-    public List<ScoredMemory> search(float[] queryEmbedding, int topK, double minScore) {
-        Map<Object, Object> entries = redis.opsForHash().entries(hashKey);
+    public List<ScoredMemory> search(String owner, float[] queryEmbedding, int topK, double minScore) {
+        Map<Object, Object> entries = redis.opsForHash().entries(hashKey(owner));
         if (entries.isEmpty()) {
             return List.of();
         }
@@ -74,14 +74,15 @@ public class RedisMemoryStore implements MemoryStore {
     }
 
     /** Trims the oldest records once the store grows past {@code memory.max-entries}. */
-    private void evictIfNeeded() {
-        Long size = redis.opsForHash().size(hashKey);
+    private void evictIfNeeded(String owner) {
+        String key = hashKey(owner);
+        Long size = redis.opsForHash().size(key);
         if (size == null || size <= properties.maxEntries()) {
             return;
         }
         int toRemove = (int) (size - properties.maxEntries());
         List<MemoryRecord> all = new ArrayList<>();
-        for (Object value : redis.opsForHash().values(hashKey)) {
+        for (Object value : redis.opsForHash().values(key)) {
             MemoryRecord record = deserialize((String) value);
             if (record != null) {
                 all.add(record);
@@ -89,9 +90,21 @@ public class RedisMemoryStore implements MemoryStore {
         }
         all.sort(Comparator.comparing(MemoryRecord::createdAt));
         for (int i = 0; i < toRemove && i < all.size(); i++) {
-            redis.opsForHash().delete(hashKey, all.get(i).id());
+            redis.opsForHash().delete(key, all.get(i).id());
         }
         log.debug("Evicted {} oldest memories (cap={})", toRemove, properties.maxEntries());
+    }
+
+    private String hashKey(String owner) {
+        return hashKey + ":" + encodeOwner(owner);
+    }
+
+    private static String encodeOwner(String owner) {
+        if (owner == null || owner.isBlank()) {
+            return "global";
+        }
+        return java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(owner.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private MemoryRecord deserialize(String json) {

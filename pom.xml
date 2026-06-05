@@ -20,7 +20,6 @@
 
     <modules>
         <module>agent-core</module>
-        <module>mcp-client</module>
         <module>mcp-integration</module>
         <module>agent-discord</module>
     </modules>
@@ -76,11 +75,6 @@
             <dependency>
                 <groupId>com.example</groupId>
                 <artifactId>agent-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>mcp-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

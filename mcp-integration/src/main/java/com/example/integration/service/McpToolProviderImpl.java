@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 
 /**
  * Bridges {@link McpToolProvider} (agent-core interface) with
- * {@link McpServerRegistryService} (mcp-client implementation).
+ * {@link McpServerRegistryService} (merged MCP registry implementation).
  *
  * <p>This is the only class that imports both MCP SDK types and agent-core types.
  */

@@ -102,7 +102,7 @@ public class AgentService {
     }
 
     public AgentResponse chat(AgentRequest request) {
-        return runLoop(request, NO_OP_LISTENER, false);
+        return runLoop(request, NO_OP_LISTENER, false, "global");
     }
 
     /**
@@ -112,10 +112,18 @@ public class AgentService {
      * once the loop completes.
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener) {
-        return runLoop(request, listener, true);
+        return runLoop(request, listener, true, "global");
     }
 
-    private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream) {
+    public AgentResponse chat(AgentRequest request, String owner) {
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner));
+    }
+
+    public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner) {
+        return runLoop(request, listener, true, normalizeOwner(owner));
+    }
+
+    private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream, String owner) {
         Instant deadline = Instant.now().plus(requestTimeout);
         RoutingSelection routing = resolveModel(request);
         String model = routing.model();
@@ -143,7 +151,7 @@ public class AgentService {
                         "You have just restarted after a self-update. " + notice
                         + " Begin your response by sharing this update notice with the user.")));
         memoryService.ifPresent(memory -> {
-            List<MemoryStore.ScoredMemory> recalled = memory.recall(request.prompt());
+            List<MemoryStore.ScoredMemory> recalled = memory.recall(owner, request.prompt());
             if (!recalled.isEmpty()) {
                 messages.add(ChatMessage.system(formatMemories(recalled)));
             }
@@ -202,7 +210,7 @@ public class AgentService {
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall, toolServerMap,
-                            request.sessionId(), request.recentMessages());
+                            request.sessionId(), owner, request.recentMessages());
                     listener.onToolResult(toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -225,7 +233,7 @@ public class AgentService {
                     answer = "The agent finished without producing a text answer.";
                 }
                 final String finalAnswer = answer;
-                memoryService.ifPresent(memory -> memory.remember(request.prompt(), finalAnswer));
+                memoryService.ifPresent(memory -> memory.remember(owner, request.prompt(), finalAnswer));
                 if (!clientManagedContext) {
                     conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), finalAnswer));
                 }
@@ -350,7 +358,7 @@ public class AgentService {
     private record RoutingSelection(String model, String route, String decisionModel) {}
 
     private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap,
-                                   String sessionId, List<String> channelMessages) {
+                                   String sessionId, String owner, List<String> channelMessages) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
@@ -358,7 +366,7 @@ public class AgentService {
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
             ToolContext ctx = new ToolContext(
-                    workspaceRegistry.resolve(sessionId), sessionId, channelMessages);
+                    workspaceRegistry.resolve(sessionId), sessionId, owner, channelMessages);
             try {
                 return localTool.execute(args, ctx);
             } catch (Exception e) {
@@ -408,5 +416,12 @@ public class AgentService {
                 message.reasoningContent() == null ? "" : message.reasoningContent(),
                 message.toolCalls(),
                 message.toolCallId());
+    }
+
+    private static String normalizeOwner(String owner) {
+        if (owner == null || owner.isBlank()) {
+            return "global";
+        }
+        return owner;
     }
 }

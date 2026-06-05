@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter xmlns="https://findbugs.sourceforge.net/filter/3.0.0">
+    <Match>
+        <Class name="com.example.integration.config.SecurityConfig" />
+        <Method name="jwtSigningKey" />
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE" />
+    </Match>
+</FindBugsFilter>

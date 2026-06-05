@@ -113,4 +113,4 @@ Prefer metadata sources:
 
 - Missing `uvx`/`npx` MCP warnings in logs are often unrelated to Hugin server health.
 - A Discord interaction failure with `NoClassDefFoundError` for `InteractionCreateHandler$1` indicates a stale or incomplete Discord runtime jar/process. Rebuild, copy `agent-discord.jar`, and restart `com.hugin.discord`.
-- If install/update scripts reference deleted modules such as `agent-terminal`, fix the script and package manifest before relying on `hugin update`.
+- If install/update scripts reference deleted modules or removed launcher assets such as the terminal UI or `scripts/mcp-agent`, fix the script and package manifest before relying on `hugin update`.

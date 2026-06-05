@@ -39,7 +39,7 @@ public class McpServerRegistryService {
     private static final Logger log = LoggerFactory.getLogger(McpServerRegistryService.class);
 
     private static final McpSchema.Implementation CLIENT_INFO =
-            new McpSchema.Implementation("spring-mcp-client", "1.0.0");
+            new McpSchema.Implementation("hugin-mcp-registry", "1.0.0");
 
     private final McpProperties properties;
     private final ObjectMapper objectMapper;

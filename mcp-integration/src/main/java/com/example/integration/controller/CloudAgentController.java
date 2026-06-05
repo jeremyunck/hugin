@@ -3,6 +3,8 @@ package com.example.integration.controller;
 import com.example.agent.AgentStreamListener;
 import com.example.agent.CloudAgentService;
 import com.example.agent.model.AgentInfo;
+import com.example.agent.model.CloudAgentEvent;
+import com.example.integration.service.CloudAgentEventStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,16 +45,19 @@ public class CloudAgentController {
             String model) {}
 
     private final CloudAgentService cloudAgentService;
+    private final CloudAgentEventStore eventStore;
     private final ObjectMapper objectMapper;
     private final ExecutorService streamExecutor;
     private final long streamTimeoutMillis;
 
     public CloudAgentController(
             CloudAgentService cloudAgentService,
+            CloudAgentEventStore eventStore,
             ObjectMapper objectMapper,
             ExecutorService agentStreamExecutor,
             @Value("${agent.request-timeout:5m}") Duration requestTimeout) {
         this.cloudAgentService = cloudAgentService;
+        this.eventStore = eventStore;
         this.objectMapper = objectMapper;
         this.streamExecutor = agentStreamExecutor;
         this.streamTimeoutMillis = requestTimeout.plusSeconds(60).toMillis();
@@ -66,43 +71,46 @@ public class CloudAgentController {
             AgentInfo info;
             try {
                 info = cloudAgentService.create(req.repoUrl(), req.task(), req.branch(), req.model());
-                send(emitter, "agent_created", Map.of("id", info.id(), "branch", info.branch()));
+                send(info.id(), emitter, "agent_created", Map.of("id", info.id(), "branch", info.branch()));
             } catch (Exception e) {
                 log.warn("Cloud agent creation failed", e);
-                send(emitter, "error", Map.of("message", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                send(null, emitter, "error", Map.of("message", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
                 emitter.complete();
                 return;
             }
 
             final String agentId = info.id();
             try {
-                cloudAgentService.run(agentId, req.model(), new AgentStreamListener() {
+                CloudAgentService.RunResult result = cloudAgentService.run(agentId, req.model(), new AgentStreamListener() {
                     @Override
                     public void onContent(String delta) {
-                        send(emitter, "token", Map.of("text", delta));
+                        send(agentId, emitter, "token", Map.of("text", delta));
                     }
 
                     @Override
                     public void onReasoning(String delta) {
-                        send(emitter, "reasoning", Map.of("text", delta));
+                        send(agentId, emitter, "reasoning", Map.of("text", delta));
                     }
 
                     @Override
                     public void onToolCall(String toolName, String arguments) {
-                        send(emitter, "tool", Map.of("name", toolName, "args", arguments));
+                        send(agentId, emitter, "tool", Map.of("name", toolName, "args", arguments));
                     }
 
                     @Override
                     public void onToolResult(String toolName, String result) {
-                        send(emitter, "tool_result", Map.of("name", toolName, "result", result));
+                        send(agentId, emitter, "tool_result", Map.of("name", toolName, "result", result));
                     }
                 });
-                send(emitter, "done", Map.of("id", agentId));
+                result.pullRequestUrl().ifPresent(url ->
+                        send(agentId, emitter, "pr_opened", Map.of("id", agentId, "url", url)));
+                send(agentId, emitter, "done", Map.of("id", agentId, "prUrl", result.pullRequestUrl().orElse(""),
+                        "changed", result.changed()));
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("Cloud agent {} failed", agentId, e);
                 String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                send(emitter, "error", Map.of("id", agentId, "message", message));
+                send(agentId, emitter, "error", Map.of("id", agentId, "message", message));
                 emitter.complete();
             }
         });
@@ -122,6 +130,15 @@ public class CloudAgentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{id}/events")
+    public ResponseEntity<List<CloudAgentEvent>> events(@PathVariable String id) {
+        List<CloudAgentEvent> events = eventStore.read(id);
+        if (events.isEmpty() && cloudAgentService.get(id).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(events);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         if (cloudAgentService.get(id).isEmpty()) {
@@ -131,8 +148,11 @@ public class CloudAgentController {
         return ResponseEntity.noContent().build();
     }
 
-    private void send(SseEmitter emitter, String event, Map<String, ?> data) {
+    private void send(String agentId, SseEmitter emitter, String event, Map<String, ?> data) {
         try {
+            if (agentId != null) {
+                eventStore.append(agentId, event, data);
+            }
             emitter.send(SseEmitter.event().name(event).data(objectMapper.writeValueAsString(data)));
         } catch (IOException e) {
             log.debug("Could not send SSE event '{}': {}", event, e.getMessage());

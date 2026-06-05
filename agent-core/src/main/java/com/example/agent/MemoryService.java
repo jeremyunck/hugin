@@ -35,7 +35,7 @@ public class MemoryService {
 
     /** Embeds {@code query} and returns the most similar stored memories (never throws). */
     public List<MemoryStore.ScoredMemory> recall(String query) {
-        return recall(query, properties.topK());
+        return recall("global", query, properties.topK());
     }
 
     /**
@@ -43,6 +43,14 @@ public class MemoryService {
      * Used by the {@code recall_memory} tool so the agent can ask for more or fewer hits on demand.
      */
     public List<MemoryStore.ScoredMemory> recall(String query, int topK) {
+        return recall("global", query, topK);
+    }
+
+    public List<MemoryStore.ScoredMemory> recall(String owner, String query) {
+        return recall(owner, query, properties.topK());
+    }
+
+    public List<MemoryStore.ScoredMemory> recall(String owner, String query, int topK) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
@@ -50,7 +58,7 @@ public class MemoryService {
         try {
             float[] embedding = embeddingClient.embed(query);
             List<MemoryStore.ScoredMemory> hits =
-                    store.search(embedding, limit, properties.minScore());
+                    store.search(owner, embedding, limit, properties.minScore());
             log.debug("Recalled {} memories (top-k={}, min-score={})",
                     hits.size(), limit, properties.minScore());
             return hits;
@@ -62,6 +70,10 @@ public class MemoryService {
 
     /** Embeds and persists a prompt/answer exchange for future recall (never throws). */
     public void remember(String userPrompt, String assistantAnswer) {
+        remember("global", userPrompt, assistantAnswer);
+    }
+
+    public void remember(String owner, String userPrompt, String assistantAnswer) {
         if (assistantAnswer == null || assistantAnswer.isBlank()) {
             return;
         }
@@ -69,7 +81,7 @@ public class MemoryService {
             String text = "User: " + (userPrompt == null ? "" : userPrompt)
                     + "\nAssistant: " + assistantAnswer;
             float[] embedding = embeddingClient.embed(text);
-            store.save(new MemoryRecord(UUID.randomUUID().toString(), text, embedding, Instant.now()));
+            store.save(owner, new MemoryRecord(UUID.randomUUID().toString(), text, embedding, Instant.now()));
             log.debug("Stored memory ({} chars)", text.length());
         } catch (Exception e) {
             log.warn("Memory store failed: {}", e.getMessage());

@@ -491,7 +491,7 @@ class AgentServiceTest {
     void injectsRecalledMemoryAndStoresFinalAnswer() {
         // Given: a memory service that recalls one past exchange
         MemoryService memory = mock(MemoryService.class);
-        when(memory.recall(PROMPT)).thenReturn(List.of(new MemoryStore.ScoredMemory(
+        when(memory.recall("alice", PROMPT)).thenReturn(List.of(new MemoryStore.ScoredMemory(
                 new MemoryRecord("1", "User: hi\nAssistant: hello", new float[]{0.1f, 0.2f},
                         java.time.Instant.now()),
                 0.9)));
@@ -503,13 +503,13 @@ class AgentServiceTest {
                 .thenReturn(responseWithContent("Final answer."));
 
         // When
-        AgentResponse result = service.chat(new AgentRequest(PROMPT, MODEL));
+        AgentResponse result = service.chat(new AgentRequest(PROMPT, MODEL), "alice");
 
         // Then: recalled memory is injected as a system message before the user prompt,
         // and the finished exchange is stored back.
         assertThat(result.response()).isEqualTo("Final answer.");
-        verify(memory).recall(PROMPT);
-        verify(memory).remember(PROMPT, "Final answer.");
+        verify(memory).recall("alice", PROMPT);
+        verify(memory).remember("alice", PROMPT, "Final answer.");
 
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
@@ -524,7 +524,7 @@ class AgentServiceTest {
     void doesNotInjectMemoryMessageWhenNothingRecalled() {
         // Given: memory enabled but nothing relevant recalled
         MemoryService memory = mock(MemoryService.class);
-        when(memory.recall(PROMPT)).thenReturn(List.of());
+        when(memory.recall("alice", PROMPT)).thenReturn(List.of());
         var service = new AgentService(
                 llmClient, toolProvider, registry(), objectMapper, FIVE_MINUTES, DEFAULT_MODEL, MAX_ITERATIONS,
                 defaultRegistry(), Optional.of(memory), Optional.empty(), Optional.empty(), Optional.empty());
@@ -533,11 +533,11 @@ class AgentServiceTest {
                 .thenReturn(responseWithContent("Hi!"));
 
         // When
-        AgentResponse result = service.chat(new AgentRequest(PROMPT, MODEL));
+        AgentResponse result = service.chat(new AgentRequest(PROMPT, MODEL), "alice");
 
         // Then: conversation starts directly with the user message, answer still stored
         assertThat(result.response()).isEqualTo("Hi!");
-        verify(memory).remember(PROMPT, "Hi!");
+        verify(memory).remember("alice", PROMPT, "Hi!");
     }
 
     @Test
