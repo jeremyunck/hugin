@@ -143,6 +143,9 @@ public class AgentService {
                 messages.add(ChatMessage.system(summary));
             }
         });
+        if (request.systemPrompt() != null && !request.systemPrompt().isBlank()) {
+            messages.add(ChatMessage.system(request.systemPrompt()));
+        }
         if (!toolDefinitions.isEmpty()) {
             messages.add(ChatMessage.system(Prompts.TOOL_USE));
         }
@@ -161,7 +164,8 @@ public class AgentService {
         boolean clientManagedContext = request.recentMessages() != null;
         if (!clientManagedContext) {
             // Replay the recent turns of this session (short-term memory) before the current prompt.
-            conversationMemory.ifPresent(cm -> messages.addAll(cm.history(request.sessionId())));
+            conversationMemory.ifPresent(cm -> messages.addAll(cm.history(
+                    sessionScope(owner, request.agentId(), request.sessionId()))));
         }
         messages.add(ChatMessage.user(request.prompt()));
 
@@ -210,7 +214,7 @@ public class AgentService {
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall, toolServerMap,
-                            request.sessionId(), owner, request.recentMessages());
+                            request.sessionId(), owner, request.agentId(), request.recentMessages());
                     listener.onToolResult(toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -233,9 +237,12 @@ public class AgentService {
                     answer = "The agent finished without producing a text answer.";
                 }
                 final String finalAnswer = answer;
-                memoryService.ifPresent(memory -> memory.remember(owner, request.prompt(), finalAnswer));
+                memoryService.ifPresent(memory -> memory.remember(memoryOwner(owner, request.agentId()),
+                        request.prompt(), finalAnswer));
                 if (!clientManagedContext) {
-                    conversationMemory.ifPresent(cm -> cm.record(request.sessionId(), request.prompt(), finalAnswer));
+                    conversationMemory.ifPresent(cm -> cm.record(
+                            sessionScope(owner, request.agentId(), request.sessionId()),
+                            request.prompt(), finalAnswer));
                 }
                 return new AgentResponse(answer, Collections.unmodifiableList(messages));
             }
@@ -355,10 +362,28 @@ public class AgentService {
         return second;
     }
 
+    private static String memoryOwner(String owner, String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return owner;
+        }
+        if (owner == null || owner.isBlank()) {
+            return agentId;
+        }
+        return owner + ":" + agentId;
+    }
+
+    private static String sessionScope(String owner, String agentId, String sessionId) {
+        String base = memoryOwner(owner, agentId);
+        if (sessionId == null || sessionId.isBlank()) {
+            return base;
+        }
+        return base + ":" + sessionId;
+    }
+
     private record RoutingSelection(String model, String route, String decisionModel) {}
 
     private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap,
-                                   String sessionId, String owner, List<String> channelMessages) {
+                                   String sessionId, String owner, String agentId, List<String> channelMessages) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
@@ -366,7 +391,7 @@ public class AgentService {
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
             ToolContext ctx = new ToolContext(
-                    workspaceRegistry.resolve(sessionId), sessionId, owner, channelMessages);
+                    workspaceRegistry.resolve(sessionId), sessionId, owner, agentId, channelMessages);
             try {
                 return localTool.execute(args, ctx);
             } catch (Exception e) {

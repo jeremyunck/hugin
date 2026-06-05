@@ -76,9 +76,7 @@ public class RecallMemoryTool implements LocalTool {
         }
         limit = Math.min(limit, MAX_LIMIT);
 
-        String owner = ctx != null && ctx.username() != null && !ctx.username().isBlank()
-                ? ctx.username()
-                : "global";
+        String owner = resolveOwner(ctx);
         List<MemoryStore.ScoredMemory> hits = memoryService.recall(owner, query, limit);
         if (hits.isEmpty()) {
             return "No relevant memories found for: " + query;
@@ -95,5 +93,23 @@ public class RecallMemoryTool implements LocalTool {
                     .append(hit.record().text());
         }
         return sb.toString();
+    }
+
+    private static String resolveOwner(ToolContext ctx) {
+        if (ctx == null) {
+            return "global";
+        }
+        String username = ctx.username();
+        String agentId = ctx.agentId();
+        if (username != null && !username.isBlank() && agentId != null && !agentId.isBlank()) {
+            return username + ":" + agentId;
+        }
+        if (username != null && !username.isBlank()) {
+            return username;
+        }
+        if (agentId != null && !agentId.isBlank()) {
+            return agentId;
+        }
+        return "global";
     }
 }

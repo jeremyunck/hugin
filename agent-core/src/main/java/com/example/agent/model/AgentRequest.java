@@ -31,32 +31,34 @@ public record AgentRequest(
         String decision,
         String complex,
         String simple,
+        String agentId,
+        String systemPrompt,
         String sessionId,
         List<String> recentMessages) {
 
     /** Stateless request with no session memory. */
     public AgentRequest(String prompt, String model) {
-        this(prompt, model, model, model, model, null, null);
+        this(prompt, model, model, model, model, null, null, null, null);
     }
 
     /** Session-scoped request that uses server-side short-term conversation memory. */
     public AgentRequest(String prompt, String model, String sessionId) {
-        this(prompt, model, model, model, model, sessionId, null);
+        this(prompt, model, model, model, model, null, null, sessionId, null);
     }
 
     /** Session-scoped request with client-managed recent message context. */
     public AgentRequest(String prompt, String model, String sessionId, List<String> recentMessages) {
-        this(prompt, model, model, model, model, sessionId, recentMessages);
+        this(prompt, model, model, model, model, null, null, sessionId, recentMessages);
     }
 
     /** Routing-aware request that uses a decision model to select between simple and complex. */
     public AgentRequest(String prompt, String decision, String complex, String simple) {
-        this(prompt, null, decision, complex, simple, null, null);
+        this(prompt, null, decision, complex, simple, null, null, null, null);
     }
 
     /** Routing-aware session request that uses a decision model to select between simple and complex. */
     public AgentRequest(String prompt, String decision, String complex, String simple,
                         String sessionId, List<String> recentMessages) {
-        this(prompt, null, decision, complex, simple, sessionId, recentMessages);
+        this(prompt, null, decision, complex, simple, null, null, sessionId, recentMessages);
     }
 }

@@ -6,6 +6,7 @@ import com.example.agent.DeveloperModeService;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
+import com.example.integration.agent.UserAgentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class AgentControllerTest {
     @Mock
     DeveloperModeService developerModeService;
 
+    @Mock
+    UserAgentService userAgentService;
+
     ObjectMapper objectMapper = new ObjectMapper();
     AgentController controller;
 
@@ -47,6 +51,7 @@ class AgentControllerTest {
                 objectMapper,
                 Executors.newCachedThreadPool(),
                 developerModeService,
+                userAgentService,
                 Duration.ofMinutes(5)
         );
     }
@@ -59,7 +64,7 @@ class AgentControllerTest {
     void chatEndpointReturnOkWithResponse() {
         var request = new AgentRequest("Hello", "llama3.2");
         var agentResponse = new AgentResponse("Hi there!", List.of());
-        when(agentService.chat(request, "global")).thenReturn(agentResponse);
+        when(agentService.chat(any(AgentRequest.class), eq("global"))).thenReturn(agentResponse);
 
         ResponseEntity<?> result = controller.chat(request);
 
@@ -71,11 +76,11 @@ class AgentControllerTest {
     void chatEndpointDelegatesToAgentService() {
         var request = new AgentRequest("What time is it?", "llama3.2");
         var agentResponse = new AgentResponse("It is noon.", List.of());
-        when(agentService.chat(request, "global")).thenReturn(agentResponse);
+        when(agentService.chat(any(AgentRequest.class), eq("global"))).thenReturn(agentResponse);
 
         controller.chat(request);
 
-        verify(agentService).chat(request, "global");
+        verify(agentService).chat(any(AgentRequest.class), eq("global"));
     }
 
     @Test
@@ -87,6 +92,8 @@ class AgentControllerTest {
                 "llama3.2",
                 "llama3.2",
                 "llama3.2",
+                null,
+                null,
                 "global:session-123",
                 null
         );
@@ -94,7 +101,7 @@ class AgentControllerTest {
                 ChatMessage.user("Previous message"),
                 ChatMessage.assistant("Previous answer")
         ));
-        when(agentService.chat(scopedRequest, "global")).thenReturn(agentResponse);
+        when(agentService.chat(any(AgentRequest.class), eq("global"))).thenReturn(agentResponse);
 
         ResponseEntity<?> result = controller.chat(request);
 
@@ -123,12 +130,12 @@ class AgentControllerTest {
         doAnswer(invocation -> {
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         controller.chatStream(request);
 
         assertThat(latch.await(2, TimeUnit.SECONDS)).isTrue();
-        verify(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        verify(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
     }
 
     @Test
@@ -143,7 +150,7 @@ class AgentControllerTest {
             listener.onContent("Hello world");
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), listenerCaptor.capture(), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), listenerCaptor.capture(), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -162,7 +169,7 @@ class AgentControllerTest {
             listener.onToolCall("get_weather", "{\"city\":\"Tokyo\"}");
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -180,7 +187,7 @@ class AgentControllerTest {
             listener.onToolResult("get_weather", "Sunny, 25°C");
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -197,7 +204,7 @@ class AgentControllerTest {
             // chatStream completes normally (no exception) -> should send "done" event
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -213,7 +220,7 @@ class AgentControllerTest {
         doAnswer(invocation -> {
             latch.countDown();
             throw new RuntimeException("LLM connection failed");
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -230,7 +237,7 @@ class AgentControllerTest {
             latch.countDown();
             // NullPointerException has null message
             throw new NullPointerException();
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 
@@ -281,7 +288,7 @@ class AgentControllerTest {
         var latch = new CountDownLatch(1);
 
         doAnswer(invocation -> { latch.countDown(); return null; })
-                .when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+                .when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         controller.chatStream(request);
 
@@ -296,7 +303,7 @@ class AgentControllerTest {
         var latch = new CountDownLatch(1);
 
         doAnswer(invocation -> { latch.countDown(); return null; })
-                .when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+                .when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         controller.chatStream(request);
 
@@ -317,7 +324,7 @@ class AgentControllerTest {
             listener.onContent("Based on the results...");
             latch.countDown();
             return null;
-        }).when(agentService).chatStream(eq(request), any(AgentStreamListener.class), eq("global"));
+        }).when(agentService).chatStream(any(AgentRequest.class), any(AgentStreamListener.class), anyString());
 
         SseEmitter emitter = controller.chatStream(request);
 

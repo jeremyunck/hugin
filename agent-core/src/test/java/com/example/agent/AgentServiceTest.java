@@ -545,7 +545,8 @@ class AgentServiceTest {
     void replaysSessionHistoryBeforePromptAndRecordsTurn() {
         // Given: short-term memory holding one prior exchange for the session
         ConversationMemoryService conversation = mock(ConversationMemoryService.class);
-        when(conversation.history(SESSION_ID)).thenReturn(List.of(
+        String scopedSessionId = "global:session-1";
+        when(conversation.history(scopedSessionId)).thenReturn(List.of(
                 ChatMessage.user("My name is Ada."),
                 ChatMessage.assistant("Nice to meet you, Ada.")));
         var service = new AgentService(
@@ -560,7 +561,7 @@ class AgentServiceTest {
 
         // Then: prior turns are replayed before the current prompt, and the new turn is recorded
         assertThat(result.response()).isEqualTo("Your name is Ada.");
-        verify(conversation).record(SESSION_ID, "What is my name?", "Your name is Ada.");
+        verify(conversation).record(scopedSessionId, "What is my name?", "Your name is Ada.");
 
         // The captured list is the loop's live message buffer; assert the leading messages, which
         // are the replayed history followed by the current prompt (the assistant reply is appended

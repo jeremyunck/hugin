@@ -15,30 +15,43 @@ import java.util.List;
  * <p>{@code username} identifies the authenticated owner of the request when one exists. Tool
  * implementations can use it to scope memory or other user-specific side effects.
  *
+ * <p>{@code agentId} identifies the selected user agent when one exists. Tools that need to
+ * scope memory or other side effects per agent should include it in their namespace.
+ *
  * <p>{@code channelMessages} is an optional, client-supplied snapshot of the recent messages in the
  * caller's channel (oldest first). It is populated for front-ends like Discord that manage their own
  * short-term context, letting the {@code read_discord_channel} tool surface more history on demand.
  * It may be {@code null} when no such context was supplied.
  */
-public record ToolContext(Workspace workspace, String sessionId, String username, List<String> channelMessages) {
+public record ToolContext(
+        Workspace workspace,
+        String sessionId,
+        String username,
+        String agentId,
+        List<String> channelMessages) {
 
     /** Context with no session origin (stateless request). */
     public ToolContext(Workspace workspace) {
-        this(workspace, null, null, null);
+        this(workspace, null, null, null, null);
     }
 
     /** Context with a session origin but no client-supplied channel history. */
     public ToolContext(Workspace workspace, String sessionId) {
-        this(workspace, sessionId, null, null);
+        this(workspace, sessionId, null, null, null);
     }
 
     /** Context with a session origin and authenticated owner but no channel history. */
     public ToolContext(Workspace workspace, String sessionId, String username) {
-        this(workspace, sessionId, username, null);
+        this(workspace, sessionId, username, null, null);
     }
 
     /** Backwards-compatible context with a session origin and channel history but no username. */
     public ToolContext(Workspace workspace, String sessionId, List<String> channelMessages) {
-        this(workspace, sessionId, null, channelMessages);
+        this(workspace, sessionId, null, null, channelMessages);
+    }
+
+    /** Context with authenticated owner and selected agent but no channel history. */
+    public ToolContext(Workspace workspace, String sessionId, String username, String agentId) {
+        this(workspace, sessionId, username, agentId, null);
     }
 }

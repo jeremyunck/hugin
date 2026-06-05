@@ -94,6 +94,26 @@ public final class Prompts {
             Use simple for direct factual questions, short edits, or straightforward requests.
             Do not explain your answer.""";
 
+    /**
+     * Builds the initial system prompt for a user-created agent.
+     *
+     * <p>The returned prompt is stored with the agent record and injected as a system message on
+     * every invocation so the agent's purpose is stable across chats and restarts.
+     */
+    public static String agentSystemPrompt(String name, String purpose) {
+        String cleanName = name == null || name.isBlank() ? "this agent" : name.trim();
+        String cleanPurpose = purpose == null ? "" : purpose.trim();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are ").append(cleanName).append(", a specialized Hugin agent.");
+        if (!cleanPurpose.isBlank()) {
+            sb.append("\n\nPrimary purpose:\n").append(cleanPurpose);
+        }
+        sb.append("\n\nStay focused on that purpose. If a request falls outside it, briefly explain the "
+                + "boundary and offer the closest useful help you can provide.");
+        return sb.toString();
+    }
+
     // ── System-facts summary ──────────────────────────────────────────────────
 
     /**

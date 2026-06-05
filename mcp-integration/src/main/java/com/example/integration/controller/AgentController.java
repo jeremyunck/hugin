@@ -5,6 +5,8 @@ import com.example.agent.AgentStreamListener;
 import com.example.agent.DeveloperModeService;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
+import com.example.integration.agent.UserAgent;
+import com.example.integration.agent.UserAgentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.server.ResponseStatusException;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -53,16 +56,19 @@ public class AgentController {
     private final ExecutorService streamExecutor;
     private final long streamTimeoutMillis;
     private final DeveloperModeService developerModeService;
+    private final UserAgentService userAgentService;
 
     public AgentController(AgentService agentService,
                            ObjectMapper objectMapper,
                            ExecutorService agentStreamExecutor,
                            DeveloperModeService developerModeService,
+                           UserAgentService userAgentService,
                            @Value("${agent.request-timeout:5m}") Duration requestTimeout) {
         this.agentService = agentService;
         this.objectMapper = objectMapper;
         this.streamExecutor = agentStreamExecutor;
         this.developerModeService = developerModeService;
+        this.userAgentService = userAgentService;
         // Allow a margin beyond the agent's own deadline before the SSE connection is torn down.
         this.streamTimeoutMillis = requestTimeout.plusSeconds(60).toMillis();
     }
@@ -79,7 +85,8 @@ public class AgentController {
     @PostMapping("/chat")
     public ResponseEntity<?> chat(@RequestBody AgentRequest request, @AuthenticationPrincipal Jwt jwt) {
         String owner = owner(jwt);
-        AgentResponse response = agentService.chat(scopedRequest(request, owner), owner);
+        AgentRequest scoped = scopedRequest(request, owner);
+        AgentResponse response = agentService.chat(scoped, memoryOwner(owner, scoped.agentId()));
         return ResponseEntity.ok(response);
     }
 
@@ -123,7 +130,7 @@ public class AgentController {
                     public void onToolResult(String toolName, String result) {
                         send(emitter, "tool_result", Map.of("name", toolName, "result", result));
                     }
-                }, owner);
+                }, memoryOwner(owner, scoped.agentId()));
                 if (streamedContent.isEmpty()
                         && response != null
                         && response.response() != null
@@ -150,22 +157,46 @@ public class AgentController {
         return jwt.getSubject();
     }
 
-    private static AgentRequest scopedRequest(AgentRequest request, String owner) {
+    private AgentRequest scopedRequest(AgentRequest request, String owner) {
         if (request == null) {
             return null;
         }
-        String sessionId = request.sessionId();
-        if (sessionId == null || sessionId.isBlank()) {
-            return request;
+        String systemPrompt = request.systemPrompt();
+        if (request.agentId() != null && !request.agentId().isBlank()) {
+            systemPrompt = userAgentService.find(owner, request.agentId())
+                    .map(UserAgent::systemPrompt)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Agent not found"));
         }
+        String sessionId = request.sessionId();
+        String scopedSessionId = scopeSession(owner, request.agentId(), sessionId);
         return new AgentRequest(
                 request.prompt(),
                 request.model(),
                 request.decision(),
                 request.complex(),
                 request.simple(),
-                owner + ":" + sessionId,
+                request.agentId(),
+                systemPrompt,
+                scopedSessionId,
                 request.recentMessages());
+    }
+
+    private static String scopeSession(String owner, String agentId, String sessionId) {
+        String base = memoryOwner(owner, agentId);
+        if (sessionId == null || sessionId.isBlank()) {
+            return base;
+        }
+        return base + ":" + sessionId;
+    }
+
+    private static String memoryOwner(String owner, String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return owner;
+        }
+        if (owner == null || owner.isBlank()) {
+            return agentId;
+        }
+        return owner + ":" + agentId;
     }
 
     private void send(SseEmitter emitter, String event, Map<String, ?> data) {
@@ -181,6 +212,13 @@ public class AgentController {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleError(Exception ex) {
+        if (ex instanceof ResponseStatusException statusException) {
+            String message = statusException.getReason() != null
+                    ? statusException.getReason()
+                    : statusException.getMessage();
+            return ResponseEntity.status(statusException.getStatusCode())
+                    .body(Map.of("error", message != null ? message : statusException.getClass().getSimpleName()));
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
     }
