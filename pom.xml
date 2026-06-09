@@ -20,8 +20,6 @@
 
     <modules>
         <module>agent-core</module>
-        <module>mcp-integration</module>
-        <module>agent-discord</module>
     </modules>
 
     <properties>

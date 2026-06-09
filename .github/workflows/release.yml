@@ -41,8 +41,7 @@ jobs:
           bundle_dir="${dist_dir}/bundle"
           mkdir -p "$bundle_dir"
 
-          cp mcp-integration/target/mcp-integration-*.jar "$bundle_dir/mcp-integration.jar"
-          cp agent-discord/target/agent-discord-*.jar "$bundle_dir/agent-discord.jar" 2>/dev/null || true
+          cp agent-core/target/agent-core-*.jar "$bundle_dir/agent-core.jar"
           cp openrouter-search-mcp.py "$bundle_dir/openrouter-search-mcp.py"
 
           tar -C "$bundle_dir" -czf "${dist_dir}/hugin-runtime.tar.gz" .
