@@ -52,7 +52,7 @@ class GoogleWorkspaceControllerTest {
 
     @Test
     void reconnectReturnsLatestStatus() throws Exception {
-        when(google.beginReconnect("http://localhost:5173/")).thenReturn(new GoogleReconnectResponse(
+        when(google.beginReconnect(null)).thenReturn(new GoogleReconnectResponse(
                 new GoogleWorkspaceStatus(
                 true,
                 true,
@@ -61,7 +61,8 @@ class GoogleWorkspaceControllerTest {
                 "Google OAuth is connected."),
                 "https://accounts.google.com/o/oauth2/v2/auth?test"));
 
-        mockMvc.perform(post("/api/google/reconnect"))
+        mockMvc.perform(post("/api/google/reconnect")
+                        .contentType("application/json"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.active").value(true))
                 .andExpect(jsonPath("$.status.configured").value(true))
