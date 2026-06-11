@@ -58,10 +58,12 @@ fi
 info "Fast-forwarding to ${remote_head:0:7}..."
 git pull --ff-only origin main
 
-info "Building release artifacts..."
+info "Rebuilding frontend and backend artifacts..."
+# The backend Maven build runs the frontend build first, then packages the
+# compiled web assets into the jar served by the detached launchd process.
 MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" mvn -q -DskipTests package
 
-info "Restarting launchd service ${SERVICE_LABEL}..."
+info "Restarting launchd service ${SERVICE_LABEL} in detached mode..."
 launchctl kickstart -k "gui/$(id -u)/${SERVICE_LABEL}"
 
 info "Update complete."
