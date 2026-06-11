@@ -1,6 +1,7 @@
 # Agent Workflow
 
 Codex agents working in this repository should always create a pull request when they complete a feature.
+Any UI change must include at least one current screenshot of the changed state in the pull request.
 
 Agents working in this repository should follow this workflow:
 
