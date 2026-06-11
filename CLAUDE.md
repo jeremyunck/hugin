@@ -4,6 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 When you finish a coding task in this repo, default to publishing the change as a pull request unless the user explicitly says not to. Keep the PR focused on the requested scope.
 
+## Workflow
+- After any UI change, include screenshots in the handoff so the visual result is documented.
+- Start new work from a clean `main` branch. If the worktree already has uncommitted changes, stash them before beginning.
+- Always create a PR for your work unless the user explicitly says not to.
+
 ## Build & Test
 
 Maven multi-module project (Java 21, Spring Boot 3.5.x). Run from the repo root.

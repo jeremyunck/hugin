@@ -89,14 +89,13 @@ export function Layout({
 
       <div className="guild-main">
         <header className="mobile-topbar mobile-only">
-          <Button variant="icon" onClick={onOpenDrawer} aria-label="Open menu">
-            <Menu size={18} />
-          </Button>
           <div className="topbar-title">
             <div className="eyebrow">Guild</div>
             <div className="topbar-name">Hugin</div>
           </div>
-          <div className="topbar-spacer" />
+          <Button variant="icon" onClick={onOpenDrawer} aria-label="Open menu" className="topbar-menu-button">
+            <Menu size={18} />
+          </Button>
         </header>
         {children}
       </div>

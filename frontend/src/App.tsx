@@ -14,29 +14,6 @@ import { loadGuildState, saveGuildState, getThread, createBlankThread, addThread
 import type { GuildState, Route } from "./lib/types";
 import { parseHashRoute, toHash } from "./lib/routing";
 
-const promptLinks = [
-  {
-    label: "Check server status",
-    subtitle: "View production health",
-    route: { screen: "check-server-status" } as Route
-  },
-  {
-    label: "Summarize emails",
-    subtitle: "Turn unread mail into a digest",
-    route: { screen: "summarize-emails" } as Route
-  },
-  {
-    label: "Research on AI agents",
-    subtitle: "Open the research chat",
-    route: { screen: "research-ai-agents" } as Route
-  },
-  {
-    label: "New chat",
-    subtitle: "Start from scratch",
-    route: { screen: "new-chat" } as Route
-  }
-];
-
 export default function App() {
   const [state, setState] = useState<GuildState>(() => loadGuildState());
   const [routeState, setRouteState] = useState(() => parseHashRoute(window.location.hash));
@@ -166,7 +143,6 @@ export default function App() {
         title="Hugin"
         subtitle="How can I help?"
         thread={null}
-        promptLinks={promptLinks}
         isHome
         draft={homeDraft}
         disabled={busyThreadId !== null}

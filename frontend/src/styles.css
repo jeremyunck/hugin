@@ -267,22 +267,27 @@ a {
 }
 
 .mobile-topbar {
+  position: relative;
   border-radius: 22px;
   padding: 12px 14px;
   display: none;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 12px;
+  padding-right: 66px;
 }
 
 .topbar-title {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
-.topbar-spacer {
-  width: 36px;
+.topbar-menu-button {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
 }
 
 .screen-frame {
@@ -363,23 +368,6 @@ a {
   color: var(--muted);
 }
 
-.prompt-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.prompt-card {
-  padding: 16px;
-  min-height: 92px;
-}
-
-.prompt-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.prompt-subtitle,
 .message-time,
 .history-preview,
 .integration-subtitle,
@@ -920,7 +908,6 @@ a {
 }
 
 @media (max-width: 820px) {
-  .prompt-grid,
   .status-grid {
     grid-template-columns: 1fr;
   }
@@ -963,10 +950,6 @@ a {
   .modal-card,
   .mobile-topbar {
     border-radius: 22px;
-  }
-
-  .prompt-grid {
-    grid-template-columns: 1fr;
   }
 
   .modal-backdrop {
