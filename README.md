@@ -65,6 +65,13 @@ mvn -q -DskipTests package
 ./scripts/install-launchd-jobs.sh
 ```
 
+The launchd updater lives at [`scripts/hugin-launchd-update.sh`](scripts/hugin-launchd-update.sh) and:
+
+- fetches `origin/main`
+- fast-forwards the checkout when there are new commits
+- rebuilds the backend jar, including the frontend bundle
+- restarts the service with `launchctl kickstart -k`
+
 The installer writes:
 
 - `~/Library/LaunchAgents/com.jnku.hugin.repo-server.plist`
