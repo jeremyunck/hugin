@@ -1,48 +1,45 @@
-# HuginApp
+# Guild Frontend
 
-HuginApp is the web console for the Hugin backend. It connects to the local agent server,
-streams chat responses, and surfaces the agent's built-in tools.
+This is the replacement Guild web UI for Hugin. It is a React + Vite app with hash-based routes so it can run locally without any special server routing.
 
-## Requirements
-
-- Node.js 18 or newer
-- The Hugin backend running on `http://localhost:8080`
-
-## Run the frontend
+## Run
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
 
-Then open:
+Open:
 
-```bash
+```text
 http://127.0.0.1:5173
 ```
 
-The app defaults to `http://localhost:8080` for API calls, so it should work with the local Hugin backend out of the box.
-
-In Settings, you can configure a routing trio for the agent:
-
-- `Decision model` classifies each prompt as simple or complex
-- `Complex model` handles heavier requests
-- `Simple model` handles lighter requests
-- Leave those fields blank to fall back to the legacy single-model path
-
-## Build for production
+## Build
 
 ```bash
 npm run build
 ```
 
-## What the app uses
+## Routes
 
-- `POST /api/agent/stream` for streamed chat responses
-- `GET /api/agent/tools` for the tool catalog
-- `GET /api/agent/agents` for agent management
+- `#/chat` - Chat Home
+- `#/chat/new` - New Chat
+- `#/chat/check-server-status` - Check Server Status chat
+- `#/chat/summarize-emails` - Summarize Emails chat
+- `#/chat/research-ai-agents` - Research on AI Agents chat
+- `#/history` - History list
+- `#/history/:threadId` - Chat from history
+- `#/settings` - Settings overview
+- `#/settings/integrations` - Integrations list
+- `#/settings/integrations/google-workspace` - Google Workspace detail
+- `#/settings/appearance` - Appearance settings
+- `#/settings/data-privacy` - Data & Privacy
 
 ## Notes
 
-- The Agents tab is currently a no-op mock.
-- If your backend runs on a different host or port, update the Base URL in Settings.
+- The chat/history/integration data is mocked in `src/services/guildService.ts` and persisted to `localStorage`.
+- Clear chat history is a modal state from Settings.
+- The mobile menu uses a drawer; desktop uses a left sidebar.
+- The raven silhouette mark is used anywhere the agent/logo appears.
