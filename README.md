@@ -56,6 +56,24 @@ mvn clean install
 mvn -pl backend spring-boot:run
 ```
 
+## macOS auto-redeploy from `main`
+
+To run this checkout as a `launchd` service and auto-update it every 30 minutes:
+
+```bash
+mvn -q -DskipTests package
+./scripts/install-launchd-jobs.sh
+```
+
+The installer writes:
+
+- `~/Library/LaunchAgents/com.jnku.hugin.repo-server.plist`
+- `~/Library/LaunchAgents/com.jnku.hugin.repo-autoupdate.plist`
+- `~/.config/hugin-dev/env`
+
+The updater only deploys when `origin/main` has moved. It skips if the checkout is not on
+`main` or if there are tracked local changes that would make `git pull --ff-only` unsafe.
+
 ## What Hugin can do
 
 - Chat with any OpenAI-compatible model
@@ -97,4 +115,3 @@ npm run dev
 ```
 
 The frontend defaults to `http://localhost:8080` for API calls.
-

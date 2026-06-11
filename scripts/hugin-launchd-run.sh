@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${HUGIN_DEV_ENV_FILE:-$HOME/.config/hugin-dev/env}"
+LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
+
+mkdir -p "$LOG_DIR"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export AGENT_HOME="${AGENT_HOME:-$REPO_DIR}"
+
+if [[ -x /opt/homebrew/opt/openjdk@21/bin/java ]]; then
+  export JAVA_HOME="/opt/homebrew/opt/openjdk@21"
+elif [[ -x /usr/local/opt/openjdk@21/bin/java ]]; then
+  export JAVA_HOME="/usr/local/opt/openjdk@21"
+else
+  printf '[hugin-run] Java 21 was not found in the expected Homebrew locations.\n' >&2
+  exit 1
+fi
+export PATH="$JAVA_HOME/bin:$PATH"
+
+cd "$REPO_DIR"
+
+jar_path="$(find "$REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
+if [[ -z "$jar_path" ]]; then
+  printf '[hugin-run] Built backend jar not found under %s/backend/target\n' "$REPO_DIR" >&2
+  exit 1
+fi
+
+exec "$JAVA_HOME/bin/java" -jar "$jar_path"

@@ -29,6 +29,9 @@ public class DefaultUserBootstrap implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        if ((password == null || password.isBlank()) && userAccountRepository.findByUsername(username).isPresent()) {
+            return;
+        }
         userAccountRepository.saveOrUpdate(
                 new UserAccount(username, passwordEncoder.encode(resolvePassword()), true, List.of("ROLE_USER")));
     }
