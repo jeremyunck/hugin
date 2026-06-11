@@ -10,7 +10,7 @@ const path = require('path');
 const { version } = require('../../package.json');
 
 const AGENT_HOME  = process.env.AGENT_HOME ?? path.join(os.homedir(), '.hugin');
-const SERVER_JAR  = path.join(AGENT_HOME, 'bin', 'mcp-integration.jar');
+const SERVER_JAR  = path.join(AGENT_HOME, 'bin', 'hugin-server.jar');
 const CONFIG_YML  = path.join(AGENT_HOME, 'config', 'application.yml');
 const LOG_FILE    = path.join(AGENT_HOME, 'logs', 'hugin.log');
 

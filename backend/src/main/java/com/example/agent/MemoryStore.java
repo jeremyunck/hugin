@@ -6,8 +6,8 @@ import java.util.List;
 
 /**
  * Storage backend for long-term memory. Kept in {@code agent-core} as an interface so the agent
- * logic stays decoupled from the concrete store (mirrors the {@link McpToolProvider} boundary); the
- * Redis implementation lives in {@code mcp-integration}.
+ * logic stays decoupled from the concrete store; the Redis implementation lives in the backend
+ * module.
  */
 public interface MemoryStore {
 

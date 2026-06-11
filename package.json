@@ -1,24 +1,20 @@
 {
   "name": "hugin-agent",
   "version": "0.1.18",
-  "description": "Hugin — AI personal assistant powered by MCP and any OpenAI-compatible LLM",
+  "description": "Hugin — AI personal assistant powered by any OpenAI-compatible LLM",
   "bin": {
     "hugin": "./hugin/bin/hugin.js"
   },
   "files": [
     "hugin/bin/",
     "install.sh",
-    "mcp-servers.example.json",
     "pom.xml",
-    "agent-core/src",
-    "agent-core/pom.xml",
-    "agent-discord/src",
-    "agent-discord/pom.xml",
-    "openrouter-search-mcp.py",
-    "mcp-integration/src/main/java",
-    "mcp-integration/src/main/resources",
-    "mcp-integration/src/test",
-    "mcp-integration/pom.xml"
+    "backend/src/main/java",
+    "backend/src/main/resources",
+    "backend/src/test",
+    "backend/pom.xml",
+    "frontend/src",
+    "frontend/package.json"
   ],
   "engines": {
     "node": ">=18"
@@ -34,7 +30,6 @@
   "keywords": [
     "ai",
     "agent",
-    "mcp",
     "llm",
     "assistant",
     "openai",

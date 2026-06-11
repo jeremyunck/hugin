@@ -3,38 +3,19 @@ server:
 
 spring:
   application:
-    name: mcp-integration
+    name: hugin
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hugin}
     username: ${SPRING_DATASOURCE_USERNAME:hugin}
   sql:
     init:
       mode: always
-  ai:
-    mcp:
-      client:
-        # Disable Spring AI's property-driven auto-configuration.
-        # All server lifecycle is managed by McpServerRegistryService.
-        enabled: false
   data:
     # Redis backing the long-term memory store. Only contacted when memory.enabled=true
     # (the connection is established lazily on first use).
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-
-mcp:
-  # Path to the shared (git-tracked) MCP servers config file (Claude Desktop format).
-  # Supports absolute paths and ~/... home-relative paths.
-  config-file: ../mcp-servers.json
-  # Path to the personal (gitignored) MCP servers config file.
-  # Entries here override same-named entries in config-file.
-  user-config-file: ../mcp-servers-user.json
-  # Max wait for an MCP server's initialization handshake before the connection is
-  # considered failed. Generous by default to tolerate slow first-run servers (e.g. uvx
-  # downloading a package); lower it if you'd rather fail fast on unreachable servers.
-  init-timeout: 120s
-
 
 llm:
   # Active LLM provider — must match a key under llm.providers below.

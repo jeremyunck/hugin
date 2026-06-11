@@ -8,7 +8,7 @@ import java.nio.file.Path;
 /**
  * SPI for cloning a GitHub repository and preparing a working branch for a cloud agent.
  *
- * <p>Implementations (e.g. git-CLI in {@code mcp-integration}) are discovered as Spring beans
+ * <p>Implementations (e.g. a git-CLI bridge in the backend module) are discovered as Spring beans
  * and wired into {@link CloudAgentService}. When no implementation is present, cloud-agent
  * creation is rejected with a clear error.
  */

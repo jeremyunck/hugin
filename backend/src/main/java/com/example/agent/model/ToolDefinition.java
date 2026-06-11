@@ -18,7 +18,4 @@ public record ToolDefinition(String type, FunctionDefinition function) {
         return new ToolDefinition("function", new FunctionDefinition(name, description, parameters));
     }
 
-    public static ToolDefinition from(AvailableTool tool) {
-        return from(tool.name(), tool.description(), tool.inputSchema());
-    }
 }

@@ -1,6 +1,7 @@
 # HuginApp
 
-HuginApp is the web console for the Hugin backend. It connects to the local agent server, streams chat responses, and manages MCP servers.
+HuginApp is the web console for the Hugin backend. It connects to the local agent server,
+streams chat responses, and surfaces the agent's built-in tools.
 
 ## Requirements
 
@@ -39,7 +40,7 @@ npm run build
 
 - `POST /api/agent/stream` for streamed chat responses
 - `GET /api/agent/tools` for the tool catalog
-- `GET /api/servers` and related server-management endpoints
+- `GET /api/agent/agents` for agent management
 
 ## Notes
 

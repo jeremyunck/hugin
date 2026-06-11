@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — single-script installer for Hugin (MCP Agent)
+# install.sh — single-script installer for Hugin
 #
 # Usage:
 #   ./install.sh             interactive install / reconfigure
@@ -18,7 +18,6 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_USER="$(id -un)"
 ENV_FILE="$HUGIN_HOME/hugin.env"
 CONFIG_YML="$HUGIN_HOME/config/application.yml"
-MCP_JSON="$HUGIN_HOME/config/mcp-servers.json"
 AUTO_UPDATE_SCRIPT="$HUGIN_HOME/bin/hugin-auto-update.sh"
 AUTO_UPDATE_INTERVAL_SECS="${HUGIN_AUTO_UPDATE_INTERVAL_SECS:-300}"
 
@@ -159,9 +158,6 @@ install_release_bundle() {
   cp "$bundle_dir"/hugin-server.jar "$HUGIN_HOME/bin/hugin-server.jar"
   if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
     cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
-  fi
-  if [[ -f "$bundle_dir/openrouter-search-mcp.py" ]]; then
-    cp "$bundle_dir/openrouter-search-mcp.py" "$HUGIN_HOME/bin/openrouter-search-mcp.py"
   fi
 }
 
@@ -449,7 +445,7 @@ DISCORD_SERVICE
     sudo_retry --reason "write systemd service file to /etc/systemd/system/" tee "$SERVICE_FILE" > /dev/null <<SERVICE
 # Hugin agent service — managed by install.sh
 [Unit]
-Description=Hugin MCP Agent Server
+Description=Hugin Agent Server
 After=network-online.target
 Wants=network-online.target
 
@@ -1075,12 +1071,6 @@ success "Wrote $ENV_FILE (chmod 600)"
 # ── 5. write config/application.yml ──────────────────────────────────────────
 cat > "$CONFIG_YML" <<EOF
 # Per-installation overrides — merged on top of the bundled application.yml.
-mcp:
-  config-file: ${HUGIN_HOME}/config/mcp-servers.json
-
-search:
-  openrouter-script: ${HUGIN_HOME}/bin/openrouter-search-mcp.py
-
 llm:
   model: \${LLM_MODEL:${LLM_MODEL}}
 
@@ -1102,19 +1092,6 @@ logging:
 # are sourced from hugin.env and picked up by application.yml property placeholders.
 EOF
 info "Wrote $CONFIG_YML"
-
-# Seed mcp-servers.json from example if not present (never overwrite an existing one)
-if [[ ! -f "$MCP_JSON" ]]; then
-  if [[ -f "$REPO_DIR/mcp-servers.example.json" ]]; then
-    cp "$REPO_DIR/mcp-servers.example.json" "$MCP_JSON"
-    info "Seeded $MCP_JSON from mcp-servers.example.json"
-  else
-    printf '{"mcpServers":{}}\n' > "$MCP_JSON"
-    info "Created empty $MCP_JSON"
-  fi
-else
-  info "$MCP_JSON already exists — not overwritten."
-fi
 
 # ── 6. build fat jars ────────────────────────────────────────────────────────
 if [[ "$SKIP_BUILD" == "true" ]]; then
@@ -1383,9 +1360,6 @@ install_release_bundle() {
   if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
     cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
   fi
-  if [[ -f "$bundle_dir/openrouter-search-mcp.py" ]]; then
-    cp "$bundle_dir/openrouter-search-mcp.py" "$HUGIN_HOME/bin/openrouter-search-mcp.py"
-  fi
 }
 
 cmd_config() {
@@ -1545,24 +1519,11 @@ cmd_doctor() {
     _dr_fail "config/application.yml not found — re-run install.sh"
   fi
 
-  if [[ -f "$HUGIN_HOME/config/mcp-servers.json" ]]; then
-    _dr_pass "config/mcp-servers.json"
-  else
-    printf '{"mcpServers":{}}\n' > "$HUGIN_HOME/config/mcp-servers.json"
-    _dr_fixed "Created empty mcp-servers.json"
-  fi
-
   if [[ -f "$HUGIN_HOME/bin/hugin-server.jar" ]]; then
     local _sz; _sz=$(du -sh "$HUGIN_HOME/bin/hugin-server.jar" | cut -f1)
     _dr_pass "hugin-server.jar ($_sz)"
   else
     _dr_fail "hugin-server.jar not found — rebuild: mvn clean package -DskipTests && re-run install.sh"
-  fi
-
-  if [[ -f "$HUGIN_HOME/bin/openrouter-search-mcp.py" ]]; then
-    _dr_pass "openrouter-search-mcp.py"
-  else
-    _dr_fail "openrouter-search-mcp.py missing — re-run install.sh to restore it"
   fi
 
   echo
@@ -1748,7 +1709,6 @@ cmd_update() {
     install_release_bundle "$release_dir"
   else
     cp "$REPO_DIR"/backend/target/hugin-backend-*.jar  "$HUGIN_HOME/bin/hugin-server.jar"
-    cp "$REPO_DIR/openrouter-search-mcp.py"                       "$HUGIN_HOME/bin/openrouter-search-mcp.py"
   fi
 
   local new_version

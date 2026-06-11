@@ -84,7 +84,7 @@ public class CloudAgentService {
         if (provisioner.isEmpty()) {
             throw new IllegalStateException(
                     "No RepositoryProvisioner available. The git-CLI implementation requires "
-                            + "the mcp-integration module.");
+                            + "the backend module.");
         }
         if (!concurrencyGate.tryAcquire()) {
             throw new IllegalStateException(

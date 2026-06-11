@@ -4,7 +4,7 @@ package com.example.agent.scheduler;
  * SPI for delivering the result of a scheduled prompt back to whoever requested it.
  *
  * <p>Kept transport-agnostic so {@code agent-core} never depends on a delivery channel. The runnable
- * server ({@code mcp-integration}) provides the concrete implementation — an outbox that fans the
+ * backend server provides the concrete implementation — an outbox that fans the
  * result out over SSE to subscribed clients (e.g. the Discord bot, which posts it to the originating
  * channel or DM).
  */

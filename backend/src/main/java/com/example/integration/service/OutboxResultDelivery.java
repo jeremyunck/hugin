@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Discord bot, which posts each result to the originating channel/DM identified by {@code target}.
  *
  * <p>This is the one place that bridges transport-agnostic {@code agent-core} scheduling to an
- * actual delivery channel, mirroring how {@code McpToolProviderImpl} bridges the MCP SDK.
+ * actual delivery channel, mirroring how the agent bridges external tool providers.
  */
 @Component
 public class OutboxResultDelivery implements ScheduledResultDelivery {

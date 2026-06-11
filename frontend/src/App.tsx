@@ -16,7 +16,6 @@ import {
   LogOut,
   Plus,
   RefreshCw,
-  Server,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -27,7 +26,7 @@ import {
   X
 } from "lucide-react";
 
-type TabId = "chat" | "agents" | "servers" | "settings";
+type TabId = "chat" | "agents" | "settings";
 type Role = "user" | "assistant" | "system";
 type AuthState = "loading" | "signed_out" | "signed_in";
 
@@ -114,14 +113,6 @@ type UserAgent = {
   updatedAt: string;
 };
 
-type ServerDefinition = {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-  headers?: Record<string, string>;
-};
-
 function buildUrl(baseUrl: string, path: string) {
   const base = baseUrl.replace(/\/+$/, "");
   return `${base}${path}`;
@@ -136,14 +127,6 @@ async function readErrorMessage(response: Response) {
   const text = await response.text();
   return text || `${response.status} ${response.statusText}`;
 }
-
-type ServerInfo = {
-  name: string;
-  definition: ServerDefinition;
-  connected: boolean;
-  error?: string | null;
-  tools?: { name: string; description?: string | null }[];
-};
 
 const STORAGE_KEYS = {
   settings: "hugin-web-settings",
@@ -162,7 +145,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 const QUICK_PROMPTS = [
   "What time is it in Tokyo right now?",
   "Summarize the tools Hugin has available.",
-  "Show me which MCP servers are disconnected.",
+  "What local tools can Hugin use?",
   "What can this app do?"
 ];
 
@@ -172,8 +155,8 @@ const TOOL_ICONS: Record<string, typeof Wrench> = {
   google_sheets_read: Database,
   google_sheets_append: Database,
   google_docs_read: Database,
-  read_file: Server,
-  edit_file: Server,
+  read_file: Wrench,
+  edit_file: Wrench,
   run_command: Terminal
 };
 
@@ -305,7 +288,7 @@ function defaultSessions(): ChatSession[] {
           id: uid("msg"),
           role: "assistant",
           content:
-            "Online and connected. I can stream chat responses, inspect MCP servers, and manage live settings."
+            "Online and connected. I can stream chat responses, inspect local tools, and manage live settings."
         }
       ]
     }
@@ -363,24 +346,11 @@ function App() {
   const [agentDraftPurpose, setAgentDraftPurpose] = useState("");
   const [agentDraftModel, setAgentDraftModel] = useState("");
   const [agentActionBusy, setAgentActionBusy] = useState(false);
-  const [servers, setServers] = useState<ServerInfo[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
   const [health, setHealth] = useState<"idle" | "checking" | "healthy" | "offline" | "error">(
     "idle"
   );
   const [healthMessage, setHealthMessage] = useState<string>("Ready");
-  const [selectedServer, setSelectedServer] = useState<ServerInfo | null>(null);
-  const [serverEditorOpen, setServerEditorOpen] = useState(false);
-  const [serverEditorMode, setServerEditorMode] = useState<"create" | "edit">("create");
-  const [serverDraftName, setServerDraftName] = useState("");
-  const [serverDraft, setServerDraft] = useState<ServerDefinition>({
-    command: "",
-    args: [],
-    env: {},
-    url: "",
-    headers: {}
-  });
-  const [serverActionBusy, setServerActionBusy] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings));
@@ -475,20 +445,12 @@ function App() {
   const refreshMetadata = useCallback(async (authToken = authProfile?.token) => {
     setHealth("checking");
     try {
-      const [toolsResponse, serversResponse] = await Promise.all([
-        requestJson<ToolSummary[]>(`/api/agent/tools`, {
-          auth: authToken ?? false
-        }),
-        requestJson<ServerInfo[]>(`/api/servers`, {
-          auth: authToken ?? false
-        })
-      ]);
+      const toolsResponse = await requestJson<ToolSummary[]>(`/api/agent/tools`, {
+        auth: authToken ?? false
+      });
       setTools(toolsResponse);
-      setServers(serversResponse);
       setHealth("healthy");
-      setHealthMessage(
-        `${toolsResponse.length} tools ready · ${serversResponse.filter((server) => server.connected).length}/${serversResponse.length} servers connected`
-      );
+      setHealthMessage(`${toolsResponse.length} tools ready`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to reach backend";
       setHealthMessage(message);
@@ -784,18 +746,6 @@ function App() {
     await sendPrompt(value);
   }
 
-  async function refreshServers() {
-    try {
-      const data = await fetchJson<ServerInfo[]>("/api/servers");
-      setServers(data);
-      setHealthMessage(
-        `${data.filter((server) => server.connected).length}/${data.length} servers connected`
-      );
-    } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : "Failed to refresh servers");
-    }
-  }
-
   async function refreshTools() {
     try {
       const data = await fetchJson<ToolSummary[]>("/api/agent/tools");
@@ -874,104 +824,7 @@ function App() {
     }
   }
 
-  async function reconnectServer(name: string) {
-    setServerActionBusy(true);
-    try {
-      const server = await fetchJson<ServerInfo>(`/api/servers/${encodeURIComponent(name)}/reconnect`, {
-        method: "POST"
-      });
-      setServers((current) => current.map((item) => (item.name === name ? server : item)));
-      setSelectedServer(server);
-    } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : "Reconnect failed");
-    } finally {
-      setServerActionBusy(false);
-    }
-  }
-
-  async function saveServer() {
-    if (!serverDraftName.trim()) return;
-
-    setServerActionBusy(true);
-    try {
-      const payload: ServerDefinition = {
-        command: serverDraft.command?.trim() || undefined,
-        args: serverDraft.args?.filter(Boolean),
-        env: normalizeObject(serverDraft.env),
-        url: serverDraft.url?.trim() || undefined,
-        headers: normalizeObject(serverDraft.headers)
-      };
-      const server = await fetchJson<ServerInfo>(`/api/servers/${encodeURIComponent(serverDraftName.trim())}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      setServers((current) => {
-        const existing = current.find((item) => item.name === server.name);
-        if (!existing) return [server, ...current];
-        return current.map((item) => (item.name === server.name ? server : item));
-      });
-      setSelectedServer(server);
-      setServerEditorOpen(false);
-    } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : "Could not save server");
-    } finally {
-      setServerActionBusy(false);
-    }
-  }
-
-  async function deleteServer(name: string) {
-    setServerActionBusy(true);
-    try {
-      await fetchJson<{ message: string }>(`/api/servers/${encodeURIComponent(name)}`, {
-        method: "DELETE"
-      });
-      setServers((current) => current.filter((item) => item.name !== name));
-      if (selectedServer?.name === name) setSelectedServer(null);
-    } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : "Could not delete server");
-    } finally {
-      setServerActionBusy(false);
-    }
-  }
-
-  function openCreateServer() {
-    setServerEditorMode("create");
-    setServerDraftName("");
-    setServerDraft({
-      command: "",
-      args: [],
-      env: {},
-      url: "",
-      headers: {}
-    });
-    setServerEditorOpen(true);
-  }
-
-  function openEditServer(server: ServerInfo) {
-    setServerEditorMode("edit");
-    setServerDraftName(server.name);
-    setServerDraft({
-      command: server.definition.command ?? "",
-      args: server.definition.args ?? [],
-      env: server.definition.env ?? {},
-      url: server.definition.url ?? "",
-      headers: server.definition.headers ?? {}
-    });
-    setServerEditorOpen(true);
-    setSelectedServer(server);
-  }
-
-  function normalizeObject(value: Record<string, string> | undefined) {
-    if (!value) return undefined;
-    const entries = Object.entries(value).filter(([, v]) => v.trim().length > 0);
-    return entries.length ? Object.fromEntries(entries) : undefined;
-  }
-
   const toolCount = tools.length;
-  const connectedServers = servers.filter((server) => server.connected).length;
 
   if (authState !== "signed_in") {
     return (
@@ -1090,7 +943,6 @@ function App() {
             <div className="endpoint-list">
               <EndpointRow label="/api/agent/tools" value={`${toolCount} tools`} icon={Wrench} />
               <EndpointRow label="/api/agent/agents" value={`${agents.length} agents`} icon={Bot} />
-              <EndpointRow label="/api/servers" value={`${connectedServers}/${servers.length} connected`} icon={Server} />
               <EndpointRow label="/api/agent/stream" value="Streaming chat" icon={MessageSquare} />
             </div>
           </div>
@@ -1098,7 +950,6 @@ function App() {
           <nav className="tab-nav">
             <TabButton current={tab} id="chat" label="Chat" icon={MessageSquare} onClick={setTab} />
             <TabButton current={tab} id="agents" label="Agents" icon={Bot} onClick={setTab} />
-            <TabButton current={tab} id="servers" label="Servers" icon={Server} onClick={setTab} />
             <TabButton current={tab} id="settings" label="Settings" icon={Settings2} onClick={setTab} />
           </nav>
         </aside>
@@ -1110,7 +961,6 @@ function App() {
               <h2>
                 {tab === "chat" && "Audience with Hugin"}
                 {tab === "agents" && "Agent council"}
-                {tab === "servers" && "MCP agora"}
                 {tab === "settings" && "Connection settings"}
               </h2>
             </div>
@@ -1166,46 +1016,18 @@ function App() {
             />
           )}
 
-          {tab === "servers" && (
-            <ServersPanel
-              servers={servers}
-              selectedServer={selectedServer}
-              onSelectServer={setSelectedServer}
-              onCreateServer={openCreateServer}
-              onEditServer={openEditServer}
-              onReconnectServer={reconnectServer}
-              onDeleteServer={deleteServer}
-              busy={serverActionBusy}
-            />
-          )}
-
           {tab === "settings" && (
             <SettingsPanel
               settings={settings}
               onChange={handleSettingsChange}
               onRefresh={refreshMetadata}
-              onRefreshServers={refreshServers}
               onRefreshTools={refreshTools}
               tools={tools}
-              servers={servers}
               username={authProfile?.username || ""}
             />
           )}
         </main>
       </div>
-
-      {serverEditorOpen && (
-        <ServerEditor
-          mode={serverEditorMode}
-          busy={serverActionBusy}
-          name={serverDraftName}
-          definition={serverDraft}
-          onClose={() => setServerEditorOpen(false)}
-          onChangeName={setServerDraftName}
-          onChangeDefinition={setServerDraft}
-          onSave={saveServer}
-        />
-      )}
     </div>
   );
 }
@@ -1746,150 +1568,19 @@ function AgentsPanel({
   );
 }
 
-function ServersPanel({
-  servers,
-  selectedServer,
-  onSelectServer,
-  onCreateServer,
-  onEditServer,
-  onReconnectServer,
-  onDeleteServer,
-  busy
-}: {
-  servers: ServerInfo[];
-  selectedServer: ServerInfo | null;
-  onSelectServer: (server: ServerInfo | null) => void;
-  onCreateServer: () => void;
-  onEditServer: (server: ServerInfo) => void;
-  onReconnectServer: (name: string) => Promise<void>;
-  onDeleteServer: (name: string) => Promise<void>;
-  busy: boolean;
-}) {
-  return (
-    <section className="panel stack">
-      <div className="section-head">
-        <div>
-          <div className="eyebrow">Connected MCP agora</div>
-          <h3>Servers</h3>
-        </div>
-        <div className="section-actions">
-          <button className="ghost-button compact" onClick={onCreateServer}>
-            <Plus size={14} />
-            Add server
-          </button>
-        </div>
-      </div>
-
-      <div className="server-grid">
-        {servers.map((server) => (
-          <button
-            key={server.name}
-            className={`server-card ${selectedServer?.name === server.name ? "selected" : ""}`}
-            onClick={() => onSelectServer(server)}
-          >
-            <div className="server-card-top">
-              <div className="server-icon">
-                <Server size={18} />
-              </div>
-              <div className="server-card-meta">
-                <div className="server-name-row">
-                  <h4>{server.name}</h4>
-                  <span className={`dot ${server.connected ? "live" : "dead"}`} />
-                </div>
-                <div className="server-subtitle">
-                  {server.definition.url
-                    ? server.definition.url
-                    : server.definition.command || "No command configured"}
-                </div>
-              </div>
-            </div>
-
-            <div className="server-quickstats">
-              <span>{server.connected ? "connected" : "disconnected"}</span>
-              <span>{server.tools?.length || 0} tools</span>
-              <span>{server.definition.url ? "SSE" : "stdio"}</span>
-            </div>
-
-            {server.error ? <div className="server-error">{server.error}</div> : null}
-          </button>
-        ))}
-      </div>
-
-      {selectedServer ? (
-        <aside className="server-detail">
-          <div className="server-detail-head">
-            <div>
-              <div className="eyebrow">Selected server</div>
-              <h4>{selectedServer.name}</h4>
-            </div>
-            <div className="detail-actions">
-              <button className="ghost-button compact" onClick={() => onReconnectServer(selectedServer.name)} disabled={busy}>
-                <RefreshCw size={14} />
-                Reconnect
-              </button>
-              <button className="ghost-button compact" onClick={() => onEditServer(selectedServer)}>
-                <Wrench size={14} />
-                Edit
-              </button>
-              <button className="danger-button compact" onClick={() => void onDeleteServer(selectedServer.name)} disabled={busy}>
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <div className="detail-label">Definition</div>
-            <div className="definition-grid">
-              <KeyValue label="transport" value={selectedServer.definition.url ? "SSE/HTTP" : "stdio"} />
-              <KeyValue label="connected" value={selectedServer.connected ? "yes" : "no"} />
-              <KeyValue label="command" value={selectedServer.definition.command || "—"} />
-              <KeyValue label="url" value={selectedServer.definition.url || "—"} />
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <div className="detail-label">Tools</div>
-            <div className="tool-chip-grid">
-              {(selectedServer.tools || []).map((tool) => (
-                <span key={tool.name} className="tool-chip" title={tool.description || ""}>
-                  {tool.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        </aside>
-      ) : null}
-    </section>
-  );
-}
-
-function KeyValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="key-value">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function SettingsPanel({
   settings,
   onChange,
   onRefresh,
-  onRefreshServers,
   onRefreshTools,
   tools,
-  servers,
   username
 }: {
   settings: AppSettings;
   onChange: (settings: AppSettings) => void;
   onRefresh: () => Promise<void>;
-  onRefreshServers: () => Promise<void>;
   onRefreshTools: () => Promise<void>;
   tools: ToolSummary[];
-  servers: ServerInfo[];
   username: string;
 }) {
   return (
@@ -1954,18 +1645,12 @@ function SettingsPanel({
         </Card>
 
         <Card title="Quick sync" icon={CircleCheckBig}>
-          <button className="ghost-button full" onClick={() => void onRefreshServers()}>
-            <Server size={14} />
-            Refresh servers
-          </button>
           <button className="ghost-button full" onClick={() => void onRefreshTools()}>
             <Wrench size={14} />
             Refresh tools
           </button>
           <div className="settings-summary">
             <SummaryRow label="Tools" value={`${tools.length}`} />
-            <SummaryRow label="Servers" value={`${servers.length}`} />
-            <SummaryRow label="Connected" value={`${servers.filter((server) => server.connected).length}`} />
           </div>
         </Card>
       </div>
@@ -2092,152 +1777,6 @@ function LabeledInput({
       />
     </label>
   );
-}
-
-function ServerEditor({
-  mode,
-  busy,
-  name,
-  definition,
-  onClose,
-  onChangeName,
-  onChangeDefinition,
-  onSave
-}: {
-  mode: "create" | "edit";
-  busy: boolean;
-  name: string;
-  definition: ServerDefinition;
-  onClose: () => void;
-  onChangeName: (name: string) => void;
-  onChangeDefinition: (definition: ServerDefinition) => void;
-  onSave: () => Promise<void>;
-}) {
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <div className="eyebrow">{mode === "create" ? "New server" : "Edit server"}</div>
-            <h3>{mode === "create" ? "Add MCP server" : name}</h3>
-          </div>
-          <button className="icon-button" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="modal-body">
-          <LabeledInput label="Name" value={name} onChange={onChangeName} placeholder="github" />
-          <ObjectEditor
-            label="Command"
-            value={definition.command || ""}
-            onChange={(command) => onChangeDefinition({ ...definition, command })}
-            placeholder="npx"
-          />
-          <ArrayEditor
-            label="Args"
-            values={definition.args || []}
-            onChange={(args) => onChangeDefinition({ ...definition, args })}
-          />
-          <ObjectEditor
-            label="Env"
-            value={objectToJson(definition.env)}
-            onChange={(text) => onChangeDefinition({ ...definition, env: jsonToObject(text) })}
-            placeholder='{"TOKEN":"..."}'
-            multiline
-          />
-          <ObjectEditor
-            label="URL"
-            value={definition.url || ""}
-            onChange={(url) => onChangeDefinition({ ...definition, url })}
-            placeholder="https://example.com/sse"
-          />
-          <ObjectEditor
-            label="Headers"
-            value={objectToJson(definition.headers)}
-            onChange={(text) => onChangeDefinition({ ...definition, headers: jsonToObject(text) })}
-            placeholder='{"Authorization":"Bearer ..."}'
-            multiline
-          />
-        </div>
-
-        <div className="modal-foot">
-          <button className="ghost-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="send-button" onClick={() => void onSave()} disabled={busy || !name.trim()}>
-            {busy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
-            Save server
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ObjectEditor({
-  label,
-  value,
-  onChange,
-  placeholder,
-  multiline = false
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      {multiline ? (
-        <textarea
-          value={value}
-          placeholder={placeholder}
-          onChange={(event) => onChange(event.target.value)}
-          rows={5}
-        />
-      ) : (
-        <input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
-      )}
-    </label>
-  );
-}
-
-function ArrayEditor({
-  label,
-  values,
-  onChange
-}: {
-  label: string;
-  values: string[];
-  onChange: (value: string[]) => void;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <textarea
-        value={values.join("\n")}
-        placeholder={"one argument per line"}
-        onChange={(event) => onChange(event.target.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))}
-        rows={5}
-      />
-    </label>
-  );
-}
-
-function objectToJson(value?: Record<string, string>) {
-  return JSON.stringify(value ?? {}, null, 2);
-}
-
-function jsonToObject(value: string) {
-  const parsed = safeJsonParse<Record<string, unknown>>(value, {});
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(parsed)) {
-    if (typeof item === "string") result[key] = item;
-  }
-  return result;
 }
 
 export default App;

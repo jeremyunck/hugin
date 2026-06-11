@@ -5,7 +5,7 @@ import java.util.Map;
 /**
  * A built-in tool executed locally by the agent (file access, search, shell, …).
  *
- * <p>Unlike tools sourced from MCP servers, these run in-process and have no MCP-SDK
+ * <p>Unlike tools sourced from external services, these run in-process and have no transport
  * dependency, so they live in {@code agent-core}. Implementations are discovered as
  * Spring beans and registered by {@link LocalToolRegistry}.
  */

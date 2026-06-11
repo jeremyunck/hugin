@@ -25,9 +25,9 @@ import java.util.regex.Pattern;
  * Core agent loop.
  *
  * <ol>
- *   <li>Collects every built-in local tool plus all tools from every connected MCP server.</li>
+ *   <li>Collects every built-in local tool plus any just-in-time tools in the workspace.</li>
  *   <li>Sends the user prompt to the configured LLM with those tools advertised.</li>
- *   <li>When the model requests a tool call, runs it locally or routes it to the owning MCP server.</li>
+ *   <li>When the model requests a tool call, runs it in-process.</li>
  *   <li>Feeds the tool result back and repeats until the model produces a final answer.</li>
  * </ol>
  */
@@ -39,7 +39,6 @@ public class AgentService {
     private final int maxIterations;
 
     private final OpenAiClient llmClient;
-    private final McpToolProvider toolProvider;
     private final LocalToolRegistry localTools;
     private final JustInTimeToolRegistry jitTools;
     private final ObjectMapper objectMapper;
@@ -53,7 +52,6 @@ public class AgentService {
 
     public AgentService(
             OpenAiClient llmClient,
-            McpToolProvider toolProvider,
             LocalToolRegistry localTools,
             JustInTimeToolRegistry jitTools,
             ObjectMapper objectMapper,
@@ -66,7 +64,6 @@ public class AgentService {
             Optional<SystemFactsService> systemFactsService,
             Optional<StartupAnnouncementService> startupAnnouncement) {
         this.llmClient = llmClient;
-        this.toolProvider = toolProvider;
         this.localTools = localTools;
         this.jitTools = jitTools;
         this.objectMapper = objectMapper;
@@ -82,7 +79,7 @@ public class AgentService {
 
     public record ToolSummary(String name, String description, String server, String transport) {}
 
-    /** Returns a flat list of all tools currently available to the agent (local + MCP). */
+    /** Returns a flat list of all tools currently available to the agent (local + JIT). */
     public List<ToolSummary> availableTools() {
         Workspace workspace = workspaceRegistry.resolve(null);
         List<ToolSummary> result = new ArrayList<>();
@@ -96,18 +93,6 @@ public class AgentService {
                 result.add(new ToolSummary(tool.name(), tool.description(), "workspace", "jit"));
             }
         }
-        toolProvider.getAllToolsByServer().forEach((serverName, tools) ->
-            tools.forEach(t -> {
-                if (toolNames.add(t.name())) {
-                    result.add(new ToolSummary(
-                            t.name(),
-                            t.description() != null ? t.description() : "",
-                            serverName,
-                            "mcp"
-                    ));
-                }
-            })
-        );
         return result;
     }
 
@@ -138,7 +123,7 @@ public class AgentService {
         RoutingSelection routing = resolveModel(request);
         String model = routing.model();
         Workspace workspace = workspaceRegistry.resolve(request.sessionId());
-        List<ToolDefinition> initialToolDefinitions = collectTools(new LinkedHashMap<>(), workspace);
+        List<ToolDefinition> initialToolDefinitions = collectTools(workspace);
 
         log.debug("Agent chat: model={}, route={}, decisionModel={}, tools available={} (local={}), stream={}",
                 model, routing.route(), routing.decisionModel(), initialToolDefinitions.size(),
@@ -191,8 +176,7 @@ public class AgentService {
 
             // Rebuild the tool list on every loop iteration so freshly written local manifests
             // become visible without a service restart.
-            Map<String, String> toolServerMap = new LinkedHashMap<>();
-            List<ToolDefinition> toolDefinitions = collectTools(toolServerMap, workspace);
+            List<ToolDefinition> toolDefinitions = collectTools(workspace);
 
             ChatResponse response = stream
                     ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent, listener::onReasoning)
@@ -226,7 +210,7 @@ public class AgentService {
                 messages.set(messages.size() - 1, assistantMsg);
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
-                    String toolResult = executeToolCall(toolCall, toolServerMap,
+                    String toolResult = executeToolCall(toolCall,
                             workspace, request.sessionId(), owner, request.agentId(), request.recentMessages());
                     listener.onToolResult(toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
@@ -268,11 +252,10 @@ public class AgentService {
     }
 
     /**
-     * Flattens every built-in local tool plus all tools from every connected MCP server into one
-     * OpenAI-format list, filling {@code toolServerMap} with a tool name → server name lookup.
-     * Built-in local tools are advertised first and take precedence on name collisions.
+     * Flattens every built-in local tool plus all just-in-time workspace tools into one OpenAI-
+     * format list. Built-in local tools are advertised first and take precedence on name collisions.
      */
-    private List<ToolDefinition> collectTools(Map<String, String> toolServerMap, Workspace workspace) {
+    private List<ToolDefinition> collectTools(Workspace workspace) {
         List<ToolDefinition> toolDefinitions = new ArrayList<>();
         Set<String> toolNames = new LinkedHashSet<>();
         for (LocalTool tool : localTools.tools()) {
@@ -288,18 +271,6 @@ public class AgentService {
             toolDefinitions.add(ToolDefinition.from(tool.name(), tool.description(), tool.inputSchema()));
         }
 
-        toolProvider.getAllToolsByServer().forEach((serverName, tools) ->
-                tools.forEach(tool -> {
-                    if (toolNames.contains(tool.name())) {
-                        log.warn("MCP tool '{}' on server '{}' is shadowed by a local tool",
-                                tool.name(), serverName);
-                        return;
-                    }
-                    toolServerMap.put(tool.name(), serverName);
-                    toolNames.add(tool.name());
-                    toolDefinitions.add(ToolDefinition.from(tool));
-                })
-        );
         return toolDefinitions;
     }
 
@@ -409,7 +380,7 @@ public class AgentService {
 
     private record RoutingSelection(String model, String route, String decisionModel) {}
 
-    private String executeToolCall(ToolCall toolCall, Map<String, String> toolServerMap,
+    private String executeToolCall(ToolCall toolCall,
                                    Workspace workspace,
                                    String sessionId, String owner, String agentId, List<String> channelMessages) {
         String toolName = toolCall.function().name();
@@ -432,22 +403,9 @@ public class AgentService {
             }
         }
 
-        String serverName = toolServerMap.get(toolName);
-        if (serverName == null) {
-            String msg = "Tool '" + toolName + "' is not available as a built-in tool "
-                    + "or on any connected MCP server.";
-            log.warn(msg);
-            return msg;
-        }
-
-        log.debug("Calling tool '{}' on server '{}' with args: {}", toolName, serverName, args);
-        try {
-            return toolProvider.callTool(serverName, toolName, args);
-        } catch (Exception e) {
-            String msg = "Tool call failed: " + e.getMessage();
-            log.error(msg, e);
-            return msg;
-        }
+        String msg = "Tool '" + toolName + "' is not available as a built-in or workspace tool.";
+        log.warn(msg);
+        return msg;
     }
 
     private Map<String, Object> parseArguments(String arguments) {

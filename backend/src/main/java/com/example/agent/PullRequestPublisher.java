@@ -6,7 +6,7 @@ import java.util.Optional;
 /**
  * Publishes a finalized cloud-agent branch as a GitHub pull request.
  *
- * <p>Implemented in {@code mcp-integration} so the agent core stays free of GitHub SDK details.
+ * <p>Implemented in the backend module so the agent core stays free of GitHub SDK details.
  */
 public interface PullRequestPublisher {
 
