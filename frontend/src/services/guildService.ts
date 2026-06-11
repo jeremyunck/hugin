@@ -150,7 +150,7 @@ export function saveGuildState(state: GuildState) {
 
 export function loadAuthSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  const raw = window.sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as AuthSession;
@@ -164,10 +164,10 @@ export function loadAuthSession(): AuthSession | null {
 export function saveAuthSession(session: AuthSession | null) {
   if (typeof window === "undefined") return;
   if (!session) {
-    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     return;
   }
-  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
