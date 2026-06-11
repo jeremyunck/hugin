@@ -1,4 +1,4 @@
-import { ArrowLeft, PenSquare } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { ChatThread, Route } from "../lib/types";
 import { Button, Card } from "../components/Ui";
 import { ChatComposer } from "../components/ChatComposer";
@@ -42,27 +42,7 @@ export function ChatScreen({
           <h1>{title}</h1>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <div className="screen-actions">
-          {onStartNewChat ? (
-            <Button variant="ghost" onClick={onStartNewChat}>
-              <PenSquare size={16} />
-              New Chat
-            </Button>
-          ) : null}
-        </div>
       </div>
-
-      {isHome ? (
-        <Card className="hero-card">
-          <div className="hero-mark">
-            <RavenMark className="hero-mark-icon" />
-          </div>
-          <div className="hero-copy">
-            <div className="hero-name">Hugin</div>
-            <div className="hero-tag">How can I help?</div>
-          </div>
-        </Card>
-      ) : null}
 
       {thread ? (
         <Card className="conversation-card">

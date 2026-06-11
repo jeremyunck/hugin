@@ -1,5 +1,7 @@
 # Agent Workflow
 
+Codex agents working in this repository should always create a pull request when they complete a feature.
+
 Agents working in this repository should follow this workflow:
 
 1. `git pull`
