@@ -15,9 +15,8 @@ import {
   appendAssistantReply,
   addThread,
   clearHistory,
-  createBlankThread,
+  createThreadFromPrompt,
   disconnectGoogleWorkspace,
-  ensureThread,
   fetchCurrentUser,
   fetchGoogleWorkspaceStatus,
   getThread,
@@ -41,8 +40,8 @@ export default function App() {
   const [session, setSession] = useState<AuthSession | null>(() => loadAuthSession());
   const [routeState, setRouteState] = useState(() => parseHashRoute(window.location.hash));
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [newChatDraft, setNewChatDraft] = useState("");
   const [draftByThread, setDraftByThread] = useState<Record<string, string>>({});
-  const [homeDraft, setHomeDraft] = useState("");
   const [busyThreadId, setBusyThreadId] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -59,7 +58,7 @@ export default function App() {
   useEffect(() => {
     const onHashChange = () => setRouteState(parseHashRoute(window.location.hash));
     window.addEventListener("hashchange", onHashChange);
-    if (!window.location.hash) window.location.hash = toHash({ screen: "chat-home" });
+    if (!window.location.hash) window.location.hash = toHash({ screen: "new-chat" });
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
@@ -101,15 +100,12 @@ export default function App() {
   const route = routeState.route;
   const dialog = routeState.dialog;
   const historyThreads = useMemo(
-    () => state.threads.filter((thread) => thread.messages.length > 0 || thread.source === "draft"),
+    () => state.threads.filter((thread) => thread.messages.length > 0),
     [state.threads]
   );
 
   const activeThread = useMemo(() => {
     if (route.screen === "history-chat") return getThread(state, route.threadId);
-    if (route.screen === "check-server-status") return getThread(state, "check-server-status");
-    if (route.screen === "summarize-emails") return getThread(state, "summarize-emails");
-    if (route.screen === "research-ai-agents") return getThread(state, "research-ai-agents");
     return null;
   }, [route, state]);
 
@@ -123,11 +119,13 @@ export default function App() {
     window.location.hash = toHash(next, nextDialog);
   }
 
-  async function startNewChat() {
-    const thread = createBlankThread();
+  async function handleNewChatSend(prompt: string) {
+    if (!prompt.trim() || !session?.token) return;
+    const thread = createThreadFromPrompt(prompt);
     setState((current) => addThread(current, thread));
-    setDraftByThread((current) => ({ ...current, [thread.id]: "" }));
+    setNewChatDraft("");
     navigate({ screen: "history-chat", threadId: thread.id });
+    await sendPromptForThread(thread.id, prompt);
   }
 
   async function sendPromptForThread(threadId: string, prompt: string) {
@@ -147,16 +145,6 @@ export default function App() {
     } finally {
       setBusyThreadId(null);
     }
-  }
-
-  async function sendFromHome(prompt: string) {
-    if (!prompt.trim()) return;
-    setHomeDraft("");
-    const thread = createBlankThread();
-    setState((current) => addThread(current, thread));
-    setDraftByThread((current) => ({ ...current, [thread.id]: "" }));
-    navigate({ screen: "history-chat", threadId: thread.id });
-    await sendPromptForThread(thread.id, prompt);
   }
 
   function updateCurrentThreadDraft(threadId: string, value: string) {
@@ -205,16 +193,8 @@ export default function App() {
   const sidebar = (
     <div className="sidebar-stack">
       <nav className="sidebar-nav">
-        <SidebarLink label="Chat Home" active={route.screen === "chat-home"} onClick={() => navigate({ screen: "chat-home" })} />
         <SidebarLink label="New Chat" active={route.screen === "new-chat"} onClick={() => navigate({ screen: "new-chat" })} />
         <SidebarLink label="History" active={route.screen === "history" || route.screen === "history-chat"} onClick={() => navigate({ screen: "history" })} />
-      </nav>
-
-      <nav className="sidebar-nav">
-        <SidebarSection title="Tools" />
-        <SidebarLink label="Check Server Status" active={route.screen === "check-server-status"} onClick={() => navigate({ screen: "check-server-status" })} />
-        <SidebarLink label="Summarize Emails" active={route.screen === "summarize-emails"} onClick={() => navigate({ screen: "summarize-emails" })} />
-        <SidebarLink label="Research on AI Agents" active={route.screen === "research-ai-agents"} onClick={() => navigate({ screen: "research-ai-agents" })} />
       </nav>
 
       <nav className="sidebar-nav">
@@ -229,23 +209,15 @@ export default function App() {
 
   let content = null;
 
-  if (route.screen === "chat-home") {
+  if (route.screen === "new-chat") {
     content = (
-      <ChatScreen
-        title="Hugin"
-        subtitle="How can I help?"
-        thread={null}
-        isHome
-        draft={homeDraft}
+      <NewChatScreen
+        draft={newChatDraft}
         disabled={busyThreadId !== null}
-        onDraftChange={setHomeDraft}
-        onSend={() => void sendFromHome(homeDraft)}
-        onNavigate={(next) => navigate(next)}
-        onStartNewChat={startNewChat}
+        onDraftChange={setNewChatDraft}
+        onSend={() => handleNewChatSend(newChatDraft)}
       />
     );
-  } else if (route.screen === "new-chat") {
-    content = <NewChatScreen onNavigate={navigate} onStartNewChat={startNewChat} />;
   } else if (route.screen === "history") {
     content = <HistoryScreen threads={historyThreads} onOpenThread={(threadId) => navigate({ screen: "history-chat", threadId })} onNavigate={navigate} />;
   } else if (route.screen === "history-chat") {
@@ -259,27 +231,6 @@ export default function App() {
         onDraftChange={(value) => updateCurrentThreadDraft(activeThread.id, value)}
         onSend={() => void sendPromptForThread(activeThread.id, draftByThread[activeThread.id] || "")}
         onNavigate={navigate}
-        onStartNewChat={startNewChat}
-      />
-    ) : null;
-  } else if (route.screen === "check-server-status" || route.screen === "summarize-emails" || route.screen === "research-ai-agents") {
-    const titles = {
-      "check-server-status": "Check Server Status",
-      "summarize-emails": "Summarize Emails",
-      "research-ai-agents": "Research on AI Agents"
-    } as const;
-    const thread = activeThread;
-    content = thread ? (
-      <ChatScreen
-        title={titles[route.screen]}
-        subtitle="Prompt-driven chat"
-        thread={thread}
-        draft={draftByThread[thread.id] || ""}
-        disabled={busyThreadId === thread.id}
-        onDraftChange={(value) => updateCurrentThreadDraft(thread.id, value)}
-        onSend={() => void sendPromptForThread(thread.id, draftByThread[thread.id] || "")}
-        onNavigate={navigate}
-        onStartNewChat={startNewChat}
       />
     ) : null;
   } else if (route.screen === "settings") {
@@ -342,14 +293,6 @@ export default function App() {
       />
     );
   }
-
-  useEffect(() => {
-    setState((current) => {
-      let next = ensureThread(current, "check-server-status", "Check Server Status", "scenario");
-      next = ensureThread(next, "summarize-emails", "Summarize Emails", "scenario");
-      return ensureThread(next, "research-ai-agents", "Research on AI Agents", "scenario");
-    });
-  }, []);
 
   if (initializing) {
     return <SignInScreen busy message="Checking your Hugin session..." onSubmit={() => Promise.resolve()} />;

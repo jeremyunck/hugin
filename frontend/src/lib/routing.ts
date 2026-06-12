@@ -2,7 +2,7 @@ import type { Route } from "./types";
 
 function cleanHash(value: string) {
   const trimmed = value.replace(/^#/, "");
-  if (!trimmed || trimmed === "/") return "/chat";
+  if (!trimmed || trimmed === "/") return "/chat/new";
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
 
@@ -15,15 +15,9 @@ export function parseHashRoute(hash: string): { route: Route; dialog: string | n
   switch (path) {
     case "/":
     case "/chat":
-      return { route: { screen: "chat-home" }, dialog };
+      return { route: { screen: "new-chat" }, dialog };
     case "/chat/new":
       return { route: { screen: "new-chat" }, dialog };
-    case "/chat/check-server-status":
-      return { route: { screen: "check-server-status" }, dialog };
-    case "/chat/summarize-emails":
-      return { route: { screen: "summarize-emails" }, dialog };
-    case "/chat/research-ai-agents":
-      return { route: { screen: "research-ai-agents" }, dialog };
     case "/history":
       return { route: { screen: "history" }, dialog };
     case "/settings":
@@ -40,16 +34,13 @@ export function parseHashRoute(hash: string): { route: Route; dialog: string | n
       if (path.startsWith("/history/")) {
         return { route: { screen: "history-chat", threadId: decodeURIComponent(path.slice("/history/".length)) }, dialog };
       }
-      return { route: { screen: "chat-home" }, dialog };
+      return { route: { screen: "new-chat" }, dialog };
   }
 }
 
 export function toHash(route: Route, dialog: string | null = null) {
-  let path = "/chat";
+  let path = "/chat/new";
   switch (route.screen) {
-    case "chat-home":
-      path = "/chat";
-      break;
     case "new-chat":
       path = "/chat/new";
       break;
@@ -58,15 +49,6 @@ export function toHash(route: Route, dialog: string | null = null) {
       break;
     case "history-chat":
       path = `/history/${encodeURIComponent(route.threadId)}`;
-      break;
-    case "check-server-status":
-      path = "/chat/check-server-status";
-      break;
-    case "summarize-emails":
-      path = "/chat/summarize-emails";
-      break;
-    case "research-ai-agents":
-      path = "/chat/research-ai-agents";
       break;
     case "settings":
       path = "/settings";

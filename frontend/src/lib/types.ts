@@ -1,11 +1,7 @@
 export type Route =
-  | { screen: "chat-home" }
   | { screen: "new-chat" }
   | { screen: "history" }
   | { screen: "history-chat"; threadId: string }
-  | { screen: "check-server-status" }
-  | { screen: "summarize-emails" }
-  | { screen: "research-ai-agents" }
   | { screen: "settings" }
   | { screen: "integrations" }
   | { screen: "google-workspace" }
@@ -13,12 +9,8 @@ export type Route =
   | { screen: "data-privacy" };
 
 export type DrawerScreen =
-  | "chat-home"
   | "new-chat"
   | "history"
-  | "check-server-status"
-  | "summarize-emails"
-  | "research-ai-agents"
   | "settings"
   | "integrations"
   | "appearance"
@@ -39,7 +31,7 @@ export type ChatThread = {
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
-  source: "home" | "scenario" | "history" | "draft";
+  source: "history" | "draft";
 };
 
 export type AppearanceSettings = {

@@ -121,7 +121,6 @@ a {
 
 .brand-mark,
 .message-avatar,
-.new-chat-mark,
 .integration-logo,
 .modal-icon {
   display: grid;
@@ -139,7 +138,6 @@ a {
 }
 
 .brand-mark-icon,
-.new-chat-mark-icon,
 .message-mark {
   width: 160%;
   height: 160%;
@@ -340,10 +338,22 @@ a {
 .new-chat-mark {
   width: 64px;
   height: 64px;
+  margin: 0 auto;
   background: #fff;
   color: #111;
   border: 1px solid var(--line);
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.new-chat-mark-icon {
+  width: 160%;
+  height: 160%;
+  object-fit: contain;
+  display: block;
 }
 
 .prompt-subtitle,
@@ -365,6 +375,23 @@ a {
 .integration-detail-card {
   display: grid;
   gap: 16px;
+}
+
+.new-chat-root {
+  min-height: calc(100vh - 32px);
+  display: grid;
+  place-content: center;
+  gap: 24px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.new-chat-root .composer {
+  max-width: 100%;
+}
+
+.new-chat-root .composer textarea {
+  text-align: left;
 }
 
 .message-list {
@@ -451,35 +478,6 @@ a {
 
 .composer-send {
   justify-self: end;
-}
-
-.new-chat-card {
-  min-height: 420px;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: 12px;
-}
-
-.new-chat-card.large {
-  min-height: 460px;
-}
-
-.new-chat-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-
-.new-chat-card p {
-  margin: 0;
-  max-width: 36ch;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.new-chat-action {
-  min-width: 220px;
 }
 
 .history-group {

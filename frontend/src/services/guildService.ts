@@ -59,11 +59,6 @@ function threadMessage(role: ChatMessage["role"], content: string, createdAt: st
   return { id: uid(role), role, content, createdAt };
 }
 
-function makeThread(id: string, title: string, source: ChatThread["source"]): ChatThread {
-  const createdAt = nowIso();
-  return { id, title, createdAt, updatedAt: createdAt, source, messages: [] };
-}
-
 function createGoogleWorkspaceState(overrides: Partial<GoogleWorkspaceState> = {}): GoogleWorkspaceState {
   return {
     accountName: "Not connected",
@@ -85,11 +80,7 @@ function createGoogleWorkspaceState(overrides: Partial<GoogleWorkspaceState> = {
 
 function buildSeedState(): GuildState {
   return {
-    threads: [
-      makeThread("check-server-status", "Check Server Status", "scenario"),
-      makeThread("summarize-emails", "Summarize Emails", "scenario"),
-      makeThread("research-ai-agents", "Research on AI Agents", "scenario")
-    ],
+    threads: [],
     appearance: {
       theme: "light",
       textSize: "medium",
@@ -351,11 +342,6 @@ export function addThread(state: GuildState, thread: ChatThread) {
   };
 }
 
-export function ensureThread(state: GuildState, threadId: string, title: string, source: ChatThread["source"]): GuildState {
-  if (getThread(state, threadId)) return state;
-  return addThread(state, makeThread(threadId, title, source));
-}
-
 export function appendAssistantReply(state: GuildState, threadId: string, prompt: string, response: string): GuildState {
   const thread = getThread(state, threadId);
   if (!thread) return state;
@@ -380,11 +366,9 @@ export function appendAssistantReply(state: GuildState, threadId: string, prompt
 }
 
 export function clearHistory(state: GuildState) {
-  const keepIds = new Set(["check-server-status", "summarize-emails", "research-ai-agents"]);
   return {
     ...state,
     threads: state.threads
-      .filter((thread) => keepIds.has(thread.id))
       .map((thread) => ({ ...thread, messages: [], updatedAt: thread.createdAt }))
   };
 }

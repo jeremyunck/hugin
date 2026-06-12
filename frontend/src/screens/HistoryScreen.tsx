@@ -17,7 +17,7 @@ export function HistoryScreen({
     <section className="screen-frame">
       <div className="screen-head">
         <div className="screen-title-block">
-          <Button variant="ghost" className="back-button mobile-only-inline" onClick={() => onNavigate({ screen: "chat-home" })}>
+          <Button variant="ghost" className="back-button mobile-only-inline" onClick={() => onNavigate({ screen: "new-chat" })}>
             <ArrowLeft size={16} />
             Back
           </Button>
