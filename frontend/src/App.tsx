@@ -244,14 +244,11 @@ export default function App() {
   } else if (route.screen === "history-chat") {
     content = activeThread ? (
       <ChatScreen
-        title={activeThread.title}
-        subtitle="Saved conversation"
         thread={activeThread}
         draft={draftByThread[activeThread.id] || ""}
         disabled={busyThreadId === activeThread.id}
         onDraftChange={(value) => updateCurrentThreadDraft(activeThread.id, value)}
         onSend={() => void sendPromptForThread(activeThread.id, draftByThread[activeThread.id] || "")}
-        onNavigate={navigate}
       />
     ) : null;
   } else if (route.screen === "settings") {

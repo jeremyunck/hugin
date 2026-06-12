@@ -391,6 +391,7 @@ a {
 }
 
 .new-chat-root .composer {
+  width: 100%;
   max-width: 100%;
 }
 
@@ -1034,7 +1035,7 @@ a {
   }
 
   .screen-title-block h1 {
-    font-size: clamp(1.9rem, 11vw, 2.8rem);
+    font-size: clamp(1.5rem, 8vw, 2.1rem);
   }
 
   .screen-title-block p {
@@ -1043,9 +1044,19 @@ a {
 
   .new-chat-root {
     min-height: auto;
-    padding: 20px 8px 8px;
-    gap: 18px;
+    width: 100%;
+    padding: 16px 0 8px;
+    gap: 16px;
     place-content: start;
+  }
+
+  .new-chat-root .composer-input,
+  .new-chat-root .composer-send {
+    width: 100%;
+  }
+
+  .back-button {
+    display: none;
   }
 
   .history-preview {
