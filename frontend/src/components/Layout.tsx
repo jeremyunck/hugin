@@ -19,6 +19,8 @@ export function Layout({
   drawerOpen,
   onOpenDrawer,
   onCloseDrawer,
+  username,
+  onSignOut,
   onNavigate,
   sidebarContent,
   children
@@ -27,6 +29,8 @@ export function Layout({
   drawerOpen: boolean;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
+  username: string;
+  onSignOut: () => void;
   onNavigate: (hash: string) => void;
   sidebarContent: ReactNode;
   children: ReactNode;
@@ -81,6 +85,22 @@ export function Layout({
             );
           })}
         </nav>
+        <div className="drawer-footer">
+          <div className="drawer-account">
+            <span className="drawer-account-label">Signed in as</span>
+            <strong>{username}</strong>
+          </div>
+          <Button
+            variant="ghost"
+            className="drawer-signout"
+            onClick={() => {
+              onCloseDrawer();
+              onSignOut();
+            }}
+          >
+            Sign Out
+          </Button>
+        </div>
       </aside>
 
       <div className="guild-main">

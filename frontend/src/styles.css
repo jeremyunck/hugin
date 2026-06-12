@@ -280,6 +280,10 @@ a {
   display: none;
 }
 
+.desktop-session-banner {
+  display: flex;
+}
+
 .mobile-topbar {
   border-radius: 22px;
   padding: 12px 14px;
@@ -468,11 +472,13 @@ a {
 .composer-input {
   width: 100%;
   min-height: 86px;
+  max-height: 220px;
   padding: 14px;
   border-radius: 20px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.95);
   outline: none;
+  overflow-y: auto;
   resize: none;
 }
 
@@ -945,6 +951,28 @@ a {
     display: grid;
     gap: 8px;
   }
+
+  .drawer-footer {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 12px;
+  }
+
+  .drawer-account {
+    display: grid;
+    gap: 4px;
+  }
+
+  .drawer-account-label {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .drawer-signout {
+    width: 100%;
+  }
 }
 
 @media (max-width: 820px) {
@@ -981,9 +1009,14 @@ a {
     padding: 12px;
   }
 
+  .desktop-session-banner {
+    display: none;
+  }
+
   .screen-frame {
     border-radius: 24px;
     padding: 14px;
+    gap: 12px;
   }
 
   .ui-card,
@@ -994,6 +1027,42 @@ a {
 
   .modal-backdrop {
     padding: 12px;
+  }
+
+  .screen-title-block {
+    gap: 6px;
+  }
+
+  .screen-title-block h1 {
+    font-size: clamp(1.9rem, 11vw, 2.8rem);
+  }
+
+  .screen-title-block p {
+    font-size: 0.98rem;
+  }
+
+  .new-chat-root {
+    min-height: auto;
+    padding: 20px 8px 8px;
+    gap: 18px;
+    place-content: start;
+  }
+
+  .history-preview {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .history-card,
+  .conversation-card,
+  .settings-card,
+  .appearance-card,
+  .privacy-card,
+  .integrations-card,
+  .integration-detail-card {
+    gap: 12px;
   }
 
 }

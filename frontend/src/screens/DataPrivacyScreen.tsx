@@ -9,7 +9,7 @@ export function DataPrivacyScreen({
   onNavigate
 }: {
   state: GuildState;
-  onClearHistory: () => void;
+  onClearHistory: (route: Route) => void;
   onNavigate: (route: Route) => void;
 }) {
   return (
@@ -49,7 +49,7 @@ export function DataPrivacyScreen({
               <Download size={16} />
               Download data snapshot
             </Button>
-            <Button variant="danger" onClick={onClearHistory}>
+            <Button variant="danger" onClick={() => onClearHistory({ screen: "data-privacy" })}>
               <Trash2 size={16} />
               Clear chat history
             </Button>

@@ -8,7 +8,7 @@ export function SettingsScreen({
   onOpenClearHistory
 }: {
   onNavigate: (route: Route) => void;
-  onOpenClearHistory: () => void;
+  onOpenClearHistory: (route: Route) => void;
 }) {
   return (
     <section className="screen-frame">
@@ -27,7 +27,7 @@ export function SettingsScreen({
       <Card className="settings-card">
         <SettingsSection title="General">
           <SettingsRow label="Language" value="English" />
-          <SettingsAction label="Clear chat history" onClick={onOpenClearHistory} />
+          <SettingsAction label="Clear chat history" onClick={() => onOpenClearHistory({ screen: "settings" })} />
         </SettingsSection>
 
         <SettingsSection title="Appearance">
