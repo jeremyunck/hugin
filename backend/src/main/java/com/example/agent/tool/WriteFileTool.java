@@ -21,6 +21,11 @@ public class WriteFileTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "write_file";
     }

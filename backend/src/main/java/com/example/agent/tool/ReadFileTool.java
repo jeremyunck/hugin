@@ -25,6 +25,11 @@ public class ReadFileTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "read_file";
     }

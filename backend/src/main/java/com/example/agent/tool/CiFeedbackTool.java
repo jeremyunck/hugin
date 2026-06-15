@@ -28,6 +28,11 @@ public class CiFeedbackTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "ci_feedback";
     }

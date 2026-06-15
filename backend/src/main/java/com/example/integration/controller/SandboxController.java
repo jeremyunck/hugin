@@ -1,5 +1,6 @@
 package com.example.integration.controller;
 
+import com.example.agent.model.FileNode;
 import com.example.agent.model.SandboxInfo;
 import com.example.integration.service.DockerSandboxManager;
 import org.springframework.http.HttpStatus;
@@ -51,6 +52,13 @@ public class SandboxController {
     @GetMapping("/{id}")
     public ResponseEntity<SandboxInfo> get(@PathVariable String id) {
         return sandboxManager.get(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/files")
+    public ResponseEntity<List<FileNode>> files(@PathVariable String id) {
+        return sandboxManager.listFiles(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

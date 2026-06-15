@@ -21,6 +21,11 @@ public class GoogleSheetsCreateTool implements LocalTool {
     }
 
     @Override
+    public boolean isAvailable() {
+        return google.available();
+    }
+
+    @Override
     public String name() {
         return "google_sheets_create";
     }

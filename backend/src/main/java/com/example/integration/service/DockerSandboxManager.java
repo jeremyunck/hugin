@@ -1,7 +1,9 @@
 package com.example.integration.service;
 
+import com.example.agent.model.FileNode;
 import com.example.agent.model.SandboxInfo;
 import com.example.agent.sandbox.SandboxRuntime;
+import com.example.agent.tool.Workspace;
 import com.example.agent.tool.WorkspaceFactory;
 import com.example.agent.tool.WorkspaceRegistry;
 import com.example.integration.sandbox.SandboxProperties;
@@ -118,6 +120,65 @@ public class DockerSandboxManager implements SandboxRuntime {
 
     public Optional<SandboxInfo> get(String id) {
         return Optional.ofNullable(sandboxes.get(id));
+    }
+
+    /** Maximum directory depth walked when building a workspace file tree. */
+    private static final int MAX_TREE_DEPTH = 8;
+    /** Maximum entries returned per directory, to bound the response for large workspaces. */
+    private static final int MAX_ENTRIES_PER_DIR = 500;
+
+    /**
+     * Returns the workspace file tree for a sandbox (relative to its workspace root), or empty when
+     * the sandbox is unknown. Directories listed in {@link Workspace#IGNORED_DIRECTORIES} are skipped,
+     * the walk is depth- and width-bounded, and directories sort before files (each alphabetically).
+     */
+    public Optional<List<FileNode>> listFiles(String id) {
+        SandboxInfo info = sandboxes.get(id);
+        if (info == null) {
+            return Optional.empty();
+        }
+        Path root = Path.of(info.workspace());
+        return Optional.of(buildChildren(root, root, 0));
+    }
+
+    private List<FileNode> buildChildren(Path root, Path dir, int depth) {
+        if (depth >= MAX_TREE_DEPTH || !Files.isDirectory(dir)) {
+            return List.of();
+        }
+        List<Path> entries = new ArrayList<>();
+        try (var stream = Files.list(dir)) {
+            stream.forEach(entries::add);
+        } catch (IOException e) {
+            log.debug("Could not list sandbox directory {}: {}", dir, e.getMessage());
+            return List.of();
+        }
+        entries.sort(Comparator
+                .comparing((Path p) -> Files.isDirectory(p) ? 0 : 1)
+                .thenComparing(p -> p.getFileName().toString().toLowerCase()));
+
+        List<FileNode> nodes = new ArrayList<>();
+        for (Path entry : entries) {
+            if (nodes.size() >= MAX_ENTRIES_PER_DIR) {
+                break;
+            }
+            String name = entry.getFileName().toString();
+            String relative = root.relativize(entry).toString();
+            if (Files.isDirectory(entry)) {
+                if (Workspace.IGNORED_DIRECTORIES.contains(name)) {
+                    continue;
+                }
+                nodes.add(FileNode.directory(name, relative, buildChildren(root, entry, depth + 1)));
+            } else {
+                long size;
+                try {
+                    size = Files.size(entry);
+                } catch (IOException e) {
+                    size = 0L;
+                }
+                nodes.add(FileNode.file(name, relative, size));
+            }
+        }
+        return nodes;
     }
 
     /** Stops and removes the sandbox container and deletes its workspace. */

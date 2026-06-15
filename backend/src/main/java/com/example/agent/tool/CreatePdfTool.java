@@ -41,6 +41,11 @@ public class CreatePdfTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "create_pdf";
     }

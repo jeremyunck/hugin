@@ -24,6 +24,11 @@ public class GoogleCalendarCreateTool implements LocalTool {
     }
 
     @Override
+    public boolean isAvailable() {
+        return google.available();
+    }
+
+    @Override
     public String name() {
         return "google_calendar_create";
     }
