@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BatteryFull,
   Check,
+  Box,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -49,7 +50,7 @@ const CHIPS = [
   ["Show me tips", "Show me tips for getting the most out of Hugin."]
 ] as const;
 
-type Screen = "login" | "chat" | "history" | "integrations";
+type Screen = "login" | "chat" | "purechat" | "history" | "integrations";
 
 type FileItem = {
   name: string;
@@ -225,7 +226,8 @@ const HISTORY_GROUPS: Array<["Today" | "Earlier", string]> = [
 ];
 
 const MENU_ITEMS = [
-  ["New chat", MessageCirclePlus, "new"],
+  ["New chat", MessageCirclePlus, "chat"],
+  ["New sandbox", Box, "sandbox"],
   ["History", History, "history"],
   ["Integrations", Puzzle, "integrations"]
 ] as const;
@@ -451,11 +453,12 @@ function InputBar(props: {
 
 function MenuOverlay(props: {
   onClose: () => void;
-  onNew: () => void;
+  onSandbox: () => void;
+  onChat: () => void;
   onHistory: () => void;
   onIntegrations: () => void;
 }) {
-  const { onClose, onNew, onHistory, onIntegrations } = props;
+  const { onClose, onSandbox, onChat, onHistory, onIntegrations } = props;
 
   return (
     <div className="menu-overlay">
@@ -469,9 +472,9 @@ function MenuOverlay(props: {
 
         <nav className="menu-nav">
           {MENU_ITEMS.map(([label, Icon, action]) => {
-            const handler = action === "new" ? onNew : action === "history" ? onHistory : onIntegrations;
+            const handler = action === "sandbox" ? onSandbox : action === "chat" ? onChat : action === "history" ? onHistory : onIntegrations;
             return (
-              <button key={label} type="button" className={`menu-item ${action === "new" ? "menu-item-active" : ""}`} onClick={handler}>
+              <button key={label} type="button" className={`menu-item ${action === "chat" ? "menu-item-active" : ""}`} onClick={handler}>
                 <Icon size={18} strokeWidth={2} color={COLORS.ink} />
                 <span>{label}</span>
               </button>
@@ -556,7 +559,7 @@ function HistoryScreen(props: {
 
       <div className="screen-pad history-footer">
         <button type="button" className="primary-button" onClick={onNew}>
-          <Plus size={18} strokeWidth={2.4} /> New chat
+          <Plus size={18} strokeWidth={2.4} /> New sandbox
         </button>
       </div>
     </>
@@ -734,10 +737,17 @@ export default function App() {
     [clearTimers]
   );
 
-  const startNew = useCallback(() => {
+  const startSandbox = useCallback(() => {
     resetSession(newId());
     setHistoryQuery("");
     setScreen("chat");
+    setMenuOpen(false);
+  }, [resetSession]);
+
+  const startChat = useCallback(() => {
+    resetSession(newId());
+    setHistoryQuery("");
+    setScreen("purechat");
     setMenuOpen(false);
   }, [resetSession]);
 
@@ -786,7 +796,9 @@ export default function App() {
         setMessages((current) => [...current, { role: "assistant", typing: true, events: [] }]);
       });
 
-      if (isAnalyze(text)) {
+      const pure = screen === "purechat";
+
+      if (!pure && isAnalyze(text)) {
         after(1450, () => {
           setMessages((current) => {
             const next = [...current];
@@ -828,7 +840,9 @@ export default function App() {
             const next = [...current];
             next[next.length - 1] = {
               role: "assistant",
-              text: "Got it — I'm on it inside this sandbox. Ask me to analyze data to watch your files update in real time.",
+              text: pure
+                ? "Happy to help — ask me anything and we can talk it through."
+                : "Got it — I'm on it inside this sandbox. Ask me to analyze data to watch your files update in real time.",
               events: []
             };
             return next;
@@ -837,7 +851,7 @@ export default function App() {
         });
       }
     },
-    [after, busy, draft]
+    [after, busy, draft, screen]
   );
 
   const fresh = messages.length === 0;
@@ -848,19 +862,21 @@ export default function App() {
         <StatusBar />
 
         {screen === "login" ? (
-          <LoginScreen username={username} password={password} onUser={setUsername} onPass={setPassword} onSignIn={() => setScreen("chat")} />
-        ) : screen === "chat" ? (
+          <LoginScreen username={username} password={password} onUser={setUsername} onPass={setPassword} onSignIn={() => setScreen("purechat")} />
+        ) : screen === "chat" || screen === "purechat" ? (
           <>
             <AppHeader onMenu={() => setMenuOpen(true)} />
-            <FileTree
-              sessionId={sessionId}
-              wsOpen={wsOpen}
-              chartsOpen={chartsOpen}
-              files={files}
-              hasCharts={hasCharts}
-              onToggleWs={() => setWsOpen((current) => !current)}
-              onToggleCharts={() => setChartsOpen((current) => !current)}
-            />
+            {screen === "chat" ? (
+              <FileTree
+                sessionId={sessionId}
+                wsOpen={wsOpen}
+                chartsOpen={chartsOpen}
+                files={files}
+                hasCharts={hasCharts}
+                onToggleWs={() => setWsOpen((current) => !current)}
+                onToggleCharts={() => setChartsOpen((current) => !current)}
+              />
+            ) : null}
             {fresh ? (
               <div className="chat-body">
                 <Greeting onChip={send} />
@@ -873,13 +889,14 @@ export default function App() {
         ) : screen === "integrations" ? (
           <IntegrationsScreen onBack={() => setScreen(returnScreen)} connected={ghConnected} connecting={ghConnecting} onConnect={connectGithub} />
         ) : (
-          <HistoryScreen onMenu={() => setMenuOpen(true)} onOpen={openHistory} onNew={startNew} query={historyQuery} onQuery={setHistoryQuery} />
+          <HistoryScreen onMenu={() => setMenuOpen(true)} onOpen={openHistory} onNew={startSandbox} query={historyQuery} onQuery={setHistoryQuery} />
         )}
 
         {menuOpen ? (
           <MenuOverlay
             onClose={() => setMenuOpen(false)}
-            onNew={startNew}
+            onSandbox={startSandbox}
+            onChat={startChat}
             onHistory={() => {
               setHistoryQuery("");
               setScreen("history");
