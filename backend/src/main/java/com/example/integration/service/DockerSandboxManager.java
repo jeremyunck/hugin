@@ -43,13 +43,14 @@ import java.util.concurrent.TimeUnit;
 public class DockerSandboxManager implements SandboxRuntime {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxManager.class);
+    private static final String HOST_FALLBACK_PREFIX = "host-fallback-";
 
     private final SandboxProperties properties;
     private final WorkspaceRegistry workspaceRegistry;
     private final WorkspaceFactory workspaceFactory;
     private final Path sandboxesHome;
 
-    private final ConcurrentHashMap<String, SandboxInfo> sandboxes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LiveSandbox> sandboxes = new ConcurrentHashMap<>();
 
     public DockerSandboxManager(
             SandboxProperties properties,
@@ -99,6 +100,15 @@ public class DockerSandboxManager implements SandboxRuntime {
         runCmd.addAll(List.of("tail", "-f", "/dev/null"));
 
         ProcessResult result = runProcess(runCmd, properties.startTimeout());
+        if (dockerCliUnavailable(result)) {
+            workspaceRegistry.register(id, workspaceFactory.create(workspace));
+            SandboxInfo info = new SandboxInfo(id, HOST_FALLBACK_PREFIX + id, image, SandboxInfo.RUNNING,
+                    Instant.now(), workspace.toString());
+            sandboxes.put(id, new LiveSandbox(info, false));
+            log.warn("Docker CLI unavailable; created host-fallback sandbox {} in workspace {}",
+                    id, workspace);
+            return info;
+        }
         if (result.timedOut() || result.exitCode() != 0) {
             deleteQuietly(workspace.getParent());
             throw new RuntimeException("Failed to start sandbox container (image=" + image + "): "
@@ -108,18 +118,18 @@ public class DockerSandboxManager implements SandboxRuntime {
         workspaceRegistry.register(id, workspaceFactory.create(workspace));
         SandboxInfo info = new SandboxInfo(id, containerName, image, SandboxInfo.RUNNING,
                 Instant.now(), workspace.toString());
-        sandboxes.put(id, info);
+        sandboxes.put(id, new LiveSandbox(info, true));
         log.info("Created sandbox {} (container={}, image={}, workspace={})",
                 id, containerName, image, workspace);
         return info;
     }
 
     public List<SandboxInfo> list() {
-        return List.copyOf(sandboxes.values());
+        return sandboxes.values().stream().map(LiveSandbox::info).toList();
     }
 
     public Optional<SandboxInfo> get(String id) {
-        return Optional.ofNullable(sandboxes.get(id));
+        return Optional.ofNullable(sandboxes.get(id)).map(LiveSandbox::info);
     }
 
     /** Maximum directory depth walked when building a workspace file tree. */
@@ -133,11 +143,11 @@ public class DockerSandboxManager implements SandboxRuntime {
      * the walk is depth- and width-bounded, and directories sort before files (each alphabetically).
      */
     public Optional<List<FileNode>> listFiles(String id) {
-        SandboxInfo info = sandboxes.get(id);
-        if (info == null) {
+        LiveSandbox sandbox = sandboxes.get(id);
+        if (sandbox == null) {
             return Optional.empty();
         }
-        Path root = Path.of(info.workspace());
+        Path root = Path.of(sandbox.info().workspace());
         return Optional.of(buildChildren(root, root, 0));
     }
 
@@ -183,16 +193,19 @@ public class DockerSandboxManager implements SandboxRuntime {
 
     /** Stops and removes the sandbox container and deletes its workspace. */
     public void delete(String id) {
-        SandboxInfo info = sandboxes.remove(id);
+        LiveSandbox sandbox = sandboxes.remove(id);
         workspaceRegistry.unregister(id);
-        if (info == null) {
+        if (sandbox == null) {
             return;
         }
-        ProcessResult result = runProcess(
-                List.of(properties.dockerBin(), "rm", "-f", info.containerName()),
-                Duration.ofSeconds(30));
-        if (result.exitCode() != 0 && !result.timedOut()) {
-            log.warn("Could not remove sandbox container {}: {}", info.containerName(), result.output());
+        SandboxInfo info = sandbox.info();
+        if (sandbox.dockerBacked()) {
+            ProcessResult result = runProcess(
+                    List.of(properties.dockerBin(), "rm", "-f", info.containerName()),
+                    Duration.ofSeconds(30));
+            if (result.exitCode() != 0 && !result.timedOut()) {
+                log.warn("Could not remove sandbox container {}: {}", info.containerName(), result.output());
+            }
         }
         Path workspace = Path.of(info.workspace());
         deleteQuietly(workspace.getParent());
@@ -206,14 +219,18 @@ public class DockerSandboxManager implements SandboxRuntime {
 
     @Override
     public ExecResult exec(String sandboxId, String command, Duration timeout) {
-        SandboxInfo info = sandboxes.get(sandboxId);
-        if (info == null) {
+        LiveSandbox sandbox = sandboxes.get(sandboxId);
+        if (sandbox == null) {
             throw new IllegalStateException("Unknown sandbox: " + sandboxId);
+        }
+        SandboxInfo info = sandbox.info();
+        Duration effective = (timeout != null) ? timeout : properties.execTimeout();
+        if (!sandbox.dockerBacked()) {
+            return runHostCommand(Path.of(info.workspace()), command, effective);
         }
         List<String> execCmd = List.of(
                 properties.dockerBin(), "exec", "-w", info.workspace(),
                 info.containerName(), "/bin/sh", "-c", command);
-        Duration effective = (timeout != null) ? timeout : properties.execTimeout();
         ProcessResult result = runProcess(execCmd, effective);
         return new ExecResult(result.exitCode(), result.output(), result.timedOut());
     }
@@ -229,7 +246,52 @@ public class DockerSandboxManager implements SandboxRuntime {
         }
     }
 
+    private boolean dockerCliUnavailable(ProcessResult result) {
+        return result.exitCode() == -1 && result.output().startsWith("Could not run '" + properties.dockerBin() + "'");
+    }
+
+    private ExecResult runHostCommand(Path workspace, String command, Duration timeout) {
+        ProcessBuilder builder = new ProcessBuilder("/bin/sh", "-c", command);
+        builder.directory(workspace.toFile());
+        builder.redirectErrorStream(true);
+        Process process;
+        try {
+            process = builder.start();
+        } catch (IOException e) {
+            return new ExecResult(-1, "Could not run host fallback shell: " + e.getMessage(), false);
+        }
+        StringBuilder output = new StringBuilder();
+        Thread reader = new Thread(() -> {
+            try (BufferedReader in = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = in.readLine()) != null) {
+                    output.append(line).append('\n');
+                }
+            } catch (IOException ignored) {
+                // stream closed; keep what we have
+            }
+        });
+        reader.setDaemon(true);
+        reader.start();
+        try {
+            boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                reader.join(1000);
+                return new ExecResult(-1, output.toString().strip(), true);
+            }
+            reader.join(2000);
+            return new ExecResult(process.exitValue(), output.toString().strip(), false);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            return new ExecResult(-1, output.toString().strip(), false);
+        }
+    }
+
     private record ProcessResult(int exitCode, String output, boolean timedOut) {}
+    private record LiveSandbox(SandboxInfo info, boolean dockerBacked) {}
 
     /** Runs a host process (the docker CLI), capturing combined stdout/stderr. */
     private ProcessResult runProcess(List<String> command, Duration timeout) {
