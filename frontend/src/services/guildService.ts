@@ -409,6 +409,24 @@ export async function disconnectGoogle(token: string): Promise<void> {
   await apiFetch("/api/google/disconnect", { method: "POST", body: JSON.stringify({}) }, token);
 }
 
+type GitHubConnectResponse = {
+  status: Integration | Record<string, unknown>;
+  installUrl: string | null;
+};
+
+export async function connectGitHub(token: string, returnTo: string): Promise<string | null> {
+  const response = await apiFetch<GitHubConnectResponse>(
+    "/api/github/connect",
+    { method: "POST", body: JSON.stringify({ returnTo }) },
+    token
+  );
+  return response.installUrl;
+}
+
+export async function disconnectGitHub(token: string): Promise<void> {
+  await apiFetch("/api/github/disconnect", { method: "POST", body: JSON.stringify({}) }, token);
+}
+
 function parseSseEvent(rawEvent: string): StreamEvent | null {
   const lines = rawEvent
     .split(/\r?\n/)

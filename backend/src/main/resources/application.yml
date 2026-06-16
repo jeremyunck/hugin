@@ -198,6 +198,29 @@ google:
   # so a person can open files the service account creates. Per-call share_with overrides this.
   default-share-with: ${GOOGLE_DEFAULT_SHARE_WITH:}
 
+github:
+  # GitHub integration powering the github_* tools, authenticated as a GitHub App.
+  #
+  # Setup:
+  #   1. Create a GitHub App (Settings → Developer settings → GitHub Apps → New). Give it the
+  #      repository permissions you want Hugin to have (e.g. Contents: read, Issues: read & write).
+  #   2. Note the numeric App ID and the App's slug (the name in its public URL,
+  #      https://github.com/apps/<slug>), then generate and download a private key (.pem).
+  #   3. Point private-key-path at that .pem (or paste the PEM into private-key) and set app-id/app-slug.
+  #   4. Click "Connect" in the Integrations screen to open the App's install page, then install it on
+  #      the account/organization and repositories you want Hugin to access.
+  # When no credentials are configured the github_* tools report themselves unavailable (no startup failure).
+  app-id: ${GITHUB_APP_ID:}
+  app-slug: ${GITHUB_APP_SLUG:}
+  # Provide the App private key either inline (PEM) or as a file path. private-key wins when both are set.
+  private-key: ${GITHUB_APP_PRIVATE_KEY:}
+  private-key-path: ${GITHUB_APP_PRIVATE_KEY_PATH:}
+  # Optional: pin a specific installation id. When blank, the App's first installation is used.
+  installation-id: ${GITHUB_APP_INSTALLATION_ID:}
+  # API/web roots — override for GitHub Enterprise Server.
+  api-base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
+  web-base-url: ${GITHUB_WEB_BASE_URL:https://github.com}
+
 management:
   endpoints:
     web:

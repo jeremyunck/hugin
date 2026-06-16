@@ -1,6 +1,8 @@
 package com.example.integration.controller;
 
 import com.example.agent.model.IntegrationStatus;
+import com.example.integration.github.GitHubAppService;
+import com.example.integration.github.GitHubStatus;
 import com.example.integration.google.GoogleWorkspaceClientFactory;
 import com.example.integration.google.GoogleWorkspaceStatus;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,12 +32,18 @@ public class IntegrationsController {
             "google_gmail_search", "google_gmail_read", "google_gmail_send",
             "google_calendar_create");
 
+    private static final List<String> GITHUB_TOOLS = List.of(
+            "github_list_repositories", "github_create_issue");
+
     private final GoogleWorkspaceClientFactory google;
+    private final GitHubAppService github;
     private final String webSearchApiKey;
 
     public IntegrationsController(GoogleWorkspaceClientFactory google,
+                                 GitHubAppService github,
                                  @Value("${OPEN_ROUTER_API_KEY:}") String webSearchApiKey) {
         this.google = google;
+        this.github = github;
         this.webSearchApiKey = webSearchApiKey;
     }
 
@@ -43,8 +51,22 @@ public class IntegrationsController {
     public List<IntegrationStatus> list() {
         List<IntegrationStatus> integrations = new ArrayList<>();
         integrations.add(googleStatus());
+        integrations.add(githubStatus());
         integrations.add(webSearchStatus());
         return integrations;
+    }
+
+    private IntegrationStatus githubStatus() {
+        GitHubStatus status = github.status();
+        return new IntegrationStatus(
+                "github",
+                "GitHub",
+                "Browse repositories and open issues via a GitHub App",
+                status.active(),
+                status.reconnectable(),
+                status.authMode(),
+                GITHUB_TOOLS,
+                status.message());
     }
 
     private IntegrationStatus googleStatus() {

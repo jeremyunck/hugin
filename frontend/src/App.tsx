@@ -29,8 +29,10 @@ import {
 import {
   buildAssistantEntry,
   buildUserEntry,
+  connectGitHub,
   createSandbox,
   createThread,
+  disconnectGitHub,
   disconnectGoogle,
   fetchCurrentUser,
   fetchIntegrations,
@@ -836,14 +838,23 @@ export default function App() {
 
   const toggleIntegration = useCallback(
     async (integration: Integration) => {
-      if (!session || integration.id !== "google") return;
+      if (!session || (integration.id !== "google" && integration.id !== "github")) return;
       setIntegrationBusy(integration.id);
       try {
-        if (integration.connected) {
-          await disconnectGoogle(session.token);
-        } else {
-          const authUrl = await reconnectGoogle(session.token, window.location.href);
-          if (authUrl) window.open(authUrl, "_blank", "noopener");
+        if (integration.id === "google") {
+          if (integration.connected) {
+            await disconnectGoogle(session.token);
+          } else {
+            const authUrl = await reconnectGoogle(session.token, window.location.href);
+            if (authUrl) window.open(authUrl, "_blank", "noopener");
+          }
+        } else if (integration.id === "github") {
+          if (integration.connected) {
+            await disconnectGitHub(session.token);
+          } else {
+            const installUrl = await connectGitHub(session.token, window.location.href);
+            if (installUrl) window.open(installUrl, "_blank", "noopener");
+          }
         }
         setIntegrations(await fetchIntegrations(session.token));
       } catch (e) {
