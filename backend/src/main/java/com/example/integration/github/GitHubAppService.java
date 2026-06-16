@@ -101,6 +101,13 @@ public class GitHubAppService {
         return status();
     }
 
+    /** Forces the next status read to re-check GitHub after an install/setup redirect. */
+    public synchronized void refresh() {
+        invalidate();
+        resolvedInstallationId = null;
+        installationAccount = null;
+    }
+
     /** Current connection snapshot, cached briefly to keep {@code GET /api/integrations} cheap. */
     public synchronized GitHubStatus status() {
         if (cachedStatus != null && Duration.between(cachedStatusAt, Instant.now()).compareTo(STATUS_CACHE) < 0) {

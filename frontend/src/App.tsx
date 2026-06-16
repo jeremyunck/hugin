@@ -99,6 +99,22 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function readLaunchScreen() {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("screen");
+}
+
+function clearLaunchScreen() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("screen");
+  url.searchParams.delete("github");
+  url.searchParams.delete("installation_id");
+  url.searchParams.delete("setup_action");
+  window.history.replaceState({}, "", url.toString());
+}
+
 function formatBytes(size?: number) {
   if (size == null) return "";
   if (size < 1024) return `${size} b`;
@@ -723,11 +739,23 @@ export default function App() {
       .then((validated) => {
         saveAuthSession(validated);
         setSession(validated);
-        setScreen("purechat");
+        setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
       })
       .catch(() => saveAuthSession(null))
       .finally(() => setBooting(false));
   }, []);
+
+  useEffect(() => {
+    if (!session || screen !== "integrations") return;
+    fetchIntegrations(session.token)
+      .then((next) => setIntegrations(next))
+      .catch(() => setIntegrations([]))
+      .finally(() => {
+        if (readLaunchScreen() === "integrations") {
+          clearLaunchScreen();
+        }
+      });
+  }, [session, screen]);
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -769,7 +797,7 @@ export default function App() {
       saveAuthSession(validated);
       setSession(validated);
       setThread(createThread("chat"));
-      setScreen("purechat");
+      setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
       setPassword("");
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "Sign in failed.");
@@ -853,7 +881,10 @@ export default function App() {
             await disconnectGitHub(session.token);
           } else {
             const installUrl = await connectGitHub(session.token, window.location.href);
-            if (installUrl) window.open(installUrl, "_blank", "noopener");
+            if (installUrl) {
+              window.location.assign(installUrl);
+              return;
+            }
           }
         }
         setIntegrations(await fetchIntegrations(session.token));
