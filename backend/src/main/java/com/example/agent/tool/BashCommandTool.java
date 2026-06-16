@@ -69,6 +69,11 @@ public class BashCommandTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "run_bash";
     }

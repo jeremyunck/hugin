@@ -1,4 +1,15 @@
-import type { AppState, AuthSession, ChatEntry, ChatThread, StreamToolEvent } from "../lib/types";
+import type {
+  AppState,
+  AuthSession,
+  ChatEntry,
+  ChatKind,
+  ChatThread,
+  FileNode,
+  Integration,
+  SandboxInfo,
+  StreamToolEvent,
+  ToolSummary
+} from "../lib/types";
 
 const APP_STORAGE_KEY = "hugin-minimal-ui-state-v1";
 const AUTH_STORAGE_KEY = "hugin-auth-session-v1";
@@ -18,7 +29,7 @@ type AuthMeResponse = {
   expiresAt: string;
 };
 
-type StreamEvent =
+export type StreamEvent =
   | { type: "config"; developerMode: boolean }
   | { type: "token"; text: string }
   | { type: "reasoning"; text: string }
@@ -137,11 +148,13 @@ export async function fetchCurrentUser(token: string): Promise<AuthSession> {
   };
 }
 
-export function createThread(): ChatThread {
+export function createThread(kind: ChatKind = "chat", sandboxId?: string): ChatThread {
   const createdAt = nowIso();
   return {
     id: uid("thread"),
-    title: "New chat",
+    title: kind === "sandbox" ? "New sandbox" : "New chat",
+    kind,
+    sandboxId,
     createdAt,
     updatedAt: createdAt,
     entries: []
@@ -289,12 +302,14 @@ export function completeAssistantEntry(state: AppState, threadId: string, assist
   }));
 }
 
-export async function streamPrompt(
-  token: string,
-  threadId: string,
-  prompt: string,
-  handlers: StreamHandlers
-) {
+export type StreamOptions = {
+  threadId: string;
+  prompt: string;
+  /** When set, the agent runs inside this sandbox and gets filesystem/shell tools. */
+  sandboxId?: string;
+};
+
+export async function streamPrompt(token: string, options: StreamOptions, handlers: StreamHandlers) {
   const response = await fetch("/api/agent/stream", {
     method: "POST",
     headers: {
@@ -303,8 +318,10 @@ export async function streamPrompt(
       Authorization: `Bearer ${token}`
     },
     body: JSON.stringify({
-      prompt,
-      sessionId: threadId
+      prompt: options.prompt,
+      sessionId: options.threadId,
+      // Only sandbox sessions advertise filesystem tools; pure chats omit sandboxId entirely.
+      ...(options.sandboxId ? { sandboxId: options.sandboxId } : {})
     })
   });
 
@@ -348,6 +365,48 @@ export async function streamPrompt(
   buffer += decoder.decode();
   const finalEvent = parseSseEvent(buffer);
   if (finalEvent) handlers.onEvent(finalEvent);
+}
+
+export async function createSandbox(token: string): Promise<SandboxInfo> {
+  return apiFetch<SandboxInfo>("/api/sandboxes", { method: "POST", body: JSON.stringify({}) }, token);
+}
+
+export async function deleteSandbox(token: string, id: string): Promise<void> {
+  await fetch(`/api/sandboxes/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchSandboxFiles(token: string, id: string): Promise<FileNode[]> {
+  return apiFetch<FileNode[]>(`/api/sandboxes/${encodeURIComponent(id)}/files`, {}, token);
+}
+
+export async function fetchIntegrations(token: string): Promise<Integration[]> {
+  return apiFetch<Integration[]>("/api/integrations", {}, token);
+}
+
+export async function fetchTools(token: string, sandboxId?: string): Promise<ToolSummary[]> {
+  const query = sandboxId ? `?sandboxId=${encodeURIComponent(sandboxId)}` : "";
+  return apiFetch<ToolSummary[]>(`/api/agent/tools${query}`, {}, token);
+}
+
+type GoogleReconnectResponse = {
+  status: Integration | Record<string, unknown>;
+  authUrl: string | null;
+};
+
+export async function reconnectGoogle(token: string, returnTo: string): Promise<string | null> {
+  const response = await apiFetch<GoogleReconnectResponse>(
+    "/api/google/reconnect",
+    { method: "POST", body: JSON.stringify({ returnTo }) },
+    token
+  );
+  return response.authUrl;
+}
+
+export async function disconnectGoogle(token: string): Promise<void> {
+  await apiFetch("/api/google/disconnect", { method: "POST", body: JSON.stringify({}) }, token);
 }
 
 function parseSseEvent(rawEvent: string): StreamEvent | null {

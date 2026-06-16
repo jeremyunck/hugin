@@ -21,6 +21,30 @@ public interface LocalTool {
     Map<String, Object> inputSchema();
 
     /**
+     * Whether this tool needs a real, writable workspace (filesystem or shell access) to be useful.
+     *
+     * <p>Tools that read, write, search, or execute against the workspace return {@code true}. The
+     * agent uses this to keep filesystem/shell tools out of "pure chat" requests (those with no
+     * sandbox bound to them), where there is no workspace the user expects the agent to touch, while
+     * still advertising them for sandbox-backed sessions. Defaults to {@code false}.
+     */
+    default boolean requiresWorkspace() {
+        return false;
+    }
+
+    /**
+     * Whether this tool is currently available to be advertised to the model.
+     *
+     * <p>Integration-backed tools (web search, Google Workspace, …) override this to report whether
+     * the integration is actually set up and enabled. When it returns {@code false} the agent does not
+     * advertise the tool at all, so the model never sees a capability the user has not connected.
+     * Defaults to {@code true} (always available).
+     */
+    default boolean isAvailable() {
+        return true;
+    }
+
+    /**
      * Executes the tool with the default (global) workspace.
      * Implementations call {@link #execute(Map, ToolContext)} internally; test stubs
      * may override only this method and the default {@code execute(args, ctx)} will delegate here.

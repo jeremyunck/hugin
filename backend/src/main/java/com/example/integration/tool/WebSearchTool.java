@@ -51,6 +51,13 @@ public class WebSearchTool implements LocalTool {
     }
 
     @Override
+    public boolean isAvailable() {
+        // Only advertise web search when the integration is actually set up (API key present),
+        // so the model never sees a capability the user has not configured.
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    @Override
     public String name() {
         return "web_search";
     }

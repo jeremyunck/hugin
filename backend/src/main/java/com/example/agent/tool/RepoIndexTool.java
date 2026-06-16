@@ -38,6 +38,11 @@ public class RepoIndexTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "repo_index";
     }

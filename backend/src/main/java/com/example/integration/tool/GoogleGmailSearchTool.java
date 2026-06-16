@@ -31,6 +31,11 @@ public class GoogleGmailSearchTool implements LocalTool {
     }
 
     @Override
+    public boolean isAvailable() {
+        return google.available();
+    }
+
+    @Override
     public String name() {
         return "google_gmail_search";
     }

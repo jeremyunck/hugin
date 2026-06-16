@@ -36,6 +36,11 @@ public class FindPathTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "find_path";
     }

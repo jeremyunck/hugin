@@ -24,6 +24,11 @@ public class ListFilesTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "list_files";
     }

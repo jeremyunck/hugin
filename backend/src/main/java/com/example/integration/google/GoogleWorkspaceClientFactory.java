@@ -87,9 +87,44 @@ public class GoogleWorkspaceClientFactory {
         this.properties = properties;
     }
 
+    /** Short TTL so repeated availability checks (one per Google tool, per agent request) avoid
+     * re-reading the OAuth token store on every call while still reflecting connect/disconnect quickly. */
+    private static final long AVAILABILITY_CACHE_MS = 5_000;
+    private volatile boolean cachedAvailable;
+    private volatile long availabilityCheckedAt;
+
     /** True when OAuth client secrets or a service-account credentials file is configured and present. */
     public boolean isConfigured() {
         return hasOauthClientSecrets() || hasServiceAccountCredentials();
+    }
+
+    /**
+     * Whether the Google Workspace tools are ready to use right now (configured and, for OAuth,
+     * consented). Used by each {@code google_*} tool's {@link com.example.agent.tool.LocalTool#isAvailable()}
+     * so the tools are only advertised to the model once the integration is actually connected.
+     * The result is cached for {@value #AVAILABILITY_CACHE_MS}ms because {@link #status()} reads the
+     * OAuth token store from disk and is called once per tool when the agent builds its tool list.
+     */
+    public boolean available() {
+        long now = System.currentTimeMillis();
+        if (now - availabilityCheckedAt < AVAILABILITY_CACHE_MS) {
+            return cachedAvailable;
+        }
+        boolean active;
+        try {
+            active = status().active();
+        } catch (Exception e) {
+            log.debug("Google availability check failed: {}", e.getMessage());
+            active = false;
+        }
+        cachedAvailable = active;
+        availabilityCheckedAt = now;
+        return active;
+    }
+
+    /** Resets the cached availability so a connect/disconnect is reflected on the next check. */
+    private void invalidateAvailability() {
+        availabilityCheckedAt = 0L;
     }
 
     /**
@@ -355,6 +390,7 @@ public class GoogleWorkspaceClientFactory {
     }
 
     private void clearCachedClients() {
+        invalidateAvailability();
         docs = null;
         sheets = null;
         drive = null;

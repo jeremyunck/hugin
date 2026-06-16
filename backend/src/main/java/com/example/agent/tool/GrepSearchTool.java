@@ -29,6 +29,11 @@ public class GrepSearchTool implements LocalTool {
     }
 
     @Override
+    public boolean requiresWorkspace() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "grep_search";
     }

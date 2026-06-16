@@ -614,6 +614,13 @@ input {
   transition: opacity 0.2s ease;
 }
 
+.login-error {
+  margin: 0 20px 4px;
+  color: #d14343;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .primary-button:active,
 .signin-button:active:not(:disabled),
 .dark-button:active:not(:disabled),
