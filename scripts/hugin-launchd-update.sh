@@ -47,6 +47,11 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 cd "$REPO_DIR"
 
+if [[ ! -f "$SERVICE_PLIST" ]]; then
+  warn "LaunchAgent plist not found at ${SERVICE_PLIST}."
+  exit 1
+fi
+
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 if [[ "$current_branch" != "main" ]]; then
   warn "Skipping update because checkout is on branch '$current_branch'."
@@ -80,6 +85,7 @@ MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" mvn -q -DskipTests package
 info "Reloading launchd service ${SERVICE_LABEL} in detached mode..."
 launchctl bootout "gui/$(id -u)" "$SERVICE_PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$SERVICE_PLIST"
+sleep 1
 kickstart_service
 
 info "Update complete."
