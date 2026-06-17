@@ -90,6 +90,7 @@ export type Integration = {
   description: string;
   connected: boolean;
   reconnectable: boolean;
+  showActionWhenDisconnected: boolean;
   authMode: string;
   tools: string[];
   message: string;

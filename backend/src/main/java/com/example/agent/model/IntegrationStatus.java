@@ -15,6 +15,7 @@ public record IntegrationStatus(
         String description,
         boolean connected,
         boolean reconnectable,
+        boolean showActionWhenDisconnected,
         String authMode,
         List<String> tools,
         String message) {

@@ -64,6 +64,7 @@ public class IntegrationsController {
                 "Browse repositories and open issues via a GitHub App",
                 status.active(),
                 status.reconnectable(),
+                !status.active(),
                 status.authMode(),
                 GITHUB_TOOLS,
                 status.message());
@@ -77,6 +78,7 @@ public class IntegrationsController {
                 "Docs, Sheets, Gmail, and Calendar",
                 status.active(),
                 status.reconnectable(),
+                false,
                 status.authMode(),
                 GOOGLE_TOOLS,
                 status.message());
@@ -89,6 +91,7 @@ public class IntegrationsController {
                 "Web Search",
                 "Up-to-date answers from the web",
                 connected,
+                false,
                 false,
                 connected ? "api-key" : "none",
                 List.of("web_search"),

@@ -643,7 +643,7 @@ function IntegrationsScreen(props: {
                 <div className="integration-meta">{integration.description}</div>
               </div>
               <div className="integration-action">
-                {integration.reconnectable || (integration.id === "github" && !integration.connected) ? (
+                {integration.reconnectable || integration.showActionWhenDisconnected ? (
                   integration.connected ? (
                     <button
                       type="button"
@@ -958,11 +958,13 @@ export default function App() {
               response.status && typeof response.status === "object" && "message" in response.status
                 ? response.status.message
                 : null;
-            throw new Error(
+            setError(
               typeof statusMessage === "string" && statusMessage
                 ? statusMessage
                 : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
             );
+            setIntegrations(await fetchIntegrations(session.token));
+            return;
           }
         }
         setIntegrations(await fetchIntegrations(session.token));
