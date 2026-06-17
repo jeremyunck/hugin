@@ -9,6 +9,19 @@ UPDATE_LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
 
 info() { printf '[hugin-update] %s\n' "$*"; }
 warn() { printf '[hugin-update] %s\n' "$*" >&2; }
+kickstart_service() {
+  local target="gui/$(id -u)/${SERVICE_LABEL}"
+  local attempt
+  for attempt in {1..10}; do
+    if launchctl kickstart -k "$target" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  warn "Unable to kickstart ${SERVICE_LABEL} after reloading ${SERVICE_PLIST}."
+  return 1
+}
 
 mkdir -p "$UPDATE_LOG_DIR"
 
@@ -67,7 +80,6 @@ MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" mvn -q -DskipTests package
 info "Reloading launchd service ${SERVICE_LABEL} in detached mode..."
 launchctl bootout "gui/$(id -u)" "$SERVICE_PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$SERVICE_PLIST"
-launchctl enable "gui/$(id -u)/${SERVICE_LABEL}"
-launchctl kickstart -k "gui/$(id -u)/${SERVICE_LABEL}"
+kickstart_service
 
 info "Update complete."
