@@ -287,6 +287,10 @@ select {
   justify-content: flex-start;
 }
 
+.message-row-assistant + .message-row-assistant {
+  margin-top: -2px;
+}
+
 .message-bubble {
   max-width: 100%;
   min-width: 0;
@@ -321,13 +325,104 @@ select {
   font-size: 12.5px;
 }
 
-.message-bubble-assistant {
+.assistant-response {
   max-width: 88%;
+  min-width: 0;
+  padding: 2px 2px 2px 0;
+  color: #1c1f23;
+  font-size: 14px;
+}
+
+.assistant-response > :first-child {
+  margin-top: 0;
+}
+
+.assistant-response > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-response p,
+.assistant-response ul,
+.assistant-response ol,
+.assistant-response pre,
+.assistant-response blockquote,
+.assistant-response table,
+.assistant-response h1,
+.assistant-response h2,
+.assistant-response h3,
+.assistant-response h4 {
+  margin: 0 0 12px;
+}
+
+.assistant-response ul,
+.assistant-response ol {
+  padding-left: 20px;
+}
+
+.assistant-response li + li {
+  margin-top: 4px;
+}
+
+.assistant-response code {
+  font-family: "SFMono-Regular", SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+  background: #f4f4f6;
+  border-radius: 6px;
+  padding: 0.12em 0.38em;
+}
+
+.assistant-response pre {
+  overflow-x: auto;
+  background: #f7f7f8;
   border: 1px solid #eaebed;
   border-radius: 12px;
   padding: 12px 14px;
-  color: #1c1f23;
-  font-size: 14px;
+}
+
+.assistant-response pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.assistant-response blockquote {
+  border-left: 3px solid #d7dbe1;
+  padding-left: 12px;
+  color: #4b5260;
+}
+
+.assistant-response table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid #eaebed;
+  border-radius: 12px;
+}
+
+.assistant-response th,
+.assistant-response td {
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #eaebed;
+}
+
+.assistant-response th {
+  background: #f7f7f8;
+  font-weight: 600;
+}
+
+.assistant-response tr:last-child td {
+  border-bottom: 0;
+}
+
+.assistant-response a {
+  color: #355ee8;
+  text-decoration: none;
+}
+
+.assistant-response a:hover {
+  text-decoration: underline;
 }
 
 .assistant-bullets,

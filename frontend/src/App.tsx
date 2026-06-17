@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   BatteryFull,
@@ -385,6 +387,10 @@ function TypingDots() {
   );
 }
 
+function normalizeAssistantMarkdown(content: string) {
+  return content.replace(/<br\s*\/?>/gi, "\n");
+}
+
 function Messages({
   entries,
   busy,
@@ -442,8 +448,12 @@ function Messages({
         const empty = !entry.content;
         return (
           <div key={entry.id} className="message-row message-row-assistant fade-in">
-            <div className="message-bubble message-bubble-assistant">
-              {empty && busy ? <TypingDots /> : <span>{entry.content}</span>}
+            <div className="assistant-response">
+              {empty && busy ? (
+                <TypingDots />
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeAssistantMarkdown(entry.content)}</ReactMarkdown>
+              )}
             </div>
           </div>
         );
