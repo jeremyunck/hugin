@@ -74,6 +74,24 @@ input {
     0 12px 30px rgba(18, 21, 25, 0.08);
 }
 
+@media (max-width: 480px) {
+  .mock-page {
+    min-height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .device-shell {
+    height: 100dvh;
+    width: 100vw;
+    max-width: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 .status-bar {
   position: relative;
   display: flex;
