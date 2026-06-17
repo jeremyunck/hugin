@@ -63,7 +63,7 @@ public class IntegrationsController {
                 "GitHub",
                 "Browse repositories and open issues via a GitHub App",
                 status.active(),
-                status.reconnectable(),
+                true,
                 status.authMode(),
                 GITHUB_TOOLS,
                 status.message());

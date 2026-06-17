@@ -434,17 +434,18 @@ export async function disconnectGoogle(token: string): Promise<void> {
 }
 
 type GitHubConnectResponse = {
-  status: Integration | Record<string, unknown>;
+  status?: {
+    message?: string;
+  };
   installUrl: string | null;
 };
 
-export async function connectGitHub(token: string, returnTo: string): Promise<string | null> {
-  const response = await apiFetch<GitHubConnectResponse>(
+export async function connectGitHub(token: string, returnTo: string): Promise<GitHubConnectResponse> {
+  return apiFetch<GitHubConnectResponse>(
     "/api/github/connect",
     { method: "POST", body: JSON.stringify({ returnTo }) },
     token
   );
-  return response.installUrl;
 }
 
 export async function disconnectGitHub(token: string): Promise<void> {

@@ -948,11 +948,19 @@ export default function App() {
           if (integration.connected) {
             await disconnectGitHub(session.token);
           } else {
-            const installUrl = await connectGitHub(session.token, window.location.href);
+            const response = await connectGitHub(session.token, window.location.href);
+            const installUrl = response.installUrl;
             if (installUrl) {
               window.location.assign(installUrl);
               return;
             }
+            setError(
+              typeof response.status?.message === "string" && response.status.message
+                ? response.status.message
+                : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
+            );
+            setIntegrations(await fetchIntegrations(session.token));
+            return;
           }
         }
         setIntegrations(await fetchIntegrations(session.token));
