@@ -89,8 +89,11 @@ const MENU_ITEMS = [
   ["History", History, "history"],
   ["Integrations", Puzzle, "integrations"]
 ] as const;
-const WORKSPACE_PROMPT_RE =
-  /\b(debug|fix|bug|code|repo|repository|file|files|folder|directory|build|test|frontend|backend|component|render|markdown|function|class|css|html|typescript|javascript|java|python|bash|shell|command)\b/i;
+const WORKSPACE_ACTION_RE =
+  /\b(debug|fix|edit|change|update|inspect|investigate|search|grep|find|open|read|write|modify|patch|refactor|run|build|test|render)\b/i;
+const WORKSPACE_TARGET_RE =
+  /\b(code|repo|repository|file|files|folder|directory|project|frontend|backend|component|markdown|ui|function|class|css|html|typescript|javascript|java|python|bash|shell|command)\b/i;
+const WORKSPACE_PATH_RE = /(^|\s)(\.\/|\/|~\/)[^\s]+/;
 
 function entryId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -104,7 +107,9 @@ function nowIso() {
 }
 
 function promptNeedsWorkspace(prompt: string) {
-  return WORKSPACE_PROMPT_RE.test(prompt);
+  return (WORKSPACE_ACTION_RE.test(prompt) && WORKSPACE_TARGET_RE.test(prompt))
+    || WORKSPACE_PATH_RE.test(prompt)
+    || prompt.includes("```");
 }
 
 function readLaunchScreen() {
