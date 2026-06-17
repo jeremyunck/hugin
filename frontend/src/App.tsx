@@ -954,13 +954,9 @@ export default function App() {
               window.location.assign(installUrl);
               return;
             }
-            const statusMessage =
-              response.status && typeof response.status === "object" && "message" in response.status
-                ? response.status.message
-                : null;
             setError(
-              typeof statusMessage === "string" && statusMessage
-                ? statusMessage
+              typeof response.status?.message === "string" && response.status.message
+                ? response.status.message
                 : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
             );
             setIntegrations(await fetchIntegrations(session.token));

@@ -434,7 +434,9 @@ export async function disconnectGoogle(token: string): Promise<void> {
 }
 
 type GitHubConnectResponse = {
-  status: Integration | Record<string, unknown>;
+  status?: {
+    message?: string;
+  };
   installUrl: string | null;
 };
 
