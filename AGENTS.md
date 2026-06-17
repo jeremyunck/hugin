@@ -6,12 +6,9 @@ When a task updates specific screens, agents should capture screenshots of each 
 
 ## Screenshot Login
 
-Use the seeded screenshot test account when verifying authenticated UI flows and capturing screenshots:
-
-- Username: `screenshot-test`
-- Password: `hugin-screenshot`
-
-Agents should log in with that account before taking post-change UI screenshots unless the task specifically requires a different user state.
+Use the seeded screenshot test account when verifying authenticated UI flows and capturing screenshots.
+Read the credentials from `AUTH_TEST_USER_USERNAME` and `AUTH_TEST_USER_PASSWORD` (or the local defaults configured in the backend auth bootstrap) before logging in.
+Agents should use that account for post-change UI screenshots unless the task specifically requires a different user state.
 
 Agents working in this repository should follow this workflow:
 
