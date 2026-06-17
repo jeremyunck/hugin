@@ -322,6 +322,80 @@ class OpenAiClientTest {
     }
 
     @Test
+    void chatRetriesOnTransient503ThenSucceeds() throws IOException {
+        AtomicInteger requestCount = new AtomicInteger(0);
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            int count = requestCount.getAndIncrement();
+            if (count == 0) {
+                // First request: simulate a transient upstream failure.
+                exchange.sendResponseHeaders(503, 0);
+                exchange.getResponseBody().close();
+            } else {
+                byte[] body = SIMPLE_RESPONSE.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                try (var os = exchange.getResponseBody()) {
+                    os.write(body);
+                }
+            }
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        var properties = new LlmProperties("test", "m", "medium",
+                Map.of("test", new LlmProperties.Provider(
+                        "http://localhost:" + port + "/v1", null)));
+        OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
+
+        ChatResponse response = client.chat("m", List.of(ChatMessage.user("retry me")), List.of());
+
+        assertThat(requestCount.get()).isGreaterThanOrEqualTo(2);
+        assertThat(response.choices().get(0).message().content()).isEqualTo("Hello there!");
+    }
+
+    @Test
+    void chatStreamReconnectsOnTransient503ThenSucceeds() throws IOException {
+        AtomicInteger requestCount = new AtomicInteger(0);
+        String sse = """
+                data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}
+
+                data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+                data: [DONE]
+
+                """;
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            int count = requestCount.getAndIncrement();
+            if (count == 0) {
+                exchange.sendResponseHeaders(503, 0);
+                exchange.getResponseBody().close();
+            } else {
+                byte[] body = sse.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+                exchange.sendResponseHeaders(200, body.length);
+                try (var os = exchange.getResponseBody()) {
+                    os.write(body);
+                }
+            }
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        var properties = new LlmProperties("test", "m", "medium",
+                Map.of("test", new LlmProperties.Provider(
+                        "http://localhost:" + port + "/v1", null)));
+        OpenAiClient client = new OpenAiClient(properties, new ObjectMapper());
+
+        List<String> tokens = new ArrayList<>();
+        ChatResponse response = client.chatStream(
+                "m", List.of(ChatMessage.user("retry me")), List.of(), tokens::add);
+
+        assertThat(requestCount.get()).isGreaterThanOrEqualTo(2);
+        assertThat(tokens).containsExactly("ok");
+        assertThat(response.choices().get(0).message().content()).isEqualTo("ok");
+    }
+
+    @Test
     void chatStreamWithBearerAuth() throws IOException {
         // Verify that chatStream also sends the Authorization header.
         String[] capturedAuth = new String[1];

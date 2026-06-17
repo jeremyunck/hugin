@@ -188,6 +188,20 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
     case "error":
       entries[idx] = { ...assistant, content: assistant.content || `⚠️ ${event.message}` };
       break;
+    case "reset": {
+      // A dropped stream is being replayed: clear this turn's partial answer and any tool
+      // entries streamed just before the assistant bubble so the retry renders from scratch.
+      let removeFrom = idx;
+      while (removeFrom > 0 && entries[removeFrom - 1].type === "tool") {
+        removeFrom -= 1;
+      }
+      entries.splice(removeFrom, idx - removeFrom);
+      const resetIdx = entries.findIndex((entry) => entry.id === assistantId);
+      if (resetIdx !== -1) {
+        entries[resetIdx] = { ...assistant, content: "", reasoning: "" };
+      }
+      break;
+    }
     default:
       break;
   }

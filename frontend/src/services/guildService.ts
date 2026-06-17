@@ -36,6 +36,9 @@ export type StreamEvent =
   | { type: "reasoning"; text: string }
   | { type: "tool"; name: string; args: string }
   | { type: "tool_result"; name: string; result: string }
+  // Emitted client-side (never by the server) before a dropped stream is replayed, so the UI can
+  // discard the partial answer from the failed attempt and stream the fresh one cleanly.
+  | { type: "reset" }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -332,63 +335,139 @@ export type StreamOptions = {
   sandboxId?: string;
 };
 
+// Backoff schedule for reconnecting a dropped stream. The length also bounds the attempt count.
+const STREAM_RECONNECT_DELAYS_MS = [1000, 2000, 4000];
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Status codes worth reconnecting on: rate limit and transient upstream/server errors. */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+async function errorFromResponse(response: Response): Promise<Error & { status?: number }> {
+  let message = `${response.status} ${response.statusText}`;
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === "string" && body.error) {
+      message = body.error;
+    }
+  } catch {
+    // Keep the status fallback when no JSON body is available.
+  }
+  const error = new Error(message) as Error & { status?: number };
+  error.status = response.status;
+  return error;
+}
+
+/**
+ * Streams a prompt, transparently reconnecting if the connection drops before the agent finishes.
+ *
+ * A normal run ends with a server `done` (or `error`) event. If the stream instead ends — or the
+ * fetch throws — without one, the connection was lost; we replay the request after a short backoff
+ * (emitting a `reset` first so the partial answer is discarded). We do NOT reconnect once a tool
+ * call has been observed in the dropped attempt, since replaying the run could repeat tool
+ * side-effects; that case surfaces an error instead.
+ */
 export async function streamPrompt(token: string, options: StreamOptions, handlers: StreamHandlers) {
-  const response = await fetch("/api/agent/stream", {
-    method: "POST",
-    headers: {
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      prompt: options.prompt,
-      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-      sessionId: options.threadId,
-      // Only sandbox sessions advertise filesystem tools; pure chats omit sandboxId entirely.
-      ...(options.sandboxId ? { sandboxId: options.sandboxId } : {})
-    })
+  const requestBody = JSON.stringify({
+    prompt: options.prompt,
+    ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+    sessionId: options.threadId,
+    // Only sandbox sessions advertise filesystem tools; pure chats omit sandboxId entirely.
+    ...(options.sandboxId ? { sandboxId: options.sandboxId } : {})
   });
 
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
+  const maxAttempts = STREAM_RECONNECT_DELAYS_MS.length;
+  let lastError: (Error & { status?: number }) | null = null;
+
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    if (attempt > 0) {
+      // Discard whatever the failed attempt streamed so the replay renders cleanly.
+      handlers.onEvent({ type: "reset" });
+      await delay(STREAM_RECONNECT_DELAYS_MS[attempt - 1]);
+    }
+
+    let receivedTerminal = false;
+    let executedTool = false;
+
     try {
-      const body = await response.json();
-      if (body && typeof body.error === "string" && body.error) {
-        message = body.error;
+      const response = await fetch("/api/agent/stream", {
+        method: "POST",
+        headers: {
+          Accept: "text/event-stream",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: requestBody
+      });
+
+      if (!response.ok) {
+        const error = await errorFromResponse(response);
+        // Transient server-side failures are worth replaying; anything else is final.
+        if (isRetryableStatus(response.status) && attempt < maxAttempts) {
+          lastError = error;
+          continue;
+        }
+        throw error;
       }
-    } catch {
-      // Keep the status fallback when no JSON body is available.
+
+      if (!response.body) {
+        throw new Error("Stream body was not available.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const dispatch = (event: StreamEvent | null) => {
+        if (!event) return;
+        if (event.type === "tool") executedTool = true;
+        if (event.type === "done" || event.type === "error") receivedTerminal = true;
+        handlers.onEvent(event);
+      };
+
+      while (!receivedTerminal) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const rawEvent of parts) {
+          dispatch(parseSseEvent(rawEvent));
+        }
+      }
+
+      if (!receivedTerminal) {
+        buffer += decoder.decode();
+        dispatch(parseSseEvent(buffer));
+      }
+
+      if (receivedTerminal) return;
+
+      // Stream ended without a terminal event: the connection dropped mid-run.
+      lastError = new Error("Connection lost before the response completed.");
+      if (executedTool || attempt >= maxAttempts) {
+        handlers.onEvent({ type: "error", message: lastError.message });
+        return;
+      }
+      // Fall through to the next attempt.
+    } catch (e) {
+      const error = e as Error & { status?: number };
+      lastError = error;
+      // A tool already ran, or retries are exhausted: don't replay, just report.
+      if (executedTool || attempt >= maxAttempts) {
+        throw error;
+      }
+      // Otherwise loop and reconnect.
     }
-    const error = new Error(message) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
   }
 
-  if (!response.body) {
-    throw new Error("Stream body was not available.");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
-
-    for (const rawEvent of parts) {
-      const event = parseSseEvent(rawEvent);
-      if (event) handlers.onEvent(event);
-    }
-  }
-
-  buffer += decoder.decode();
-  const finalEvent = parseSseEvent(buffer);
-  if (finalEvent) handlers.onEvent(finalEvent);
+  if (lastError) throw lastError;
 }
 
 export async function createSandbox(token: string): Promise<SandboxInfo> {

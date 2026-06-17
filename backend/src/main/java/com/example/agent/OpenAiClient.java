@@ -166,7 +166,8 @@ public class OpenAiClient {
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0) {
                 long delay = RETRY_DELAYS_MS[attempt - 1];
-                log.warn("Rate limited (429), retrying stream in {}ms (attempt {}/{})", delay, attempt, MAX_RETRIES);
+                log.warn("Transient LLM streaming error, reconnecting in {}ms (attempt {}/{}): {}",
+                        delay, attempt, MAX_RETRIES, lastErr != null ? lastErr.getMessage() : "unknown");
                 try {
                     Thread.sleep(delay);
                 } catch (InterruptedException ie) {
@@ -174,6 +175,18 @@ public class OpenAiClient {
                     throw new IllegalStateException("Interrupted during retry backoff", ie);
                 }
             }
+            // Tracks whether this attempt has already delivered any output to the caller. Once a
+            // token has been emitted we must NOT reconnect on a mid-stream drop, because replaying
+            // the request from scratch would duplicate everything streamed so far.
+            boolean[] emitted = {false};
+            Consumer<String> contentTracker = delta -> {
+                emitted[0] = true;
+                onContentDelta.accept(delta);
+            };
+            Consumer<String> reasoningTracker = delta -> {
+                emitted[0] = true;
+                onReasoningDelta.accept(delta);
+            };
             // Build a fresh request each attempt so the BodyPublisher is not reused across retries.
             var httpRequestBuilder = java.net.http.HttpRequest.newBuilder(endpoint)
                     .header("Content-Type", "application/json")
@@ -186,30 +199,41 @@ public class OpenAiClient {
                 HttpResponse<InputStream> response = streamingHttpClient.send(
                         httpRequestBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
 
-                if (response.statusCode() == 429 && attempt < MAX_RETRIES) {
+                int status = response.statusCode();
+                if (isRetryableStatus(status) && attempt < MAX_RETRIES) {
                     String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
                     lastErr = new IllegalStateException(
-                            "LLM streaming request rate limited (HTTP 429): " + errorBody);
+                            "LLM streaming request failed (HTTP " + status + "): " + errorBody);
                     continue;
                 }
-                if (response.statusCode() >= 400) {
+                if (status >= 400) {
                     String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
                     throw new IllegalStateException(
-                            "LLM streaming request failed (HTTP " + response.statusCode() + "): " + errorBody);
+                            "LLM streaming request failed (HTTP " + status + "): " + errorBody);
                 }
-                log.debug("← LLM stream POST {} status={}", endpoint, response.statusCode());
+                log.debug("← LLM stream POST {} status={}", endpoint, status);
 
-                return parseStream(response.body(), onContentDelta, onReasoningDelta);
+                return parseStream(response.body(), contentTracker, reasoningTracker);
             } catch (IllegalStateException e) {
                 throw e;
             } catch (IOException e) {
+                // A connection failure. If it happened before any output was delivered we can safely
+                // reconnect; once tokens have been emitted, replaying would duplicate them, so fail.
+                if (emitted[0]) {
+                    throw new IllegalStateException(
+                            "LLM streaming connection lost after partial response: " + e.getMessage(), e);
+                }
+                if (attempt < MAX_RETRIES) {
+                    lastErr = e;
+                    continue;
+                }
                 throw new IllegalStateException("LLM streaming request failed: " + e.getMessage(), e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("LLM streaming request interrupted", e);
             }
         }
-        throw new IllegalStateException("Rate limited: max streaming retries exceeded", lastErr);
+        throw new IllegalStateException("LLM streaming request failed: max retries exceeded", lastErr);
     }
 
     private ChatResponse parseStream(InputStream stream, Consumer<String> onContentDelta,
@@ -299,15 +323,19 @@ public class OpenAiClient {
     private static final long[] RETRY_DELAYS_MS = {2000, 4000, 8000, 16000};
 
     /**
-     * Wraps an LLM request in retry logic with exponential backoff.
-     * Retries only on 429 (rate limit) responses.
+     * Wraps an LLM request in retry logic with exponential backoff. Retries transient failures:
+     * a rate limit (429), a 5xx upstream error, or a lost/refused connection
+     * ({@link org.springframework.web.client.ResourceAccessException}). Non-transient errors
+     * (4xx other than 429) propagate immediately. Safe because the non-streaming request is
+     * replayed in full each attempt.
      */
     private <T> T withRetry(Callable<T> action) {
         RuntimeException lastErr = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0) {
                 long delay = RETRY_DELAYS_MS[attempt - 1];
-                log.warn("Rate limited (429), retrying in {}ms (attempt {}/{})", delay, attempt, MAX_RETRIES);
+                log.warn("Transient LLM error, retrying in {}ms (attempt {}/{}): {}",
+                        delay, attempt, MAX_RETRIES, lastErr != null ? lastErr.getMessage() : "unknown");
                 try {
                     Thread.sleep(delay);
                 } catch (InterruptedException ie) {
@@ -317,8 +345,16 @@ public class OpenAiClient {
             }
             try {
                 return action.call();
-            } catch (org.springframework.web.client.HttpClientErrorException e) {
-                if (e.getStatusCode().value() == 429 && attempt < MAX_RETRIES) {
+            } catch (org.springframework.web.client.HttpStatusCodeException e) {
+                // 429 (rate limit) and 5xx (transient upstream) are retryable; other 4xx are not.
+                if (isRetryableStatus(e.getStatusCode().value()) && attempt < MAX_RETRIES) {
+                    lastErr = e;
+                } else {
+                    throw e;
+                }
+            } catch (org.springframework.web.client.ResourceAccessException e) {
+                // I/O error talking to the provider (connection reset, refused, read timeout, …).
+                if (attempt < MAX_RETRIES) {
                     lastErr = e;
                 } else {
                     throw e;
@@ -329,7 +365,12 @@ public class OpenAiClient {
                 throw new IllegalStateException("LLM request failed: " + e.getMessage(), e);
             }
         }
-        throw new IllegalStateException("Rate limited: max retries exceeded", lastErr);
+        throw new IllegalStateException("LLM request failed: max retries exceeded", lastErr);
+    }
+
+    /** Whether an HTTP status from the LLM endpoint is worth retrying: rate limit or 5xx. */
+    private static boolean isRetryableStatus(int status) {
+        return status == 429 || status == 500 || status == 502 || status == 503 || status == 504;
     }
 
     private static String stripTrailingSlash(String url) {
