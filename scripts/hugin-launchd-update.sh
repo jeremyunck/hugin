@@ -34,7 +34,10 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
-export AGENT_HOME="${AGENT_HOME:-$DEV_HOME}"
+if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
+  export AGENT_HOME="$DEV_HOME"
+fi
+mkdir -p "$AGENT_HOME"
 
 if [[ -x /opt/homebrew/opt/openjdk@21/bin/java ]]; then
   export JAVA_HOME="/opt/homebrew/opt/openjdk@21"
