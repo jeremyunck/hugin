@@ -100,6 +100,19 @@ class AgentControllerTest {
     }
 
     @Test
+    void chatEndpointPassesRawSessionIdToAgentService() {
+        var request = new AgentRequest("Continue", "llama3.2", "session-123");
+        when(agentService.chat(any(AgentRequest.class), eq("global")))
+                .thenReturn(new AgentResponse("Sure!", List.of()));
+
+        controller.chat(request, null);
+
+        ArgumentCaptor<AgentRequest> requestCaptor = ArgumentCaptor.forClass(AgentRequest.class);
+        verify(agentService).chat(requestCaptor.capture(), eq("global"));
+        assertThat(requestCaptor.getValue().sessionId()).isEqualTo("session-123");
+    }
+
+    @Test
     void historyEndpointScopesSessionAndReturnsConversationHistory() {
         List<ChatMessage> history = List.of(ChatMessage.user("hello"), ChatMessage.assistant("hi"));
         when(agentService.history("global", null, "session-123")).thenReturn(history);

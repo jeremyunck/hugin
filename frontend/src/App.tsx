@@ -274,6 +274,10 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
   };
 }
 
+function threadHasPendingAssistant(thread: ChatThread): boolean {
+  return thread.entries.some((entry) => entry.type === "assistant" && !entry.completedAt);
+}
+
 function StatusBar() {
   return (
     <div className="status-bar">
@@ -1232,6 +1236,7 @@ export default function App() {
       upsertThread(next);
       if (threadRef.current.id === next.id) {
         setThread(next);
+        threadRef.current = next;
       }
     } catch {
       // Leave local state alone when the background resync cannot reach the server.
@@ -1271,13 +1276,9 @@ export default function App() {
     if (!session) return;
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
-      const activeThreadIds = new Set(activeAssistantIdsRef.current.keys());
-      for (const threadId of activeThreadIds) {
-        const candidate = stateRef.current.threads.find((item) => item.id === threadId)
-          ?? (threadRef.current.id === threadId ? threadRef.current : null);
-        if (candidate) {
-          void syncThreadFromServer(candidate);
-        }
+      const candidates = stateRef.current.threads.filter(threadHasPendingAssistant);
+      for (const candidate of candidates) {
+        void syncThreadFromServer(candidate);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -1285,6 +1286,45 @@ export default function App() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleVisibility);
+    };
+  }, [session, syncThreadFromServer]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const schedule = (delayMs: number) => {
+      clearTimer();
+      timer = window.setTimeout(() => {
+        void recoverPendingThreads();
+      }, delayMs);
+    };
+
+    const recoverPendingThreads = async () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      const pendingThreads = stateRef.current.threads.filter(threadHasPendingAssistant);
+      if (!pendingThreads.length) return;
+
+      await Promise.all(pendingThreads.map((candidate) => syncThreadFromServer(candidate)));
+
+      if (!cancelled && stateRef.current.threads.some(threadHasPendingAssistant)) {
+        schedule(3000);
+      }
+    };
+
+    void recoverPendingThreads();
+
+    return () => {
+      cancelled = true;
+      clearTimer();
     };
   }, [session, syncThreadFromServer]);
 

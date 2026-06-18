@@ -170,8 +170,6 @@ public class AgentController {
                     .map(UserAgent::systemPrompt)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Agent not found"));
         }
-        String sessionId = request.sessionId();
-        String scopedSessionId = scopeSession(owner, request.agentId(), sessionId);
         return new AgentRequest(
                 request.prompt(),
                 request.attachments(),
@@ -182,19 +180,11 @@ public class AgentController {
                 request.simple(),
                 request.agentId(),
                 systemPrompt,
-                scopedSessionId,
+                request.sessionId(),
                 request.priorMessages(),
                 request.recentMessages(),
                 request.sandboxId(),
                 request.clientManagedContext());
-    }
-
-    private static String scopeSession(String owner, String agentId, String sessionId) {
-        String base = memoryOwner(owner, agentId);
-        if (sessionId == null || sessionId.isBlank()) {
-            return base;
-        }
-        return base + ":" + sessionId;
     }
 
     private static String memoryOwner(String owner, String agentId) {
