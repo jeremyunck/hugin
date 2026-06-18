@@ -34,7 +34,7 @@ process.
 | `hugin server start / stop / restart / status` | Manage the background service |
 | `hugin server logs` | Stream service logs |
 
-Set `AGENT_HOME` to override the default install location (`~/.hugin`).
+Set `AGENT_HOME` to override the default agent home (`~/.hugin`).
 Set `LLM_REASONING_EFFORT` to override the reasoning effort sent to the model.
 
 ## Prerequisites
@@ -77,6 +77,9 @@ The installer writes:
 - `~/Library/LaunchAgents/com.jnku.hugin.repo-server.plist`
 - `~/Library/LaunchAgents/com.jnku.hugin.repo-autoupdate.plist`
 - `~/.config/hugin-dev/env`
+
+The dev launchd scripts keep runtime state, including Docker sandbox workspaces, under
+`~/.local/share/hugin-dev` by default instead of creating a `sandboxes/` directory in the repo.
 
 The updater only deploys when `origin/main` has moved. It skips if the checkout is not on
 `main` or if there are tracked local changes that would make `git pull --ff-only` unsafe.

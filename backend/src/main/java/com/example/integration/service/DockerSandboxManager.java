@@ -56,7 +56,7 @@ public class DockerSandboxManager implements SandboxRuntime {
             SandboxProperties properties,
             WorkspaceRegistry workspaceRegistry,
             WorkspaceFactory workspaceFactory,
-            @Value("${agent.home:.}") String agentHome) {
+            @Value("${agent.home:${user.home}/.hugin}") String agentHome) {
         this.properties = properties;
         this.workspaceRegistry = workspaceRegistry;
         this.workspaceFactory = workspaceFactory;

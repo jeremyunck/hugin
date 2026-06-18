@@ -33,7 +33,7 @@ public class IntegrationsController {
             "google_calendar_create");
 
     private static final List<String> GITHUB_TOOLS = List.of(
-            "github_list_repositories", "github_create_issue");
+            "github_list_repositories", "github_create_issue", "github_create_pull_request");
 
     private final GoogleWorkspaceClientFactory google;
     private final GitHubAppService github;
@@ -61,7 +61,7 @@ public class IntegrationsController {
         return new IntegrationStatus(
                 "github",
                 "GitHub",
-                "Browse repositories and open issues via a GitHub App",
+                "Browse repositories and open issues or pull requests via a GitHub App",
                 status.active(),
                 true,
                 status.authMode(),

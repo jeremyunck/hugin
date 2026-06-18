@@ -12,6 +12,7 @@ application-local.yml
 node_modules/
 data/
 .data/
+sandboxes/
 
 # Frontend build artifacts
 frontend/dist/

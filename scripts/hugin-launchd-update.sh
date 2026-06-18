@@ -6,6 +6,7 @@ ENV_FILE="${HUGIN_DEV_ENV_FILE:-$HOME/.config/hugin-dev/env}"
 SERVICE_LABEL="${HUGIN_DEV_SERVICE_LABEL:-com.jnku.hugin.repo-server}"
 SERVICE_PLIST="${HUGIN_DEV_SERVICE_PLIST:-$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist}"
 UPDATE_LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
+DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
 
 info() { printf '[hugin-update] %s\n' "$*"; }
 warn() { printf '[hugin-update] %s\n' "$*" >&2; }
@@ -33,7 +34,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
-export AGENT_HOME="${AGENT_HOME:-$REPO_DIR}"
+export AGENT_HOME="${AGENT_HOME:-$DEV_HOME}"
 
 if [[ -x /opt/homebrew/opt/openjdk@21/bin/java ]]; then
   export JAVA_HOME="/opt/homebrew/opt/openjdk@21"

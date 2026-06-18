@@ -56,7 +56,7 @@ public class CloudAgentService {
             Optional<PullRequestPublisher> pullRequestPublisher,
             CloudAgentProperties properties,
             ObjectMapper objectMapper,
-            @Value("${agent.home:.}") String agentHome) {
+            @Value("${agent.home:${user.home}/.hugin}") String agentHome) {
         this.agentService = agentService;
         this.workspaceRegistry = workspaceRegistry;
         this.workspaceFactory = workspaceFactory;

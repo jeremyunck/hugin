@@ -23,7 +23,7 @@ public class SystemFactsService {
     private final Path agentHome;
     private SystemFacts facts;
 
-    public SystemFactsService(@Value("${agent.home:.}") String agentHome) {
+    public SystemFactsService(@Value("${agent.home:${user.home}/.hugin}") String agentHome) {
         this.agentHome = Path.of(agentHome);
     }
 

@@ -47,4 +47,17 @@ class IntegrationsControllerTest {
                 .andExpect(jsonPath("$[1].connected").value(false))
                 .andExpect(jsonPath("$[1].reconnectable").value(true));
     }
+
+    @Test
+    void githubListsPullRequestTool() throws Exception {
+        when(google.status()).thenReturn(new GoogleWorkspaceStatus(
+                false, true, true, "oauth", "Google OAuth is not connected."));
+        when(github.status()).thenReturn(new GitHubStatus(
+                true, true, true, "github-app", "octocat", "GitHub App is connected."));
+
+        mockMvc.perform(get("/api/integrations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[1].id").value("github"))
+                .andExpect(jsonPath("$[1].tools[2]").value("github_create_pull_request"));
+    }
 }
