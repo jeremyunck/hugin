@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -51,6 +52,7 @@ public class JsonFileConversationStore implements ConversationStore {
     private final AtomicBoolean flushPending = new AtomicBoolean();
     private final AtomicBoolean dirty = new AtomicBoolean();
 
+    @Autowired
     public JsonFileConversationStore(ObjectMapper objectMapper, ConversationMemoryProperties properties) {
         this(objectMapper, properties, Clock.systemUTC());
     }

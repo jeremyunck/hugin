@@ -2,10 +2,12 @@ package com.example.integration.controller;
 
 import com.example.agent.model.FileNode;
 import com.example.agent.model.SandboxInfo;
+import com.example.integration.github.GitHubAppService;
 import com.example.integration.service.DockerSandboxManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -30,17 +32,43 @@ public class SandboxController {
 
     /** Optional body for {@code POST /api/sandboxes}; {@code image} overrides the configured default. */
     public record CreateSandboxRequest(String image) {}
+    public record CreateGitHubSandboxRequest(String image, String repoFullName, String branch) {}
 
     private final DockerSandboxManager sandboxManager;
+    private final GitHubAppService github;
 
-    public SandboxController(DockerSandboxManager sandboxManager) {
+    public SandboxController(DockerSandboxManager sandboxManager, GitHubAppService github) {
         this.sandboxManager = sandboxManager;
+        this.github = github;
     }
 
     @PostMapping
     public ResponseEntity<SandboxInfo> create(@RequestBody(required = false) CreateSandboxRequest req) {
         String image = req != null ? req.image() : null;
         SandboxInfo info = sandboxManager.create(image);
+        return ResponseEntity.status(HttpStatus.CREATED).body(info);
+    }
+
+    @PostMapping("/github")
+    public ResponseEntity<SandboxInfo> createGitHubSandbox(@RequestBody CreateGitHubSandboxRequest req) {
+        if (req == null || req.repoFullName() == null || req.repoFullName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A GitHub repository must be selected.");
+        }
+        if (req.branch() == null || req.branch().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A GitHub branch must be selected.");
+        }
+        String[] parts = req.repoFullName().split("/", 2);
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub repository must be in owner/repo format.");
+        }
+        String accessToken = github.installationToken()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub is not connected."));
+        SandboxInfo info = sandboxManager.createGitHubRepoSandbox(
+                req.image(),
+                github.cloneUrl(req.repoFullName()),
+                parts[1],
+                req.branch(),
+                accessToken);
         return ResponseEntity.status(HttpStatus.CREATED).body(info);
     }
 

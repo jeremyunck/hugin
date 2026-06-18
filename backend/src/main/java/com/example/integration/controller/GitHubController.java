@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,11 +17,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /** Endpoints for checking and connecting the GitHub App integration. */
 @RestController
 @RequestMapping("/api/github")
 public class GitHubController {
+
+    public record GitHubRepositoryOption(
+            String fullName,
+            String name,
+            String owner,
+            boolean privateRepo,
+            String defaultBranch,
+            String description) {
+    }
+
+    public record GitHubBranchOption(String name) {
+    }
 
     private final GitHubAppService github;
 
@@ -31,6 +45,24 @@ public class GitHubController {
     @GetMapping("/status")
     public GitHubStatus status() {
         return github.status();
+    }
+
+    @GetMapping("/repositories")
+    public List<GitHubRepositoryOption> repositories() throws Exception {
+        return github.listRepositories().stream()
+                .map(repo -> new GitHubRepositoryOption(
+                        repo.fullName(),
+                        repo.name(),
+                        repo.owner(),
+                        repo.privateRepo(),
+                        repo.defaultBranch(),
+                        repo.description()))
+                .toList();
+    }
+
+    @GetMapping("/repositories/{owner}/{repo}/branches")
+    public List<GitHubBranchOption> branches(@PathVariable String owner, @PathVariable String repo) throws Exception {
+        return github.listBranches(owner, repo).stream().map(GitHubBranchOption::new).toList();
     }
 
     @GetMapping("/callback")

@@ -18,11 +18,6 @@ import java.time.Duration;
  */
 @ConfigurationProperties("conversation.memory")
 public record ConversationMemoryProperties(boolean enabled, int maxMessages, Duration ttl, String storeFile) {
-
-    public ConversationMemoryProperties(boolean enabled, int maxMessages, Duration ttl) {
-        this(enabled, maxMessages, ttl, "./conversation-memory.json");
-    }
-
     public ConversationMemoryProperties {
         if (maxMessages <= 0) {
             maxMessages = 20;

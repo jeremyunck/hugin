@@ -19,6 +19,8 @@ import java.security.Signature;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -162,6 +164,59 @@ public class GitHubAppService {
     /** Whether the {@code github_*} tools should be advertised right now. */
     public boolean isActive() {
         return status().active();
+    }
+
+    public synchronized List<GitHubRepositoryRef> listRepositories() throws Exception {
+        HttpResponse<String> response = api("GET", "/installation/repositories?per_page=100", null);
+        if (response.statusCode() >= 300) {
+            throw new IllegalStateException("repository listing failed: HTTP " + response.statusCode()
+                    + " " + response.body());
+        }
+        JsonNode repos = objectMapper.readTree(response.body()).path("repositories");
+        List<GitHubRepositoryRef> results = new ArrayList<>();
+        if (!repos.isArray()) {
+            return results;
+        }
+        for (JsonNode repo : repos) {
+            String fullName = repo.path("full_name").asText("");
+            String name = repo.path("name").asText("");
+            String owner = repo.path("owner").path("login").asText("");
+            if (fullName.isBlank() || name.isBlank() || owner.isBlank()) {
+                continue;
+            }
+            results.add(new GitHubRepositoryRef(
+                    fullName,
+                    name,
+                    owner,
+                    repo.path("private").asBoolean(),
+                    repo.path("default_branch").asText(""),
+                    repo.path("description").asText("")));
+        }
+        return results;
+    }
+
+    public synchronized List<String> listBranches(String owner, String repo) throws Exception {
+        HttpResponse<String> response = api("GET", "/repos/" + owner + "/" + repo + "/branches?per_page=100", null);
+        if (response.statusCode() >= 300) {
+            throw new IllegalStateException("branch listing failed: HTTP " + response.statusCode()
+                    + " " + response.body());
+        }
+        JsonNode branches = objectMapper.readTree(response.body());
+        List<String> results = new ArrayList<>();
+        if (!branches.isArray()) {
+            return results;
+        }
+        for (JsonNode branch : branches) {
+            String name = branch.path("name").asText("");
+            if (!name.isBlank()) {
+                results.add(name);
+            }
+        }
+        return results;
+    }
+
+    public String cloneUrl(String fullName) {
+        return properties.webBaseUrl() + "/" + fullName + ".git";
     }
 
     /**
@@ -322,5 +377,14 @@ public class GitHubAppService {
 
     private static String base64Url(byte[] bytes) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    public record GitHubRepositoryRef(
+            String fullName,
+            String name,
+            String owner,
+            boolean privateRepo,
+            String defaultBranch,
+            String description) {
     }
 }

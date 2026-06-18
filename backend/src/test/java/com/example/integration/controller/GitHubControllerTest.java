@@ -50,6 +50,29 @@ class GitHubControllerTest {
     }
 
     @Test
+    void repositoriesReturnsAccessibleRepositories() throws Exception {
+        when(github.listRepositories()).thenReturn(java.util.List.of(
+                new GitHubAppService.GitHubRepositoryRef(
+                        "octocat/hello-world", "hello-world", "octocat", true, "main", "Example repo")));
+
+        mockMvc.perform(get("/api/github/repositories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fullName").value("octocat/hello-world"))
+                .andExpect(jsonPath("$[0].defaultBranch").value("main"))
+                .andExpect(jsonPath("$[0].privateRepo").value(true));
+    }
+
+    @Test
+    void branchesReturnsRepositoryBranches() throws Exception {
+        when(github.listBranches("octocat", "hello-world")).thenReturn(java.util.List.of("main", "develop"));
+
+        mockMvc.perform(get("/api/github/repositories/octocat/hello-world/branches"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("main"))
+                .andExpect(jsonPath("$[1].name").value("develop"));
+    }
+
+    @Test
     void callbackRedirectsBackToIntegrations() throws Exception {
         mockMvc.perform(get("/api/github/callback")
                         .param("installation_id", "123")

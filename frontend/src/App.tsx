@@ -11,6 +11,8 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  GitBranch,
+  Github,
   History,
   Image as ImageIcon,
   Lock,
@@ -36,9 +38,13 @@ import {
   buildUserEntry,
   connectGitHub,
   createSandbox,
+  createGitHubSandbox,
   createThread,
   disconnectGitHub,
   disconnectGoogle,
+  fetchGitHubBranches,
+  fetchGitHubRepositories,
+  fetchGitHubStatus,
   fetchModels,
   fetchCurrentUser,
   fetchIntegrations,
@@ -63,6 +69,9 @@ import type {
   ChatEntry,
   ChatThread,
   FileNode,
+  GitHubBranch,
+  GitHubRepository,
+  GitHubStatus,
   Integration,
   ModelOption
 } from "./lib/types";
@@ -89,15 +98,7 @@ const CHIPS = [
   ["Show me tips", "Show me tips for getting the most out of Hugin."]
 ] as const;
 
-type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings";
-
-const MENU_ITEMS = [
-  ["New chat", MessageCirclePlus, "chat"],
-  ["New sandbox", Box, "sandbox"],
-  ["History", History, "history"],
-  ["Integrations", Puzzle, "integrations"],
-  ["Model settings", Settings2, "settings"]
-] as const;
+type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings" | "github-repo";
 const WORKSPACE_ACTION_RE =
   /\b(debug|fix|edit|change|update|inspect|investigate|search|grep|find|open|read|write|modify|patch|refactor|run|build|test|render)\b/i;
 const WORKSPACE_TARGET_RE =
@@ -295,8 +296,8 @@ function TreeRow({
   );
 }
 
-function FileNodeRow({ node, depth }: { node: FileNode; depth: number }) {
-  const [open, setOpen] = useState(true);
+function FileNodeRow({ node, depth, defaultOpen }: { node: FileNode; depth: number; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
 
   if (node.type === "dir") {
     return (
@@ -310,7 +311,9 @@ function FileNodeRow({ node, depth }: { node: FileNode; depth: number }) {
           )}
           <span>{node.name}</span>
         </TreeRow>
-        {open ? node.children?.map((child) => <FileNodeRow key={child.path} node={child} depth={depth + 1} />) : null}
+        {open ? node.children?.map((child) => (
+          <FileNodeRow key={child.path} node={child} depth={depth + 1} defaultOpen={defaultOpen} />
+        )) : null}
       </>
     );
   }
@@ -329,16 +332,19 @@ function FileTree(props: {
   files: FileNode[];
   wsOpen: boolean;
   onToggleWs: () => void;
+  label: string;
+  badge: string;
+  defaultOpenDirectories: boolean;
 }) {
-  const { sessionId, files, wsOpen, onToggleWs } = props;
+  const { sessionId, files, wsOpen, onToggleWs, label, badge, defaultOpenDirectories } = props;
 
   return (
     <div className="file-tree">
       <TreeRow>
         <ChevronDown size={13} color={COLORS.faint} />
         <Network size={14} strokeWidth={2} color={COLORS.ink} />
-        <span className="mono">~/sandbox/{sessionId.slice(0, 8)}</span>
-        <span className="tree-badge">sandbox</span>
+        <span className="mono">{label || `~/sandbox/${sessionId.slice(0, 8)}`}</span>
+        <span className="tree-badge">{badge}</span>
       </TreeRow>
 
       <TreeRow depth={1} onClick={onToggleWs}>
@@ -353,7 +359,7 @@ function FileTree(props: {
 
       {wsOpen ? (
         files.length ? (
-          files.map((node) => <FileNodeRow key={node.path} node={node} depth={2} />)
+          files.map((node) => <FileNodeRow key={node.path} node={node} depth={2} defaultOpen={defaultOpenDirectories} />)
         ) : (
           <TreeRow depth={2}>
             <span className="mono" style={{ color: COLORS.faint }}>
@@ -363,6 +369,107 @@ function FileTree(props: {
         )
       ) : null}
     </div>
+  );
+}
+
+function RepoSetupScreen(props: {
+  busy: boolean;
+  loadingRepos: boolean;
+  loadingBranches: boolean;
+  repositories: GitHubRepository[];
+  branches: GitHubBranch[];
+  selectedRepo: string;
+  selectedBranch: string;
+  error: string | null;
+  onBack: () => void;
+  onRepoChange: (value: string) => void;
+  onBranchChange: (value: string) => void;
+  onConfirm: () => void;
+}) {
+  const {
+    busy,
+    loadingRepos,
+    loadingBranches,
+    repositories,
+    branches,
+    selectedRepo,
+    selectedBranch,
+    error,
+    onBack,
+    onRepoChange,
+    onBranchChange,
+    onConfirm
+  } = props;
+  const selectedRepoMeta = repositories.find((repo) => repo.fullName === selectedRepo);
+  const ready = Boolean(selectedRepo && selectedBranch) && !busy && !loadingRepos && !loadingBranches;
+
+  return (
+    <>
+      <div className="back-row">
+        <button type="button" className="icon-button back-button" onClick={onBack} aria-label="Back">
+          <ArrowLeft size={22} strokeWidth={2} />
+        </button>
+      </div>
+
+      <div className="screen-pad">
+        <h1 className="screen-title integration-title">GitHub repo chat</h1>
+        <p className="integration-subtitle">
+          Pick a repository and branch, then Hugin will open a fresh sandbox with a clean pull of that branch.
+        </p>
+      </div>
+
+      <div className="repo-setup-card">
+        <label className="composer-select repo-setup-select">
+          <span>Repository</span>
+          <select value={selectedRepo} onChange={(event) => onRepoChange(event.target.value)} disabled={busy || loadingRepos}>
+            <option value="">{loadingRepos ? "Loading repositories…" : "Select a repository"}</option>
+            {repositories.map((repo) => (
+              <option key={repo.fullName} value={repo.fullName}>
+                {repo.fullName}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="composer-select repo-setup-select">
+          <span>Branch</span>
+          <select
+            value={selectedBranch}
+            onChange={(event) => onBranchChange(event.target.value)}
+            disabled={busy || !selectedRepo || loadingBranches}
+          >
+            <option value="">
+              {!selectedRepo ? "Select a repository first" : loadingBranches ? "Loading branches…" : "Select a branch"}
+            </option>
+            {branches.map((branch) => (
+              <option key={branch.name} value={branch.name}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {selectedRepoMeta ? (
+          <div className="repo-summary">
+            <div className="repo-summary-title">
+              <Github size={16} strokeWidth={2} />
+              <span>{selectedRepoMeta.fullName}</span>
+            </div>
+            <div className="repo-summary-meta">
+              <span>{selectedRepoMeta.privateRepo ? "Private" : "Public"}</span>
+              <span>Default {selectedRepoMeta.defaultBranch || "unknown"}</span>
+            </div>
+            {selectedRepoMeta.description ? <p>{selectedRepoMeta.description}</p> : null}
+          </div>
+        ) : null}
+
+        {error ? <p className="login-error">{error}</p> : null}
+
+        <button type="button" className="primary-button repo-confirm-button" onClick={onConfirm} disabled={!ready}>
+          {busy ? "Creating sandbox…" : "Open repo sandbox"}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -581,14 +688,16 @@ function InputBar(props: {
 function MenuOverlay(props: {
   username: string;
   roles: string[];
+  githubConnected: boolean;
   onClose: () => void;
   onSandbox: () => void;
+  onGitHubRepo: () => void;
   onChat: () => void;
   onHistory: () => void;
   onIntegrations: () => void;
   onSettings: () => void;
 }) {
-  const { username, roles, onClose, onSandbox, onChat, onHistory, onIntegrations, onSettings } = props;
+  const { username, roles, githubConnected, onClose, onSandbox, onGitHubRepo, onChat, onHistory, onIntegrations, onSettings } = props;
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
@@ -602,24 +711,32 @@ function MenuOverlay(props: {
         </div>
 
         <nav className="menu-nav">
-          {MENU_ITEMS.map(([label, Icon, action]) => {
-            const handler =
-              action === "sandbox"
-                ? onSandbox
-                : action === "chat"
-                ? onChat
-                : action === "history"
-                ? onHistory
-                : action === "integrations"
-                ? onIntegrations
-                : onSettings;
-            return (
-              <button key={label} type="button" className="menu-item" onClick={handler}>
-                <Icon size={18} strokeWidth={2} color={COLORS.ink} />
-                <span>{label}</span>
-              </button>
-            );
-          })}
+          <button type="button" className="menu-item" onClick={onChat}>
+            <MessageCirclePlus size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>New chat</span>
+          </button>
+          <button type="button" className="menu-item" onClick={onSandbox}>
+            <Box size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>New sandbox</span>
+          </button>
+          {githubConnected ? (
+            <button type="button" className="menu-item" onClick={onGitHubRepo}>
+              <Github size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>GitHub repo chat</span>
+            </button>
+          ) : null}
+          <button type="button" className="menu-item" onClick={onHistory}>
+            <History size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>History</span>
+          </button>
+          <button type="button" className="menu-item" onClick={onIntegrations}>
+            <Puzzle size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>Integrations</span>
+          </button>
+          <button type="button" className="menu-item" onClick={onSettings}>
+            <Settings2 size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>Model settings</span>
+          </button>
         </nav>
 
         <div className="menu-profile">
@@ -688,6 +805,8 @@ function HistoryScreen(props: {
                     <div className="history-card-icon">
                       {thread.kind === "sandbox" ? (
                         <Box size={17} strokeWidth={2} color={COLORS.ink} />
+                      ) : thread.kind === "github" ? (
+                        <GitBranch size={17} strokeWidth={2} color={COLORS.ink} />
                       ) : (
                         <MessageSquare size={17} strokeWidth={2} color={COLORS.ink} />
                       )}
@@ -953,6 +1072,13 @@ export default function App() {
 
   const [files, setFiles] = useState<FileNode[]>([]);
   const [wsOpen, setWsOpen] = useState(true);
+  const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
+  const [repoOptions, setRepoOptions] = useState<GitHubRepository[]>([]);
+  const [branchOptions, setBranchOptions] = useState<GitHubBranch[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("");
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
 
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [integrationBusy, setIntegrationBusy] = useState<string | null>(null);
@@ -986,6 +1112,7 @@ export default function App() {
         saveAuthSession(validated);
         setSession(validated);
         setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
+        fetchGitHubStatus(validated.token).then((status) => setGitHubStatus(status)).catch(() => setGitHubStatus(null));
       })
       .catch(() => saveAuthSession(null))
       .finally(() => setBooting(false));
@@ -1008,6 +1135,13 @@ export default function App() {
     fetchModels(session.token)
       .then((next) => setModels(next))
       .catch(() => setModels([]));
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchGitHubStatus(session.token)
+      .then((status) => setGitHubStatus(status))
+      .catch(() => setGitHubStatus(null));
   }, [session]);
 
   useEffect(() => {
@@ -1078,6 +1212,7 @@ export default function App() {
       setThread(createThread("chat"));
       setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
       fetchModels(validated.token).then((next) => setModels(next)).catch(() => setModels([]));
+      fetchGitHubStatus(validated.token).then((status) => setGitHubStatus(status)).catch(() => setGitHubStatus(null));
       setPassword("");
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "Sign in failed.");
@@ -1089,6 +1224,7 @@ export default function App() {
   const startChat = useCallback(() => {
     setThread(createThread("chat"));
     setFiles([]);
+    setWsOpen(true);
     setDraftAttachment(null);
     setError(null);
     setHistoryQuery("");
@@ -1102,11 +1238,12 @@ export default function App() {
     setHistoryQuery("");
     setError(null);
     setFiles([]);
+    setWsOpen(true);
     setDraftAttachment(null);
     setBusy(true);
     try {
       const sandbox = await createSandbox(session.token);
-      setThread(createThread("sandbox", sandbox.id));
+      setThread(createThread("sandbox", { sandboxId: sandbox.id }));
       setScreen("chat");
       void refreshFiles(sandbox.id);
     } catch (e) {
@@ -1127,6 +1264,12 @@ export default function App() {
       if (item.kind === "sandbox") {
         setScreen("chat");
         setFiles([]);
+        setWsOpen(true);
+        if (item.sandboxId) void refreshFiles(item.sandboxId);
+      } else if (item.kind === "github") {
+        setScreen("chat");
+        setFiles([]);
+        setWsOpen(false);
         if (item.sandboxId) void refreshFiles(item.sandboxId);
       } else {
         setScreen("purechat");
@@ -1191,6 +1334,7 @@ export default function App() {
           }
         }
         setIntegrations(await fetchIntegrations(session.token));
+        setGitHubStatus(await fetchGitHubStatus(session.token));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Integration update failed.");
       } finally {
@@ -1222,8 +1366,9 @@ export default function App() {
         try {
           const sandbox = await createSandbox(session.token);
           sandboxId = sandbox.id;
-          setThread((current) => ({ ...current, kind: "sandbox", sandboxId: sandbox.id }));
+          setThread((current) => ({ ...current, kind: current.kind === "github" ? "github" : "sandbox", sandboxId: sandbox.id }));
           setScreen("chat");
+          setWsOpen(true);
           void refreshFiles(sandbox.id);
         } catch (e) {
           setBusy(false);
@@ -1243,10 +1388,12 @@ export default function App() {
         const isFirst = !current.entries.some((entry) => entry.type === "user");
         return {
           ...current,
-          ...(sandboxId ? { kind: "sandbox" as const, sandboxId } : {}),
+          ...(sandboxId ? { kind: current.kind === "github" ? "github" as const : "sandbox" as const, sandboxId } : {}),
           modelId: selectedModel.id,
           reasoningEffort: selectedReasoning,
-          title: isFirst ? getThreadTitle(text || attachment?.name || "Image attachment") : current.title,
+          title: isFirst && current.kind !== "github"
+            ? getThreadTitle(text || attachment?.name || "Image attachment")
+            : current.title,
           updatedAt: nowIso(),
           entries: [...current.entries, userEntry, assistant]
         };
@@ -1345,6 +1492,72 @@ export default function App() {
     }
   }, [session, savingModels, models, returnScreen]);
 
+  const openGitHubRepoSetup = useCallback(async () => {
+    if (!session || !githubStatus?.active) return;
+    setReturnScreen(screen === "github-repo" ? returnScreen : screen);
+    setScreen("github-repo");
+    setMenuOpen(false);
+    setError(null);
+    setSelectedRepo("");
+    setSelectedBranch("");
+    setBranchOptions([]);
+    setLoadingRepos(true);
+    try {
+      setRepoOptions(await fetchGitHubRepositories(session.token));
+    } catch (e) {
+      setRepoOptions([]);
+      setError(e instanceof Error ? e.message : "Could not load GitHub repositories.");
+    } finally {
+      setLoadingRepos(false);
+    }
+  }, [session, githubStatus?.active, screen, returnScreen]);
+
+  const chooseRepo = useCallback(async (repoFullName: string) => {
+    setSelectedRepo(repoFullName);
+    setSelectedBranch("");
+    setBranchOptions([]);
+    if (!session || !repoFullName) return;
+    setLoadingBranches(true);
+    setError(null);
+    try {
+      const branches = await fetchGitHubBranches(session.token, repoFullName);
+      setBranchOptions(branches);
+      const defaultBranch = repoOptions.find((repo) => repo.fullName === repoFullName)?.defaultBranch;
+      setSelectedBranch(branches.find((branch) => branch.name === defaultBranch)?.name ?? branches[0]?.name ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load GitHub branches.");
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [session, repoOptions]);
+
+  const confirmGitHubRepo = useCallback(async () => {
+    if (!session || !selectedRepo || !selectedBranch) return;
+    const repo = repoOptions.find((item) => item.fullName === selectedRepo);
+    if (!repo) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const sandbox = await createGitHubSandbox(session.token, selectedRepo, selectedBranch);
+      setFiles([]);
+      setWsOpen(false);
+      setDraft("");
+      setDraftAttachment(null);
+      setThread(createThread("github", {
+        sandboxId: sandbox.id,
+        repoFullName: repo.fullName,
+        repoName: repo.name,
+        branchName: selectedBranch
+      }));
+      setScreen("chat");
+      void refreshFiles(sandbox.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start a GitHub repo sandbox.");
+    } finally {
+      setBusy(false);
+    }
+  }, [session, selectedRepo, selectedBranch, repoOptions, refreshFiles]);
+
   const enabledModels = models.filter((model) => model.enabled);
   const activeModel = enabledModels.find((model) => model.id === thread.modelId) ?? enabledModels[0];
   const activeReasoning = activeModel?.reasoningOptions.includes(thread.reasoningEffort ?? "")
@@ -1401,6 +1614,11 @@ export default function App() {
                 files={files}
                 wsOpen={wsOpen}
                 onToggleWs={() => setWsOpen((current) => !current)}
+                label={thread.kind === "github"
+                  ? `${thread.repoName ?? thread.repoFullName ?? "repo"} · ${thread.branchName ?? "branch"}`
+                  : `~/sandbox/${thread.id.slice(0, 8)}`}
+                badge={thread.kind === "github" ? "github" : "sandbox"}
+                defaultOpenDirectories={thread.kind !== "github"}
               />
             ) : null}
             {error ? <p className="login-error screen-pad">{error}</p> : null}
@@ -1442,6 +1660,21 @@ export default function App() {
             onBack={() => setScreen(returnScreen)}
             onToggle={toggleIntegration}
           />
+        ) : screen === "github-repo" ? (
+          <RepoSetupScreen
+            busy={busy}
+            loadingRepos={loadingRepos}
+            loadingBranches={loadingBranches}
+            repositories={repoOptions}
+            branches={branchOptions}
+            selectedRepo={selectedRepo}
+            selectedBranch={selectedBranch}
+            error={error}
+            onBack={() => setScreen(returnScreen)}
+            onRepoChange={chooseRepo}
+            onBranchChange={setSelectedBranch}
+            onConfirm={confirmGitHubRepo}
+          />
         ) : screen === "settings" ? (
           <SettingsScreen
             models={models}
@@ -1465,8 +1698,10 @@ export default function App() {
           <MenuOverlay
             username={session.username}
             roles={session.roles}
+            githubConnected={githubStatus?.active === true}
             onClose={() => setMenuOpen(false)}
             onSandbox={startSandbox}
+            onGitHubRepo={openGitHubRepoSetup}
             onChat={startChat}
             onHistory={() => {
               setHistoryQuery("");
