@@ -4,33 +4,46 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit SHA from jeremyunck/hugin to deploy
+        required: false
+      ref:
+        description: Git ref from jeremyunck/hugin to deploy
+        required: false
+        default: refs/heads/main
 
 permissions:
   contents: read
 
 jobs:
   dispatch:
-    if: >-
-      ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'main'
-      }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch hugin-deploy workflow
+        if: >-
+          ${{
+            github.event_name == 'workflow_dispatch' ||
+            (
+              github.event.workflow_run.conclusion == 'success' &&
+              github.event.workflow_run.event == 'push' &&
+              github.event.workflow_run.head_branch == 'main'
+            )
+          }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.HUGIN_DEPLOY_REPO_DISPATCH_TOKEN }}
           DEPLOY_REPO: jeremyunck/hugin-deploy
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+          SOURCE_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+          SOURCE_REF: ${{ inputs.ref || 'refs/heads/main' }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || github.run_id }}
+          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id || github.run_id }}
         run: |
           payload="$(jq -n \
             --arg sha "${SOURCE_SHA}" \
-            --arg ref "refs/heads/main" \
+            --arg ref "${SOURCE_REF}" \
             --arg source_repository "${SOURCE_REPOSITORY}" \
             --arg source_run_id "${SOURCE_RUN_ID}" \
             --arg source_run_url "${SOURCE_RUN_URL}" \
