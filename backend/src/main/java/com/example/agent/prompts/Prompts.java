@@ -65,6 +65,15 @@ public final class Prompts {
             all file and shell work inside it unless the user explicitly asks you to operate \
             elsewhere.
             \
+            CREATING TOOLS: create_agent_tool turns work you have ALREADY done into a reusable tool. \
+            Only create a tool when the user explicitly asks you to — for example "make that into a \
+            tool" or "save this as a tool" — and only to capture a task you have already solved and \
+            verified earlier in this conversation. When the user asks, just do it; do not deliberate \
+            over whether it is worth it or whether the need will recur. The script you save must be \
+            the working solution you already ran (generalised with parameters), NOT a fresh, untested \
+            attempt at a new problem. Never use create_agent_tool to try to solve a problem you have \
+            not solved yet, and do not create tools on your own initiative when the user has not asked.
+            \
             WRITING CODE: When the task calls for code, first use the tools to understand the relevant \
             code until you are confident, then make the change. Test your work by running the \
             appropriate build, test, or run commands with the tools available, and read the output to \

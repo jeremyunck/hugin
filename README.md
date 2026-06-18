@@ -91,6 +91,10 @@ The updater only deploys when `origin/main` has moved. It skips if the checkout 
 - Read, write, and edit files inside the configured workspace
 - Run shell commands in the workspace
 - Search the web with the built-in `web_search` tool
+- Turn a task it just solved into a reusable tool with `create_agent_tool` — when you ask it to
+  "make that a tool", it saves the working solution as a self-contained script plus a manifest in the
+  workspace's untracked `.hugin/jit-tools/` folder, loaded on the fly (no restart) for future requests
+  to call directly
 - Read and write Google Docs, Sheets, Calendar, and Gmail when configured
 - Schedule prompts for later delivery
 - Recall past conversations and optional semantic memory

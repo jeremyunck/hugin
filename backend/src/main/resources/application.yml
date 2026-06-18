@@ -127,7 +127,12 @@ agent:
     deny-list: []
     # Workspace-local just-in-time tool manifests. The agent rescans this directory on every
     # loop iteration, so tools created at runtime become available without restarting Hugin.
+    # The create_agent_tool tool writes generated scripts + manifests here (and a .gitignore so
+    # they are never committed). Keep this path covered by .gitignore.
     jit-tool-directory: .hugin/jit-tools
+    # Cap on the number of generated (just-in-time) tools per workspace. A guardrail against the
+    # agent minting a sprawl of one-off tools; create_agent_tool refuses once the limit is hit.
+    max-jit-tools: 24
   # Per-session Docker sandboxes. POST /api/sandboxes starts a container whose bind-mounted working
   # directory becomes the agent's confined workspace; chat/stream requests target it via "sandboxId"
   # and run_bash is executed inside that container (docker exec). File tools operate on the host-side

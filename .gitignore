@@ -13,6 +13,8 @@ node_modules/
 data/
 .data/
 sandboxes/
+# Runtime-generated agent tools (created on the fly by the create_agent_tool tool).
+.hugin/
 
 # Frontend build artifacts
 frontend/dist/
