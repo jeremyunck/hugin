@@ -324,6 +324,17 @@ function collectRecoveryCandidates(
   return [...candidates.values()];
 }
 
+function screenForThread(thread: ChatThread): Screen {
+  return thread.kind === "chat" ? "purechat" : "chat";
+}
+
+function mostRecentThread(threads: ChatThread[]): ChatThread | null {
+  if (!threads.length) return null;
+  return threads.reduce((latest, candidate) =>
+    Date.parse(candidate.updatedAt) > Date.parse(latest.updatedAt) ? candidate : latest
+  );
+}
+
 function StatusBar() {
   return (
     <div className="status-bar">
@@ -1266,9 +1277,12 @@ export default function App() {
     }
     fetchCurrentUser(existing.token)
       .then((validated) => {
+        const restoredThread = mostRecentThread(stateRef.current.threads) ?? createThread("chat");
         saveAuthSession(validated);
         setSession(validated);
-        setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
+        setThread(restoredThread);
+        threadRef.current = restoredThread;
+        setScreen(readLaunchScreen() === "integrations" ? "integrations" : screenForThread(restoredThread));
         fetchGitHubStatus(validated.token).then((status) => setGitHubStatus(status)).catch(() => setGitHubStatus(null));
       })
       .catch(() => saveAuthSession(null))
@@ -1317,7 +1331,7 @@ export default function App() {
 
   useEffect(() => {
     if (busy) return;
-    void syncThreadFromServer(thread);
+    void syncThreadFromServer(threadRef.current);
   }, [busy, thread.id, syncThreadFromServer]);
 
   useEffect(() => {
@@ -1432,6 +1446,11 @@ export default function App() {
     },
     [session]
   );
+
+  useEffect(() => {
+    if (!session || screen !== "chat" || !thread.sandboxId) return;
+    void refreshFiles(thread.sandboxId);
+  }, [session, screen, thread.sandboxId, refreshFiles]);
 
   const signIn = useCallback(async () => {
     if (!username.trim() || !password.trim() || signingIn) return;

@@ -132,49 +132,43 @@ public class AgentController {
         SseEmitter emitter = createEmitter();
 
         streamExecutor.execute(() -> {
-            if (!send(emitter, "config", Map.of("developerMode", developerModeService.isEnabled()))) {
-                emitter.complete();
-                return;
-            }
+            send(emitter, "config", Map.of("developerMode", developerModeService.isEnabled()));
             try {
                 StringBuilder streamedContent = new StringBuilder();
                 AgentResponse response = agentService.chatStream(scoped, new AgentStreamListener() {
                     @Override
                     public void onConfig(boolean developerMode) {
-                        SseRequestSupport.ensureConnected(send(emitter, "config", Map.of("developerMode", developerMode)));
+                        send(emitter, "config", Map.of("developerMode", developerMode));
                     }
 
                     @Override
                     public void onContent(String delta) {
                         streamedContent.append(delta);
-                        SseRequestSupport.ensureConnected(send(emitter, "token", Map.of("text", delta)));
+                        send(emitter, "token", Map.of("text", delta));
                     }
 
                     @Override
                     public void onReasoning(String delta) {
-                        SseRequestSupport.ensureConnected(send(emitter, "reasoning", Map.of("text", delta)));
+                        send(emitter, "reasoning", Map.of("text", delta));
                     }
 
                     @Override
                     public void onToolCall(String toolName, String arguments) {
-                        SseRequestSupport.ensureConnected(send(emitter, "tool", Map.of("name", toolName, "args", arguments)));
+                        send(emitter, "tool", Map.of("name", toolName, "args", arguments));
                     }
 
                     @Override
                     public void onToolResult(String toolName, String result) {
-                        SseRequestSupport.ensureConnected(send(emitter, "tool_result", Map.of("name", toolName, "result", result)));
+                        send(emitter, "tool_result", Map.of("name", toolName, "result", result));
                     }
                 }, memoryOwner(owner, scoped.agentId()));
                 if (streamedContent.isEmpty()
                         && response != null
                         && response.response() != null
                         && !response.response().isBlank()) {
-                    SseRequestSupport.ensureConnected(send(emitter, "token", Map.of("text", response.response())));
+                    send(emitter, "token", Map.of("text", response.response()));
                 }
-                SseRequestSupport.ensureConnected(send(emitter, "done", Map.of()));
-                emitter.complete();
-            } catch (SseRequestSupport.ClientDisconnectedException e) {
-                log.debug("Agent stream client disconnected");
+                send(emitter, "done", Map.of());
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("Agent stream failed", e);

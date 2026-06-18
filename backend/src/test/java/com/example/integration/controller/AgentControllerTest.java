@@ -332,7 +332,7 @@ class AgentControllerTest {
     }
 
     @Test
-    void chatStreamStopsWorkWhenClientDisconnects() throws InterruptedException {
+    void chatStreamContinuesWorkWhenClientDisconnects() throws InterruptedException {
         var emitter = new FailingEmitter(2);
         controller = new AgentController(
                 agentService,
@@ -364,7 +364,7 @@ class AgentControllerTest {
 
         assertThat(latch.await(2, TimeUnit.SECONDS)).isTrue();
         Thread.sleep(100);
-        assertThat(continuedAfterDisconnect).hasValue(0);
+        assertThat(continuedAfterDisconnect).hasValue(1);
     }
 
     // -------------------------------------------------------------------------
