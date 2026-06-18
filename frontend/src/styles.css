@@ -846,6 +846,62 @@ select {
   padding-bottom: 16px;
 }
 
+.repo-setup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 20px;
+  border: 1px solid #eaebed;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  padding: 18px;
+}
+
+.repo-setup-select {
+  gap: 8px;
+}
+
+.repo-summary {
+  border-radius: 14px;
+  background: #f7f7f8;
+  padding: 14px;
+}
+
+.repo-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1c1f23;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.repo-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.repo-summary-meta span {
+  border-radius: 999px;
+  background: #fff;
+  padding: 5px 9px;
+  color: #5c626c;
+  font-size: 11.5px;
+}
+
+.repo-summary p {
+  margin: 10px 0 0;
+  color: #5c626c;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.repo-confirm-button {
+  margin-top: 4px;
+}
+
 .primary-button,
 .signin-button {
   display: flex;
@@ -1004,7 +1060,8 @@ select {
 }
 
 .dark-button:disabled,
-.signin-button:disabled {
+.signin-button:disabled,
+.primary-button:disabled {
   opacity: 0.3;
   cursor: default;
 }

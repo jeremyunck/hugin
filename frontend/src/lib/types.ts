@@ -44,7 +44,7 @@ export type ChatEntry =
       createdAt: string;
     };
 
-export type ChatKind = "chat" | "sandbox";
+export type ChatKind = "chat" | "sandbox" | "github";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -58,6 +58,9 @@ export type ChatThread = {
   title: string;
   kind: ChatKind;
   sandboxId?: string;
+  repoFullName?: string;
+  repoName?: string;
+  branchName?: string;
   modelId?: string;
   reasoningEffort?: string;
   createdAt: string;
@@ -102,6 +105,28 @@ export type Integration = {
   authMode: string;
   tools: string[];
   message: string;
+};
+
+export type GitHubStatus = {
+  active: boolean;
+  configured: boolean;
+  reconnectable: boolean;
+  authMode: string;
+  account: string;
+  message: string;
+};
+
+export type GitHubRepository = {
+  fullName: string;
+  name: string;
+  owner: string;
+  privateRepo: boolean;
+  defaultBranch: string;
+  description: string;
+};
+
+export type GitHubBranch = {
+  name: string;
 };
 
 export type ModelOption = {

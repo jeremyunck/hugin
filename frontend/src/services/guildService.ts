@@ -7,6 +7,9 @@ import type {
   ChatMessage,
   ChatThread,
   FileNode,
+  GitHubBranch,
+  GitHubRepository,
+  GitHubStatus,
   Integration,
   ModelOption,
   SandboxInfo,
@@ -175,13 +178,28 @@ export async function fetchCurrentUser(token: string): Promise<AuthSession> {
   };
 }
 
-export function createThread(kind: ChatKind = "chat", sandboxId?: string): ChatThread {
+type CreateThreadOptions = {
+  sandboxId?: string;
+  repoFullName?: string;
+  repoName?: string;
+  branchName?: string;
+};
+
+export function createThread(kind: ChatKind = "chat", options: CreateThreadOptions = {}): ChatThread {
   const createdAt = nowIso();
+  const title = kind === "sandbox"
+    ? "New sandbox"
+    : kind === "github"
+    ? `${options.repoFullName ?? "GitHub repo"}${options.branchName ? ` (${options.branchName})` : ""}`
+    : "New chat";
   return {
     id: uid("thread"),
-    title: kind === "sandbox" ? "New sandbox" : "New chat",
+    title,
     kind,
-    sandboxId,
+    sandboxId: options.sandboxId,
+    repoFullName: options.repoFullName,
+    repoName: options.repoName,
+    branchName: options.branchName,
     modelId: undefined,
     reasoningEffort: undefined,
     createdAt,
@@ -602,6 +620,18 @@ export async function createSandbox(token: string): Promise<SandboxInfo> {
   return apiFetch<SandboxInfo>("/api/sandboxes", { method: "POST", body: JSON.stringify({}) }, token);
 }
 
+export async function createGitHubSandbox(
+  token: string,
+  repoFullName: string,
+  branch: string
+): Promise<SandboxInfo> {
+  return apiFetch<SandboxInfo>(
+    "/api/sandboxes/github",
+    { method: "POST", body: JSON.stringify({ repoFullName, branch }) },
+    token
+  );
+}
+
 export async function deleteSandbox(token: string, id: string): Promise<void> {
   await fetch(`/api/sandboxes/${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -676,6 +706,26 @@ export async function connectGitHub(token: string, returnTo: string): Promise<Gi
 
 export async function disconnectGitHub(token: string): Promise<void> {
   await apiFetch("/api/github/disconnect", { method: "POST", body: JSON.stringify({}) }, token);
+}
+
+export async function fetchGitHubStatus(token: string): Promise<GitHubStatus> {
+  return apiFetch<GitHubStatus>("/api/github/status", {}, token);
+}
+
+export async function fetchGitHubRepositories(token: string): Promise<GitHubRepository[]> {
+  return apiFetch<GitHubRepository[]>("/api/github/repositories", {}, token);
+}
+
+export async function fetchGitHubBranches(token: string, repoFullName: string): Promise<GitHubBranch[]> {
+  const [owner, repo] = repoFullName.split("/", 2);
+  if (!owner || !repo) {
+    throw new Error("Repository must be in owner/repo format.");
+  }
+  return apiFetch<GitHubBranch[]>(
+    `/api/github/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    {},
+    token
+  );
 }
 
 function parseSseEvent(rawEvent: string): StreamEvent | null {

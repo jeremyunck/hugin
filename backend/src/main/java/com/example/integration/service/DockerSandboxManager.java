@@ -65,6 +65,26 @@ public class DockerSandboxManager implements SandboxRuntime {
 
     /** Creates and starts a new sandbox container, returning its metadata. */
     public SandboxInfo create(String imageOverride) {
+        return createSandbox(imageOverride);
+    }
+
+    public SandboxInfo createGitHubRepoSandbox(
+            String imageOverride,
+            String cloneUrl,
+            String repoName,
+            String branch,
+            String accessToken) {
+        SandboxInfo info = createSandbox(imageOverride);
+        try {
+            cloneRepository(info, cloneUrl, repoName, branch, accessToken);
+            return info;
+        } catch (RuntimeException e) {
+            delete(info.id());
+            throw e;
+        }
+    }
+
+    private SandboxInfo createSandbox(String imageOverride) {
         if (!properties.enabled()) {
             throw new IllegalStateException(
                     "Sandboxes are disabled. Set agent.sandbox.enabled=true to enable.");
@@ -122,6 +142,32 @@ public class DockerSandboxManager implements SandboxRuntime {
         log.info("Created sandbox {} (container={}, image={}, workspace={})",
                 id, containerName, image, workspace);
         return info;
+    }
+
+    private void cloneRepository(
+            SandboxInfo sandbox,
+            String cloneUrl,
+            String repoName,
+            String branch,
+            String accessToken) {
+        Path workspace = Path.of(sandbox.workspace());
+        Path targetDir = workspace.resolve(repoName);
+        List<String> command = new ArrayList<>(List.of("git", "clone", "--single-branch"));
+        if (branch != null && !branch.isBlank()) {
+            command.addAll(List.of("--branch", branch));
+        }
+        command.addAll(List.of(cloneUrl, targetDir.toString()));
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(workspace.toFile());
+        builder.redirectErrorStream(true);
+        configureGitCredentials(builder, accessToken);
+
+        ProcessResult result = runHostProcess(builder, properties.startTimeout());
+        if (result.timedOut() || result.exitCode() != 0) {
+            throw new RuntimeException("Failed to clone GitHub repository into sandbox: "
+                    + (result.timedOut() ? "git clone timed out" : result.output()));
+        }
     }
 
     public List<SandboxInfo> list() {
@@ -302,6 +348,55 @@ public class DockerSandboxManager implements SandboxRuntime {
 
     private record ProcessResult(int exitCode, String output, boolean timedOut) {}
     private record LiveSandbox(SandboxInfo info, boolean dockerBacked) {}
+
+    private void configureGitCredentials(ProcessBuilder builder, String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return;
+        }
+        var env = builder.environment();
+        env.put("GIT_TERMINAL_PROMPT", "0");
+        env.put("GIT_CONFIG_COUNT", "1");
+        env.put("GIT_CONFIG_KEY_0", "credential.helper");
+        env.put("GIT_CONFIG_VALUE_0", "!f() { echo username=x-access-token; echo password=$GITHUB_TOKEN; }; f");
+        env.put("GITHUB_TOKEN", accessToken);
+    }
+
+    private ProcessResult runHostProcess(ProcessBuilder builder, Duration timeout) {
+        Process process;
+        try {
+            process = builder.start();
+        } catch (IOException e) {
+            return new ProcessResult(-1, "Could not run '" + builder.command().get(0) + "': " + e.getMessage(), false);
+        }
+        StringBuilder output = new StringBuilder();
+        Thread reader = new Thread(() -> {
+            try (BufferedReader in = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = in.readLine()) != null) {
+                    output.append(line).append('\n');
+                }
+            } catch (IOException ignored) {
+                // stream closed; keep what we have
+            }
+        });
+        reader.setDaemon(true);
+        reader.start();
+        try {
+            boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                reader.join(1000);
+                return new ProcessResult(-1, output.toString().strip(), true);
+            }
+            reader.join(2000);
+            return new ProcessResult(process.exitValue(), output.toString().strip(), false);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            return new ProcessResult(-1, output.toString().strip(), false);
+        }
+    }
 
     /** Runs a host process (the docker CLI), capturing combined stdout/stderr. */
     private ProcessResult runProcess(List<String> command, Duration timeout) {

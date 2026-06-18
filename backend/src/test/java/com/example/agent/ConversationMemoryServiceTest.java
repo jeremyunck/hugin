@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConversationMemoryServiceTest {
 
     private static ConversationMemoryService service(int maxMessages, Duration ttl) {
-        var props = new ConversationMemoryProperties(true, maxMessages, ttl);
+        var props = new ConversationMemoryProperties(true, maxMessages, ttl, "./conversation-memory.json");
         return new ConversationMemoryService(new InMemoryConversationStore(props), props);
     }
 
@@ -86,7 +86,7 @@ class ConversationMemoryServiceTest {
     @Test
     void evictsExpiredSessions() {
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
-        var props = new ConversationMemoryProperties(true, 20, Duration.ofMinutes(30));
+        var props = new ConversationMemoryProperties(true, 20, Duration.ofMinutes(30), "./conversation-memory.json");
         var service = new ConversationMemoryService(new InMemoryConversationStore(props, clock), props);
 
         service.record("s", "hello", "hi");
@@ -133,7 +133,7 @@ class ConversationMemoryServiceTest {
     @Test
     void leavesSessionsAliveWhenTtlIsDisabled() {
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
-        var props = new ConversationMemoryProperties(true, 20, null);
+        var props = new ConversationMemoryProperties(true, 20, null, "./conversation-memory.json");
         var service = new ConversationMemoryService(new InMemoryConversationStore(props, clock), props);
 
         service.record("s", "hello", "hi");
