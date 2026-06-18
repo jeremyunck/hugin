@@ -75,21 +75,31 @@ public class AgentRunRegistry {
         if (entry == null || !entry.summary.owner().equals(owner)) {
             return false;
         }
-        active.computeIfPresent(id, (key, current) -> new Entry(
-                new ActiveRun(
-                        current.summary.id(),
-                        current.summary.owner(),
-                        current.summary.sessionId(),
-                        current.summary.agentId(),
-                        current.summary.prompt(),
-                        current.summary.model(),
-                        current.summary.sandboxId(),
-                        current.summary.startedAt(),
-                        current.summary.disconnected(),
-                        true),
-                current.worker()));
-        entry.worker.interrupt();
-        return true;
+        // Flip the run to cancellation-requested and interrupt its worker atomically with the
+        // presence check. Holding the map bin's lock here guarantees unregister() (which also
+        // mutates the map) has not run yet, so the worker is still on this run -- the stream
+        // executor pools its threads, and interrupting after a run has been unregistered could
+        // otherwise disrupt an unrelated run that has since reused the thread. computeIfPresent
+        // returns null if the run already finished between the lookup above and here.
+        return active.computeIfPresent(id, (key, current) -> {
+            Thread worker = current.worker();
+            if (worker != null && worker.isAlive()) {
+                worker.interrupt();
+            }
+            return new Entry(
+                    new ActiveRun(
+                            current.summary.id(),
+                            current.summary.owner(),
+                            current.summary.sessionId(),
+                            current.summary.agentId(),
+                            current.summary.prompt(),
+                            current.summary.model(),
+                            current.summary.sandboxId(),
+                            current.summary.startedAt(),
+                            current.summary.disconnected(),
+                            true),
+                    worker);
+        }) != null;
     }
 
     public void unregister(String id) {

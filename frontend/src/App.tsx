@@ -1649,7 +1649,8 @@ export default function App() {
     try {
       setAgentRuns(await fetchAgentRuns(session.token));
     } catch {
-      setAgentRuns([]);
+      // Keep the last known runs on a transient failure so the 3s poll doesn't
+      // flicker the list to empty when a single request fails.
     } finally {
       setAgentRunsLoading(false);
     }

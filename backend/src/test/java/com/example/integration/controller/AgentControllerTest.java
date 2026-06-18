@@ -225,6 +225,30 @@ class AgentControllerTest {
     }
 
     @Test
+    void cancelRunInterruptsLiveWorker() throws InterruptedException {
+        var started = new CountDownLatch(1);
+        var interrupted = new CountDownLatch(1);
+        Thread worker = new Thread(() -> {
+            started.countDown();
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+            }
+        });
+        worker.start();
+        String runId = runRegistry.register(
+                "global", new AgentRequest("hello", "llama3.2", "session-123"), "llama3.2", worker);
+        assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+
+        ResponseEntity<Void> result = controller.cancelRun(runId, null);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(interrupted.await(2, TimeUnit.SECONDS)).isTrue();
+        runRegistry.unregister(runId);
+    }
+
+    @Test
     void cancelRunEndpointReturnsNotFoundForUnknownRun() {
         ResponseEntity<Void> result = controller.cancelRun("missing-run", null);
 
