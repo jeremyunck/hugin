@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.server.ResponseStatusException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -132,49 +133,50 @@ public class AgentController {
         SseEmitter emitter = createEmitter();
 
         streamExecutor.execute(() -> {
-            send(emitter, "config", Map.of("developerMode", developerModeService.isEnabled()));
+            AtomicBoolean streamOpen = new AtomicBoolean(true);
+            sendIfOpen(emitter, streamOpen, "config", Map.of("developerMode", developerModeService.isEnabled()));
             try {
                 StringBuilder streamedContent = new StringBuilder();
                 AgentResponse response = agentService.chatStream(scoped, new AgentStreamListener() {
                     @Override
                     public void onConfig(boolean developerMode) {
-                        send(emitter, "config", Map.of("developerMode", developerMode));
+                        sendIfOpen(emitter, streamOpen, "config", Map.of("developerMode", developerMode));
                     }
 
                     @Override
                     public void onContent(String delta) {
                         streamedContent.append(delta);
-                        send(emitter, "token", Map.of("text", delta));
+                        sendIfOpen(emitter, streamOpen, "token", Map.of("text", delta));
                     }
 
                     @Override
                     public void onReasoning(String delta) {
-                        send(emitter, "reasoning", Map.of("text", delta));
+                        sendIfOpen(emitter, streamOpen, "reasoning", Map.of("text", delta));
                     }
 
                     @Override
                     public void onToolCall(String toolName, String arguments) {
-                        send(emitter, "tool", Map.of("name", toolName, "args", arguments));
+                        sendIfOpen(emitter, streamOpen, "tool", Map.of("name", toolName, "args", arguments));
                     }
 
                     @Override
                     public void onToolResult(String toolName, String result) {
-                        send(emitter, "tool_result", Map.of("name", toolName, "result", result));
+                        sendIfOpen(emitter, streamOpen, "tool_result", Map.of("name", toolName, "result", result));
                     }
                 }, memoryOwner(owner, scoped.agentId()));
                 if (streamedContent.isEmpty()
                         && response != null
                         && response.response() != null
                         && !response.response().isBlank()) {
-                    send(emitter, "token", Map.of("text", response.response()));
+                    sendIfOpen(emitter, streamOpen, "token", Map.of("text", response.response()));
                 }
-                send(emitter, "done", Map.of());
-                emitter.complete();
+                sendIfOpen(emitter, streamOpen, "done", Map.of());
+                completeSafely(emitter);
             } catch (Exception e) {
                 log.warn("Agent stream failed", e);
                 String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                send(emitter, "error", Map.of("message", message));
-                emitter.complete();
+                sendIfOpen(emitter, streamOpen, "error", Map.of("message", message));
+                completeSafely(emitter);
             }
         });
 
@@ -241,6 +243,23 @@ public class AgentController {
             // Client disconnected; nothing more we can do for this stream.
             log.debug("Could not send SSE event '{}': {}", event, e.getMessage());
             return false;
+        }
+    }
+
+    private void sendIfOpen(SseEmitter emitter, AtomicBoolean streamOpen, String event, Map<String, ?> data) {
+        if (!streamOpen.get()) {
+            return;
+        }
+        if (!send(emitter, event, data) && streamOpen.compareAndSet(true, false)) {
+            log.debug("Agent stream client disconnected during '{}' event; continuing run in background", event);
+        }
+    }
+
+    private void completeSafely(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (IllegalStateException e) {
+            log.debug("SSE emitter was already completed: {}", e.getMessage());
         }
     }
 

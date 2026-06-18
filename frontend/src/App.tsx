@@ -1441,14 +1441,18 @@ export default function App() {
       try {
         setFiles(await fetchSandboxFiles(session.token, id));
       } catch {
-        // Best-effort; leave the previous tree in place.
+        setFiles([]);
       }
     },
     [session]
   );
 
   useEffect(() => {
-    if (!session || screen !== "chat" || !thread.sandboxId) return;
+    if (!session || screen !== "chat" || !thread.sandboxId) {
+      setFiles([]);
+      return;
+    }
+    setFiles([]);
     void refreshFiles(thread.sandboxId);
   }, [session, screen, thread.sandboxId, refreshFiles]);
 
