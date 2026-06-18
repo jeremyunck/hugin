@@ -49,7 +49,7 @@ conversation:
     # max-messages instead of expiring after a fixed timeout.
     ttl:
     # JSON file that mirrors short-term conversation memory so chats survive service restarts.
-    store-file: ${CONVERSATION_MEMORY_STORE_FILE:${agent.home}/conversation-memory.json}
+    store-file: ${CONVERSATION_MEMORY_STORE_FILE:${agent.home}/state/conversation-memory.json}
 
 memory:
   # Redis-backed long-term memory with text-embedding recall. Disabled by default; when enabled it
