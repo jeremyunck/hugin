@@ -195,6 +195,12 @@ public class AgentService {
         if (!initialToolDefinitions.isEmpty()) {
             messages.add(ChatMessage.system(Prompts.TOOL_USE));
         }
+        if (includeWorkspaceTools) {
+            String skillPrompt = Prompts.workspaceSkills(WorkspaceSkills.list(workspace));
+            if (!skillPrompt.isBlank()) {
+                messages.add(ChatMessage.system(skillPrompt));
+            }
+        }
         startupAnnouncement.flatMap(StartupAnnouncementService::consume).ifPresent(notice ->
                 messages.add(ChatMessage.system(
                         "You have just restarted after a self-update. " + notice

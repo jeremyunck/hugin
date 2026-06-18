@@ -4,7 +4,8 @@
 
 Hugin is a Spring Boot + React personal assistant. It talks to any OpenAI-compatible chat
 endpoint, exposes a web UI, and ships with local tools for file access, shell commands, web
-search, Google Workspace, email, scheduling, and optional Redis-backed memory.
+search, Google Workspace, email, scheduling, optional repo-local skills, and optional
+Redis-backed memory.
 
 ## Getting started
 
@@ -98,6 +99,8 @@ The updater only deploys when `origin/main` has moved. It skips if the checkout 
 - Read and write Google Docs, Sheets, Calendar, and Gmail when configured
 - Schedule prompts for later delivery
 - Recall past conversations and optional semantic memory
+- Discover repo-local skills from `skills/**/SKILL.md` and `docs/skills/**/SKILL.md`, then read a
+  relevant skill before substantial workspace tasks
 
 ## Configuration
 

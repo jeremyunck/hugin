@@ -1,10 +1,12 @@
 package com.example.agent.prompts;
 
 import com.example.agent.SystemFacts;
+import com.example.agent.WorkspaceSkills;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * Central home for every prompt string sent to the LLM.
@@ -50,6 +52,12 @@ public final class Prompts {
             guess when the tools can continue the investigation. If one tool path fails, try a \
             different tool or narrower command before giving up.
             \
+            EXPLORING AN UNFAMILIAR REPOSITORY: Start by getting bearings with focused discovery, \
+            not a massive dump. Prefer repo_index search/build, find_path, find_files, grep_search, \
+            or a shallow list_files call before a recursive full-tree listing. Once you identify a \
+            likely file, use read_file on that file — and for large files prefer a narrow line range \
+            over reading the entire file at once.
+            \
             FINDING FILES AND FOLDERS: A path the user gives may be approximate, partial, or simply \
             wrong, and the thing they want may live somewhere other than where they said. If an exact \
             path does not exist, do NOT report it as missing — search for it. Use find_path to locate \
@@ -79,6 +87,10 @@ public final class Prompts {
             appropriate build, test, or run commands with the tools available, and read the output to \
             verify it actually works and is complete — unless the user instructs otherwise.
             \
+            FILE TOOL DISTINCTIONS: read_file is only for reading file contents and optional line \
+            ranges; it does not edit. Use edit_file for targeted in-place changes and write_file for \
+            full-file writes.
+            \
             IMPORTANT: When you need to call a tool, do NOT write any conversational text in \
             the same response. Only output the tool call(s). Wait until all tool calls have \
             completed and their results are available before writing a complete, conversational \
@@ -98,6 +110,28 @@ public final class Prompts {
     public static final String MEMORY_HEADER = """
             Relevant context recalled from long-term memory of past conversations. \
             Use it if it helps answer the user; ignore it if it is not relevant:""";
+
+    public static String workspaceSkills(List<WorkspaceSkills.SkillSummary> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("""
+                Workspace skills are available in this repository. When one is relevant, read its \
+                SKILL.md with read_file before substantial work and follow it as repo-specific \
+                instructions. Skills are for execution, not just reference.
+                
+                Available skills:
+                """);
+        for (WorkspaceSkills.SkillSummary skill : skills) {
+            sb.append("\n- ")
+                    .append(skill.path())
+                    .append(" — ")
+                    .append(skill.name())
+                    .append(": ")
+                    .append(skill.description());
+        }
+        return sb.toString();
+    }
 
     /**
      * Prompt used by the routing classifier. It should reply with exactly one word:

@@ -143,7 +143,31 @@ class LocalToolsExtendedTest {
         String result = read.execute(Map.of("path", "big.txt"));
 
         assertThat(result).startsWith("a".repeat(100));
-        assertThat(result).contains("[truncated 50 characters]");
+        assertThat(result).contains("[truncated 50 characters; use start_line and line_count for a narrower slice]");
+    }
+
+    @Test
+    void readFileCanReturnSpecificLineRange() throws Exception {
+        Files.writeString(tmp.resolve("range.txt"), "one\ntwo\nthree\nfour\nfive");
+        var read = new ReadFileTool(workspace, properties, noDenyList);
+
+        String result = read.execute(Map.of("path", "range.txt", "start_line", 2, "line_count", 2));
+
+        assertThat(result).isEqualTo("two\nthree");
+    }
+
+    @Test
+    void readFileRejectsEditStyleArguments() throws Exception {
+        Files.writeString(tmp.resolve("file.txt"), "hello");
+        var read = new ReadFileTool(workspace, properties, noDenyList);
+
+        String result = read.execute(Map.of(
+                "path", "file.txt",
+                "old_string", "hello",
+                "new_string", "hi"));
+
+        assertThat(result).contains("read_file only reads files");
+        assertThat(result).contains("Use edit_file");
     }
 
     // ------------------------------------------------------------------

@@ -383,6 +383,46 @@ class AgentServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void injectsWorkspaceSkillPromptWhenSkillsExist(@TempDir Path tmp) throws Exception {
+        Files.createDirectories(tmp.resolve("skills/explore-github-repository"));
+        Files.writeString(tmp.resolve("skills/explore-github-repository/SKILL.md"), """
+                ---
+                name: explore-github-repository
+                description: Use when starting work in an unfamiliar repository.
+                ---
+                """);
+        var props = new LocalToolProperties(true, tmp.toString(), Duration.ofSeconds(30), 30_000, List.of());
+        var workspace = new Workspace(props);
+        var service = new AgentService(
+                llmClient,
+                registry(new RecordingLocalTool("get_time", "12:00")),
+                jitRegistry(tmp),
+                objectMapper,
+                FIVE_MINUTES,
+                DEFAULT_MODEL,
+                MAX_ITERATIONS,
+                new WorkspaceRegistry(workspace),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithContent("12:00"));
+
+        service.chat(new AgentRequest(PROMPT, null, MODEL, null, MODEL, MODEL, MODEL, null, null, SESSION_ID, null, null, "sandbox-1", null));
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        assertThat(captor.getValue()).anySatisfy(message -> {
+            assertThat(message.role()).isEqualTo("system");
+            assertThat(message.content()).contains("Workspace skills are available");
+            assertThat(message.content()).contains("skills/explore-github-repository/SKILL.md");
+        });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldNotPrependSystemPromptWhenNoToolsAvailable() {
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(responseWithContent("Hi!"));

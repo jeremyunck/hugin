@@ -37,7 +37,7 @@ public class ReadFileTool implements LocalTool {
     @Override
     public String description() {
         return "Read and return the contents of a UTF-8 text file within the workspace. "
-                + "Large files are truncated.";
+                + "Supports optional line ranges via start_line and line_count. Large files are truncated.";
     }
 
     @Override
@@ -47,7 +47,13 @@ public class ReadFileTool implements LocalTool {
                 "properties", Map.of(
                         "path", Map.of(
                                 "type", "string",
-                                "description", "File path, relative to the workspace root.")),
+                                "description", "File path, relative to the workspace root."),
+                        "start_line", Map.of(
+                                "type", "integer",
+                                "description", "Optional 1-based starting line number for a narrower read."),
+                        "line_count", Map.of(
+                                "type", "integer",
+                                "description", "Optional number of lines to read when using start_line. Defaults to 200 for ranged reads.")),
                 "required", List.of("path"));
     }
 
@@ -59,9 +65,17 @@ public class ReadFileTool implements LocalTool {
     @Override
     public String execute(Map<String, Object> arguments, ToolContext ctx) throws IOException {
         String requested = requiredString(arguments, "path");
+        if (arguments.containsKey("old_string") || arguments.containsKey("new_string")
+                || arguments.containsKey("replace_all")) {
+            return "Error: read_file only reads files. Use edit_file for old_string/new_string replacements.";
+        }
         Workspace ws = ctx.workspace();
         Path file = ws.resolve(requested);
         String relative = ws.relativize(file);
+        boolean hasStartLine = arguments.containsKey("start_line");
+        boolean hasLineCount = arguments.containsKey("line_count");
+        int startLine = Math.max(1, optionalInt(arguments, "start_line", 1));
+        int lineCount = Math.max(1, optionalInt(arguments, "line_count", 200));
 
         if (denyList.isDenied(relative)) {
             return "Error: access to '" + requested + "' is denied by configuration.";
@@ -74,15 +88,33 @@ public class ReadFileTool implements LocalTool {
             return listDirectory(file);
         }
 
+        if (hasStartLine || hasLineCount) {
+            return readLineRange(file, startLine, lineCount);
+        }
+
         String content = Files.readString(file);
         if (content.isEmpty()) {
             return "(file is empty)";
         }
         if (content.length() > maxChars) {
             return content.substring(0, maxChars)
-                    + "\n... [truncated " + (content.length() - maxChars) + " characters]";
+                    + "\n... [truncated " + (content.length() - maxChars)
+                    + " characters; use start_line and line_count for a narrower slice]";
         }
         return content;
+    }
+
+    private static String readLineRange(Path file, int startLine, int lineCount) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        if (lines.isEmpty()) {
+            return "(file is empty)";
+        }
+        if (startLine > lines.size()) {
+            return "Error: start_line " + startLine + " is beyond end of file (" + lines.size() + " lines).";
+        }
+        int fromIndex = startLine - 1;
+        int toIndex = Math.min(lines.size(), fromIndex + lineCount);
+        return String.join("\n", lines.subList(fromIndex, toIndex));
     }
 
     private static String listDirectory(Path dir) throws IOException {
