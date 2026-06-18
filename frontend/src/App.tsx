@@ -116,6 +116,21 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function resolvePreferredGitHubBranch(
+  branches: GitHubBranch[],
+  defaultBranch: string | null | undefined,
+  currentBranch?: string
+) {
+  if (currentBranch && branches.some((branch) => branch.name === currentBranch)) {
+    return currentBranch;
+  }
+  if (defaultBranch) {
+    const matchingDefault = branches.find((branch) => branch.name === defaultBranch);
+    if (matchingDefault) return matchingDefault.name;
+  }
+  return branches[0]?.name ?? "";
+}
+
 function promptNeedsWorkspace(prompt: string) {
   return (WORKSPACE_ACTION_RE.test(prompt) && WORKSPACE_TARGET_RE.test(prompt))
     || WORKSPACE_PATH_RE.test(prompt)
@@ -1612,13 +1627,22 @@ export default function App() {
       const branches = await fetchGitHubBranches(session.token, repoFullName);
       setBranchOptions(branches);
       const defaultBranch = repoOptions.find((repo) => repo.fullName === repoFullName)?.defaultBranch;
-      setSelectedBranch(branches.find((branch) => branch.name === defaultBranch)?.name ?? branches[0]?.name ?? "");
+      setSelectedBranch(resolvePreferredGitHubBranch(branches, defaultBranch));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load GitHub branches.");
     } finally {
       setLoadingBranches(false);
     }
   }, [session, repoOptions]);
+
+  useEffect(() => {
+    if (!selectedRepo || !branchOptions.length) return;
+    const defaultBranch = repoOptions.find((repo) => repo.fullName === selectedRepo)?.defaultBranch;
+    const preferredBranch = resolvePreferredGitHubBranch(branchOptions, defaultBranch, selectedBranch);
+    if (preferredBranch !== selectedBranch) {
+      setSelectedBranch(preferredBranch);
+    }
+  }, [selectedRepo, selectedBranch, branchOptions, repoOptions]);
 
   const confirmGitHubRepo = useCallback(async () => {
     if (!session || !selectedRepo || !selectedBranch) return;
