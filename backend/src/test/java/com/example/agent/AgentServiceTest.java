@@ -524,10 +524,12 @@ class AgentServiceTest {
         AgentResponse result = service.chat(new AgentRequest("What is my name?", MODEL, SESSION_ID));
 
         assertThat(result.response()).isEqualTo("Your name is Ada.");
-        ArgumentCaptor<ChatMessage> recordedMessage = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(conversation).record(eq(scopedSessionId), recordedMessage.capture(), eq("Your name is Ada."));
-        assertThat(recordedMessage.getValue().content()).isEqualTo("What is my name?");
-        assertThat(recordedMessage.getValue().attachments()).isNull();
+        ArgumentCaptor<List<ChatMessage>> transcriptCaptor = ArgumentCaptor.forClass(List.class);
+        verify(conversation).recordMessages(eq(scopedSessionId), transcriptCaptor.capture());
+        assertThat(transcriptCaptor.getValue()).extracting(ChatMessage::role)
+                .containsExactly("user", "assistant");
+        assertThat(transcriptCaptor.getValue().get(0).content()).isEqualTo("What is my name?");
+        assertThat(transcriptCaptor.getValue().get(0).attachments()).isNull();
 
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
@@ -575,10 +577,10 @@ class AgentServiceTest {
 
         assertThat(result.response()).isEqualTo("It looks like a raven.");
 
-        ArgumentCaptor<ChatMessage> recordedMessage = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(conversation).record(eq("global:" + SESSION_ID), recordedMessage.capture(), eq("It looks like a raven."));
-        assertThat(recordedMessage.getValue().attachments()).hasSize(1);
-        assertThat(recordedMessage.getValue().attachments().get(0).dataUrl()).isEqualTo("data:image/png;base64,abc123");
+        ArgumentCaptor<List<ChatMessage>> transcriptCaptor = ArgumentCaptor.forClass(List.class);
+        verify(conversation).recordMessages(eq("global:" + SESSION_ID), transcriptCaptor.capture());
+        assertThat(transcriptCaptor.getValue().get(0).attachments()).hasSize(1);
+        assertThat(transcriptCaptor.getValue().get(0).attachments().get(0).dataUrl()).isEqualTo("data:image/png;base64,abc123");
     }
 
     @Test
@@ -623,6 +625,7 @@ class AgentServiceTest {
         assertThat(result.response()).isEqualTo("done");
         verify(conversation, never()).history(anyString());
         verify(conversation, never()).record(anyString(), anyString(), anyString());
+        verify(conversation, never()).recordMessages(anyString(), anyList());
         assertThat(channelTool.seen).isEqualTo(recent);
     }
 
@@ -668,7 +671,7 @@ class AgentServiceTest {
 
         assertThat(result.response()).isEqualTo("You asked me this before.");
         verify(conversation, never()).history(anyString());
-        verify(conversation).record(eq("global:" + SESSION_ID), any(ChatMessage.class), eq("You asked me this before."));
+        verify(conversation).recordMessages(eq("global:" + SESSION_ID), anyList());
 
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());

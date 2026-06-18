@@ -7,6 +7,7 @@ export type AuthSession = {
 
 export type StreamToolEvent = {
   id: string;
+  callId?: string;
   name: string;
   args: string;
   result: string;

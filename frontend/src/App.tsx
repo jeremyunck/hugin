@@ -178,11 +178,12 @@ function defaultReasoningFor(model?: ModelOption) {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /** Folds a streamed agent event into the working thread, keyed by the active assistant entry. */
-function applyStreamEvent(thread: ChatThread, assistantId: string, event: StreamEvent): ChatThread {
+function applyStreamEvent(thread: ChatThread, assistantId: string, event: StreamEvent): { thread: ChatThread; assistantId: string } {
   const entries = thread.entries.slice();
   const idx = entries.findIndex((entry) => entry.id === assistantId);
-  if (idx === -1) return thread;
+  if (idx === -1) return { thread, assistantId };
   const assistant = entries[idx] as Extract<ChatEntry, { type: "assistant" }>;
+  let nextAssistantId = assistantId;
 
   switch (event.type) {
     case "token":
@@ -204,8 +205,14 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
         },
         createdAt: nowIso()
       };
-      // Insert tool activity just before the assistant bubble so the final answer stays last.
-      entries.splice(idx, 0, toolEntry);
+      if (assistant.content.trim() || assistant.reasoning.trim()) {
+        const nextAssistant = buildAssistantEntry();
+        entries[idx] = { ...assistant, completedAt: assistant.completedAt ?? nowIso() };
+        entries.splice(idx + 1, 0, toolEntry, nextAssistant);
+        nextAssistantId = nextAssistant.id;
+      } else {
+        entries.splice(idx, 0, toolEntry);
+      }
       break;
     }
     case "tool_result": {
@@ -228,16 +235,17 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
       entries[idx] = { ...assistant, content: event.content, completedAt: nowIso() };
       break;
     case "reset": {
-      // A dropped stream is being replayed: clear this turn's partial answer and any tool
-      // entries streamed just before the assistant bubble so the retry renders from scratch.
-      let removeFrom = idx;
-      while (removeFrom > 0 && entries[removeFrom - 1].type === "tool") {
-        removeFrom -= 1;
-      }
-      entries.splice(removeFrom, idx - removeFrom);
       const resetIdx = entries.findIndex((entry) => entry.id === assistantId);
       if (resetIdx !== -1) {
         entries[resetIdx] = { ...assistant, content: "", reasoning: "" };
+      }
+      break;
+    }
+    case "done": {
+      if (!assistant.content.trim() && !assistant.reasoning.trim()) {
+        entries.splice(idx, 1);
+      } else {
+        entries[idx] = { ...assistant, completedAt: assistant.completedAt ?? nowIso() };
       }
       break;
     }
@@ -245,7 +253,10 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
       break;
   }
 
-  return { ...thread, updatedAt: nowIso(), entries };
+  return {
+    thread: { ...thread, updatedAt: nowIso(), entries },
+    assistantId: nextAssistantId
+  };
 }
 
 function StatusBar() {
@@ -543,28 +554,45 @@ function Messages({
         if (entry.type === "tool") {
           return (
             <div key={entry.id} className="message-row message-row-assistant fade-in">
-              <div className="assistant-event">
-                {entry.tool.finishedAt ? (
-                  <Check size={15} strokeWidth={3} color={COLORS.green} />
-                ) : (
-                  <TypingDots />
-                )}
-                <span>
-                  Used <span className="mono">{entry.tool.name}</span>
-                </span>
-              </div>
+              <details className="tool-event">
+                <summary className="assistant-event">
+                  {entry.tool.finishedAt ? (
+                    <Check size={15} strokeWidth={3} color={COLORS.green} />
+                  ) : (
+                    <TypingDots />
+                  )}
+                  <span>
+                    Used <span className="mono">{entry.tool.name}</span>
+                  </span>
+                </summary>
+                <div className="tool-event-body">
+                  <div className="tool-event-section">
+                    <span className="tool-event-label">Input</span>
+                    <pre>{entry.tool.args || "(empty)"}</pre>
+                  </div>
+                  <div className="tool-event-section">
+                    <span className="tool-event-label">Output</span>
+                    <pre>{entry.tool.result || (entry.tool.finishedAt ? "(empty)" : "Running…")}</pre>
+                  </div>
+                </div>
+              </details>
             </div>
           );
         }
 
-        const empty = !entry.content;
+        const empty = !entry.content && !entry.reasoning;
         return (
           <div key={entry.id} className="message-row message-row-assistant fade-in">
             <div className="assistant-response">
               {empty && busy ? (
                 <TypingDots />
               ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeAssistantMarkdown(entry.content)}</ReactMarkdown>
+                <>
+                  {entry.reasoning ? <div className="assistant-reasoning">{entry.reasoning}</div> : null}
+                  {entry.content ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeAssistantMarkdown(entry.content)}</ReactMarkdown>
+                  ) : null}
+                </>
               )}
             </div>
           </div>
@@ -1063,7 +1091,9 @@ export default function App() {
 
   const [state, setState] = useState<AppState>(() => loadAppState());
   const [thread, setThread] = useState<ChatThread>(() => createThread("chat"));
+  const stateRef = useRef(state);
   const threadRef = useRef(thread);
+  const activeAssistantIdsRef = useRef(new Map<string, string>());
 
   const [draft, setDraft] = useState("");
   const [draftAttachment, setDraftAttachment] = useState<ChatAttachment | null>(null);
@@ -1097,8 +1127,44 @@ export default function App() {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
     threadRef.current = thread;
   }, [thread]);
+
+  const upsertThread = useCallback((nextThread: ChatThread) => {
+    setState((prev) => {
+      const exists = prev.threads.some((existing) => existing.id === nextThread.id);
+      const threads = exists
+        ? prev.threads.map((existing) => (existing.id === nextThread.id ? nextThread : existing))
+        : [nextThread, ...prev.threads];
+      const next = { ...prev, threads };
+      stateRef.current = next;
+      saveAppState(next);
+      return next;
+    });
+  }, []);
+
+  const applyEventToThread = useCallback((threadId: string, event: StreamEvent) => {
+    let nextThread: ChatThread | null = null;
+    const target = stateRef.current.threads.find((candidate) => candidate.id === threadId)
+      ?? (threadRef.current.id === threadId ? threadRef.current : null);
+    const assistantId = activeAssistantIdsRef.current.get(threadId);
+    if (!target || !assistantId) return;
+    const result = applyStreamEvent(target, assistantId, event);
+    activeAssistantIdsRef.current.set(threadId, result.assistantId);
+    nextThread = result.thread;
+    upsertThread(nextThread);
+    if (threadRef.current.id === threadId) {
+      setThread(nextThread);
+      threadRef.current = nextThread;
+    }
+    if (event.type === "done" || event.type === "error") {
+      activeAssistantIdsRef.current.delete(threadId);
+    }
+  }, [upsertThread]);
 
   // Validate any stored session on load so a refresh keeps the user signed in.
   useEffect(() => {
@@ -1144,16 +1210,23 @@ export default function App() {
       .catch(() => setGitHubStatus(null));
   }, [session]);
 
+  const syncThreadFromServer = useCallback(async (candidate: ChatThread) => {
+    if (!session || !candidate.entries.some((entry) => entry.type === "user")) return;
+    try {
+      const next = await syncThreadHistory(session.token, candidate);
+      upsertThread(next);
+      if (threadRef.current.id === next.id) {
+        setThread(next);
+      }
+    } catch {
+      // Leave local state alone when the background resync cannot reach the server.
+    }
+  }, [session, upsertThread]);
+
   useEffect(() => {
-    if (!session || !thread.entries.some((entry) => entry.type === "user")) return;
-    syncThreadHistory(session.token, thread)
-      .then((next) => {
-        setThread((current) => (current.id === next.id ? next : current));
-      })
-      .catch(() => {
-        // Leave local state alone when the background resync cannot reach the server.
-      });
-  }, [session, thread.id]);
+    if (busy) return;
+    void syncThreadFromServer(thread);
+  }, [busy, thread.id, syncThreadFromServer]);
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -1174,19 +1247,31 @@ export default function App() {
     }));
   }, [models, thread.modelId, thread.reasoningEffort]);
 
-  // Persist a thread to history only once the user has actually sent a message.
   useEffect(() => {
     if (!thread.entries.some((entry) => entry.type === "user")) return;
-    setState((prev) => {
-      const exists = prev.threads.some((existing) => existing.id === thread.id);
-      const threads = exists
-        ? prev.threads.map((existing) => (existing.id === thread.id ? thread : existing))
-        : [thread, ...prev.threads];
-      const next = { ...prev, threads };
-      saveAppState(next);
-      return next;
-    });
-  }, [thread]);
+    upsertThread(thread);
+  }, [thread, upsertThread]);
+
+  useEffect(() => {
+    if (!session) return;
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      const activeThreadIds = new Set(activeAssistantIdsRef.current.keys());
+      for (const threadId of activeThreadIds) {
+        const candidate = stateRef.current.threads.find((item) => item.id === threadId)
+          ?? (threadRef.current.id === threadId ? threadRef.current : null);
+        if (candidate) {
+          void syncThreadFromServer(candidate);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
+    };
+  }, [session, syncThreadFromServer]);
 
   const refreshFiles = useCallback(
     async (sandboxId?: string) => {
@@ -1258,6 +1343,7 @@ export default function App() {
   const openHistory = useCallback(
     (item: ChatThread) => {
       setThread(item);
+      void syncThreadFromServer(item);
       setDraftAttachment(null);
       setError(null);
       setMenuOpen(false);
@@ -1275,7 +1361,7 @@ export default function App() {
         setScreen("purechat");
       }
     },
-    [refreshFiles]
+    [refreshFiles, syncThreadFromServer]
   );
 
   const openIntegrations = useCallback(async () => {
@@ -1384,27 +1470,30 @@ export default function App() {
 
       const userEntry = buildUserEntry(text, attachment ? [attachment] : undefined);
       const assistant = buildAssistantEntry();
-      setThread((current) => {
-        const isFirst = !current.entries.some((entry) => entry.type === "user");
-        return {
-          ...current,
-          ...(sandboxId ? { kind: current.kind === "github" ? "github" as const : "sandbox" as const, sandboxId } : {}),
-          modelId: selectedModel.id,
-          reasoningEffort: selectedReasoning,
-          title: isFirst && current.kind !== "github"
-            ? getThreadTitle(text || attachment?.name || "Image attachment")
-            : current.title,
-          updatedAt: nowIso(),
-          entries: [...current.entries, userEntry, assistant]
-        };
-      });
+      const currentThread = threadRef.current;
+      const isFirst = !currentThread.entries.some((entry) => entry.type === "user");
+      const nextThread: ChatThread = {
+        ...currentThread,
+        ...(sandboxId ? { kind: currentThread.kind === "github" ? "github" as const : "sandbox" as const, sandboxId } : {}),
+        modelId: selectedModel.id,
+        reasoningEffort: selectedReasoning,
+        title: isFirst && currentThread.kind !== "github"
+          ? getThreadTitle(text || attachment?.name || "Image attachment")
+          : currentThread.title,
+        updatedAt: nowIso(),
+        entries: [...currentThread.entries, userEntry, assistant]
+      };
+      activeAssistantIdsRef.current.set(nextThread.id, assistant.id);
+      setThread(nextThread);
+      threadRef.current = nextThread;
+      upsertThread(nextThread);
 
       try {
-        const priorMessages = buildPriorMessages(threadRef.current);
+        const priorMessages = buildPriorMessages(currentThread);
         await streamPrompt(
           session.token,
           {
-            threadId: threadRef.current.id,
+            threadId: nextThread.id,
             prompt: text,
             attachments: attachment ? [attachment] : undefined,
             priorMessages,
@@ -1412,17 +1501,17 @@ export default function App() {
             reasoningEffort: selectedReasoning,
             sandboxId
           },
-          { onEvent: (event) => setThread((current) => applyStreamEvent(current, assistant.id, event)) }
+          { onEvent: (event) => applyEventToThread(nextThread.id, event) }
         );
       } catch (e) {
         const message = e instanceof Error ? e.message : "The agent request failed.";
-        setThread((current) => applyStreamEvent(current, assistant.id, { type: "error", message }));
+        applyEventToThread(nextThread.id, { type: "error", message });
       } finally {
         setBusy(false);
         if (sandboxId) void refreshFiles(sandboxId);
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, models]
+    [draft, draftAttachment, busy, session, refreshFiles, models, upsertThread, applyEventToThread]
   );
 
   const pickImage = useCallback(() => {

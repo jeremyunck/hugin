@@ -515,6 +515,14 @@ type ServerChatMessage = {
   content: string;
   attachments?: ChatAttachment[];
   reasoning_content?: string | null;
+  tool_calls?: Array<{
+    id?: string | null;
+    function?: {
+      name?: string | null;
+      arguments?: string | null;
+    } | null;
+  }> | null;
+  tool_call_id?: string | null;
 };
 
 async function fetchConversationHistory(token: string, sessionId: string): Promise<ServerChatMessage[]> {
@@ -573,40 +581,69 @@ export function buildPriorMessages(thread: ChatThread): ChatMessage[] {
 
 export async function syncThreadHistory(token: string, thread: ChatThread): Promise<ChatThread> {
   const history = await fetchConversationHistory(token, thread.id);
-  const remote = history.filter((message) => message.role === "user" || message.role === "assistant");
+  const remote = history.filter((message) =>
+    message.role === "user" || message.role === "assistant" || message.role === "tool");
   if (!remote.length) {
     return thread;
   }
-  const entries = thread.entries.slice();
-  const localIndices = entries
-    .map((entry, index) => ({ entry, index }))
-    .filter(({ entry }) => entry.type === "user" || entry.type === "assistant");
+  const entries: ChatEntry[] = [];
+  const toolEntriesByCallId = new Map<string, number>();
 
-  for (let i = 0; i < remote.length; i++) {
-    const message = remote[i];
-    const local = localIndices[i];
-    if (local) {
-      if (message.role === "user" && local.entry.type === "user") {
-        entries[local.index] = {
-          ...local.entry,
-          content: message.content ?? local.entry.content,
-          attachments: message.attachments ?? local.entry.attachments
+  for (const message of remote) {
+    if (message.role === "user") {
+      entries.push(buildUserEntry(message.content ?? "", message.attachments));
+      continue;
+    }
+
+    if (message.role === "assistant") {
+      const hasVisibleAssistantContent = Boolean((message.content ?? "").trim() || (message.reasoning_content ?? "").trim());
+      if (hasVisibleAssistantContent) {
+        entries.push({
+          ...buildAssistantEntry(),
+          content: message.content ?? "",
+          reasoning: message.reasoning_content ?? "",
+          completedAt: nowIso()
+        });
+      }
+      for (const toolCall of message.tool_calls ?? []) {
+        const toolEntry: ChatEntry = {
+          id: uid("entry-tool"),
+          type: "tool",
+          tool: {
+            id: uid("tool"),
+            callId: toolCall.id ?? undefined,
+            name: toolCall.function?.name ?? "tool",
+            args: toolCall.function?.arguments ?? "",
+            result: "",
+            startedAt: nowIso()
+          },
+          createdAt: nowIso()
         };
-      } else if (message.role === "assistant" && local.entry.type === "assistant") {
-        entries[local.index] = {
-          ...local.entry,
-          content: message.content ?? local.entry.content,
-          reasoning: message.reasoning_content ?? local.entry.reasoning,
-          completedAt: local.entry.completedAt ?? nowIso()
-        };
+        entries.push(toolEntry);
+        if (toolCall.id) {
+          toolEntriesByCallId.set(toolCall.id, entries.length - 1);
+        }
       }
       continue;
     }
-    entries.push(
-      message.role === "user"
-        ? buildUserEntry(message.content ?? "", message.attachments)
-        : { ...buildAssistantEntry(), content: message.content ?? "", reasoning: message.reasoning_content ?? "", completedAt: nowIso() }
-    );
+
+    if (message.role === "tool") {
+      const byCallId = message.tool_call_id ? toolEntriesByCallId.get(message.tool_call_id) : undefined;
+      const matchIndex = byCallId ?? [...entries].reverse().findIndex((entry) =>
+        entry.type === "tool" && !entry.tool.finishedAt);
+      const entryIndex = byCallId ?? (matchIndex === -1 ? -1 : entries.length - 1 - matchIndex);
+      if (entryIndex >= 0 && entries[entryIndex]?.type === "tool") {
+        const entry = entries[entryIndex] as Extract<ChatEntry, { type: "tool" }>;
+        entries[entryIndex] = {
+          ...entry,
+          tool: {
+            ...entry.tool,
+            result: message.content ?? "",
+            finishedAt: nowIso()
+          }
+        };
+      }
+    }
   }
 
   return {

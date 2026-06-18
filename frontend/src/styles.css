@@ -333,6 +333,14 @@ select {
   font-size: 14px;
 }
 
+.assistant-reasoning {
+  margin-bottom: 10px;
+  color: #98a0ab;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .assistant-response > :first-child {
   margin-top: 0;
 }
@@ -459,7 +467,55 @@ select {
 }
 
 .assistant-event {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  list-style: none;
   font-size: 13px;
+  cursor: pointer;
+}
+
+.assistant-event::-webkit-details-marker {
+  display: none;
+}
+
+.tool-event {
+  width: min(88%, 100%);
+}
+
+.tool-event-body {
+  margin-top: 8px;
+  border-left: 2px solid #eaebed;
+  padding-left: 12px;
+}
+
+.tool-event-section + .tool-event-section {
+  margin-top: 10px;
+}
+
+.tool-event-label {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: #8b9099;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tool-event-body pre {
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #eaebed;
+  border-radius: 10px;
+  background: #f7f7f8;
+  padding: 10px 12px;
+  color: #3c414a;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .bullet-mark {

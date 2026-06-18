@@ -14,10 +14,9 @@ import java.util.List;
  * them back into the model's context on the next request so it remembers the conversation so far.
  *
  * <p>Implements the standard sliding-window buffer ({@code conversation.memory.max-messages}):
- * only the most recent turns are kept, bounding the prompt size. Only the user prompt and the final
- * assistant answer are retained per turn — the intermediate tool-call scaffolding is deliberately
- * dropped, keeping the stored history a valid, self-contained transcript that can be trimmed at any
- * point without orphaning a tool result.
+ * only the most recent transcript messages are kept, bounding the prompt size. A completed turn may
+ * include assistant tool-call scaffolding and tool results, so the stored transcript remains rich
+ * enough for client-side catch-up and exact replay.
  *
  * <p>Both operations are best-effort: storage failures are logged and swallowed so the agent loop
  * keeps working. Only created when {@code conversation.memory.enabled} is true (the default).
@@ -77,6 +76,22 @@ public class ConversationMemoryService {
                     List.of(userMessage, ChatMessage.assistant(assistantAnswer)),
                     properties.maxMessages());
             log.debug("Recorded turn for session {}", sessionId);
+        } catch (Exception e) {
+            log.warn("Conversation history store failed for session {}: {}", sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * Appends a completed turn transcript to the session exactly as it should be replayed later.
+     * No-op when there is no session id or the transcript is empty (never throws).
+     */
+    public void recordMessages(String sessionId, List<ChatMessage> messages) {
+        if (sessionId == null || sessionId.isBlank() || messages == null || messages.isEmpty()) {
+            return;
+        }
+        try {
+            store.append(sessionId, List.copyOf(messages), properties.maxMessages());
+            log.debug("Recorded transcript for session {}", sessionId);
         } catch (Exception e) {
             log.warn("Conversation history store failed for session {}: {}", sessionId, e.getMessage());
         }

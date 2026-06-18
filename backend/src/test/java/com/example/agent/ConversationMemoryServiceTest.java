@@ -131,6 +131,26 @@ class ConversationMemoryServiceTest {
     }
 
     @Test
+    void recordsFullTurnTranscriptWithTools() {
+        var service = service(20, Duration.ofHours(1));
+        service.recordMessages("s1", List.of(
+                ChatMessage.user("hello"),
+                ChatMessage.assistantWithToolCalls(List.of(
+                        new com.example.agent.model.ToolCall(
+                                "call_1",
+                                "function",
+                                new com.example.agent.model.ToolCall.FunctionCall("read_file", "{\"path\":\"README.md\"}")))),
+                ChatMessage.tool("call_1", "file contents"),
+                ChatMessage.assistant("done")));
+
+        List<ChatMessage> history = service.history("s1");
+        assertThat(history).hasSize(4);
+        assertThat(history.get(1).toolCalls()).hasSize(1);
+        assertThat(history.get(2).role()).isEqualTo("tool");
+        assertThat(history.get(3).content()).isEqualTo("done");
+    }
+
+    @Test
     void leavesSessionsAliveWhenTtlIsDisabled() {
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
         var props = new ConversationMemoryProperties(true, 20, null, "./conversation-memory.json");

@@ -215,6 +215,7 @@ public class AgentService {
         }
         ChatMessage userMessage = ChatMessage.user(request.prompt(), request.attachments());
         messages.add(userMessage);
+        int turnStartIndex = messages.size() - 1;
 
         String lastAssistantContent = null;
         boolean hadToolCalls = false;
@@ -296,9 +297,24 @@ public class AgentService {
                 memoryService.ifPresent(memory -> memory.remember(memoryOwner(owner, request.agentId()),
                         request.prompt(), finalAnswer));
                 if (!clientManagedContext) {
-                    conversationMemory.ifPresent(cm -> cm.record(
+                    List<ChatMessage> transcript = new ArrayList<>();
+                    boolean recordedUser = false;
+                    for (int j = turnStartIndex; j < messages.size(); j++) {
+                        ChatMessage message = messages.get(j);
+                        if ("user".equals(message.role())) {
+                            if (!recordedUser) {
+                                transcript.add(message);
+                                recordedUser = true;
+                            }
+                            continue;
+                        }
+                        if ("assistant".equals(message.role()) || "tool".equals(message.role())) {
+                            transcript.add(message);
+                        }
+                    }
+                    conversationMemory.ifPresent(cm -> cm.recordMessages(
                             sessionScope(owner, request.agentId(), request.sessionId()),
-                            userMessage, finalAnswer));
+                            transcript));
                 }
                 return new AgentResponse(answer, Collections.unmodifiableList(messages));
             }
