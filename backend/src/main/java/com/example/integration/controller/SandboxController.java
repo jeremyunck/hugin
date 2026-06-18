@@ -7,6 +7,7 @@ import com.example.integration.service.DockerSandboxManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -51,17 +52,17 @@ public class SandboxController {
     @PostMapping("/github")
     public ResponseEntity<SandboxInfo> createGitHubSandbox(@RequestBody CreateGitHubSandboxRequest req) {
         if (req == null || req.repoFullName() == null || req.repoFullName().isBlank()) {
-            throw new IllegalStateException("A GitHub repository must be selected.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A GitHub repository must be selected.");
         }
         if (req.branch() == null || req.branch().isBlank()) {
-            throw new IllegalStateException("A GitHub branch must be selected.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A GitHub branch must be selected.");
         }
         String[] parts = req.repoFullName().split("/", 2);
         if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
-            throw new IllegalStateException("GitHub repository must be in owner/repo format.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub repository must be in owner/repo format.");
         }
         String accessToken = github.installationToken()
-                .orElseThrow(() -> new IllegalStateException("GitHub is not connected."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub is not connected."));
         SandboxInfo info = sandboxManager.createGitHubRepoSandbox(
                 req.image(),
                 github.cloneUrl(req.repoFullName()),
