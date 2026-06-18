@@ -43,6 +43,8 @@ import {
   createThread,
   disconnectGitHub,
   disconnectGoogle,
+  cancelAgentRun,
+  fetchAgentRuns,
   fetchGitHubBranches,
   fetchGitHubRepositories,
   fetchGitHubStatus,
@@ -67,6 +69,7 @@ import {
 import type {
   AppState,
   AuthSession,
+  AgentRun,
   ChatAttachment,
   ChatEntry,
   ChatThread,
@@ -100,7 +103,7 @@ const CHIPS = [
   ["Show me tips", "Show me tips for getting the most out of Hugin."]
 ] as const;
 
-type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings" | "github-repo";
+type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings" | "github-repo" | "agent-threads";
 const WORKSPACE_ACTION_RE =
   /\b(debug|fix|edit|change|update|inspect|investigate|search|grep|find|open|read|write|modify|patch|refactor|run|build|test|render)\b/i;
 const WORKSPACE_TARGET_RE =
@@ -322,6 +325,17 @@ function collectRecoveryCandidates(
     }
   }
   return [...candidates.values()];
+}
+
+function screenForThread(thread: ChatThread): Screen {
+  return thread.kind === "chat" ? "purechat" : "chat";
+}
+
+function mostRecentThread(threads: ChatThread[]): ChatThread | null {
+  if (!threads.length) return null;
+  return threads.reduce((latest, candidate) =>
+    Date.parse(candidate.updatedAt) > Date.parse(latest.updatedAt) ? candidate : latest
+  );
 }
 
 function StatusBar() {
@@ -811,10 +825,11 @@ function MenuOverlay(props: {
   onGitHubRepo: () => void;
   onChat: () => void;
   onHistory: () => void;
+  onAgentThreads: () => void;
   onIntegrations: () => void;
   onSettings: () => void;
 }) {
-  const { username, roles, githubConnected, onClose, onSandbox, onGitHubRepo, onChat, onHistory, onIntegrations, onSettings } = props;
+  const { username, roles, githubConnected, onClose, onSandbox, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings } = props;
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
@@ -846,6 +861,10 @@ function MenuOverlay(props: {
             <History size={18} strokeWidth={2} color={COLORS.ink} />
             <span>History</span>
           </button>
+          <button type="button" className="menu-item" onClick={onAgentThreads}>
+            <Network size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>Agent threads</span>
+          </button>
           <button type="button" className="menu-item" onClick={onIntegrations}>
             <Puzzle size={18} strokeWidth={2} color={COLORS.ink} />
             <span>Integrations</span>
@@ -866,6 +885,75 @@ function MenuOverlay(props: {
         </div>
       </div>
     </div>
+  );
+}
+
+function AgentThreadsScreen(props: {
+  runs: AgentRun[];
+  threads: ChatThread[];
+  busyRunId: string | null;
+  loading: boolean;
+  onBack: () => void;
+  onCancel: (id: string) => void;
+}) {
+  const { runs, threads, busyRunId, loading, onBack, onCancel } = props;
+
+  const labelForRun = (run: AgentRun) => {
+    const match = run.sessionId ? threads.find((thread) => thread.id === run.sessionId) : null;
+    if (match) return match.title;
+    if (run.prompt) return run.prompt;
+    return run.sessionId || "Active run";
+  };
+
+  return (
+    <>
+      <div className="back-row">
+        <button type="button" className="icon-button back-button" onClick={onBack} aria-label="Back">
+          <ArrowLeft size={22} strokeWidth={2} />
+        </button>
+      </div>
+
+      <div className="screen-pad">
+        <h1 className="screen-title integration-title">Agent threads</h1>
+        <p className="integration-subtitle">
+          Running agent requests continue on the server after a client disconnect. Cancel them here when needed.
+        </p>
+      </div>
+
+      <div className="integrations-list">
+        <div className="history-group-label">ACTIVE RUNS</div>
+        {loading && runs.length === 0 ? (
+          <p className="history-empty">Loading active runs…</p>
+        ) : runs.length === 0 ? (
+          <p className="history-empty">No active agent threads.</p>
+        ) : (
+          runs.map((run) => (
+            <div key={run.id} className="integration-card">
+              <div className="integration-copy">
+                <div className="integration-name-row">
+                  <span className="integration-name">{labelForRun(run)}</span>
+                  {run.disconnected ? <span className="integration-badge">DISCONNECTED</span> : null}
+                  {run.cancellationRequested ? <span className="integration-badge">CANCELLING</span> : null}
+                </div>
+                <div className="integration-meta">{run.model || "Default model"}</div>
+                <div className="model-description">
+                  Started {formatTimestamp(run.startedAt)}
+                  {run.sessionId ? ` • ${run.sessionId}` : ""}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={run.cancellationRequested || busyRunId === run.id}
+                onClick={() => onCancel(run.id)}
+              >
+                {busyRunId === run.id || run.cancellationRequested ? "Cancelling…" : "Cancel"}
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1203,6 +1291,9 @@ export default function App() {
 
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [integrationBusy, setIntegrationBusy] = useState<string | null>(null);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
+  const [agentRunsLoading, setAgentRunsLoading] = useState(false);
+  const [agentRunBusyId, setAgentRunBusyId] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [savingModels, setSavingModels] = useState(false);
 
@@ -1266,9 +1357,12 @@ export default function App() {
     }
     fetchCurrentUser(existing.token)
       .then((validated) => {
+        const restoredThread = mostRecentThread(stateRef.current.threads) ?? createThread("chat");
         saveAuthSession(validated);
         setSession(validated);
-        setScreen(readLaunchScreen() === "integrations" ? "integrations" : "purechat");
+        setThread(restoredThread);
+        threadRef.current = restoredThread;
+        setScreen(readLaunchScreen() === "integrations" ? "integrations" : screenForThread(restoredThread));
         fetchGitHubStatus(validated.token).then((status) => setGitHubStatus(status)).catch(() => setGitHubStatus(null));
       })
       .catch(() => saveAuthSession(null))
@@ -1317,7 +1411,7 @@ export default function App() {
 
   useEffect(() => {
     if (busy) return;
-    void syncThreadFromServer(thread);
+    void syncThreadFromServer(threadRef.current);
   }, [busy, thread.id, syncThreadFromServer]);
 
   useEffect(() => {
@@ -1427,11 +1521,20 @@ export default function App() {
       try {
         setFiles(await fetchSandboxFiles(session.token, id));
       } catch {
-        // Best-effort; leave the previous tree in place.
+        setFiles([]);
       }
     },
     [session]
   );
+
+  useEffect(() => {
+    if (!session || screen !== "chat" || !thread.sandboxId) {
+      setFiles([]);
+      return;
+    }
+    setFiles([]);
+    void refreshFiles(thread.sandboxId);
+  }, [session, screen, thread.sandboxId, refreshFiles]);
 
   const signIn = useCallback(async () => {
     if (!username.trim() || !password.trim() || signingIn) return;
@@ -1539,6 +1642,50 @@ export default function App() {
       setModels([]);
     }
   }, [screen, returnScreen, session]);
+
+  const loadAgentRuns = useCallback(async () => {
+    if (!session) return;
+    setAgentRunsLoading(true);
+    try {
+      setAgentRuns(await fetchAgentRuns(session.token));
+    } catch {
+      // Keep the last known runs on a transient failure so the 3s poll doesn't
+      // flicker the list to empty when a single request fails.
+    } finally {
+      setAgentRunsLoading(false);
+    }
+  }, [session]);
+
+  const openAgentThreads = useCallback(async () => {
+    setReturnScreen(screen === "agent-threads" ? returnScreen : screen);
+    setScreen("agent-threads");
+    setMenuOpen(false);
+    setBugReportNotice(null);
+    await loadAgentRuns();
+  }, [screen, returnScreen, loadAgentRuns]);
+
+  const cancelRun = useCallback(async (id: string) => {
+    if (!session) return;
+    setAgentRunBusyId(id);
+    try {
+      await cancelAgentRun(session.token, id);
+      setAgentRuns((current) => current.map((run) => run.id === id ? { ...run, cancellationRequested: true } : run));
+      await loadAgentRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel agent thread.");
+    } finally {
+      setAgentRunBusyId(null);
+    }
+  }, [session, loadAgentRuns]);
+
+  useEffect(() => {
+    if (!session || screen !== "agent-threads") return;
+    void loadAgentRuns();
+    const id = window.setInterval(() => {
+      void loadAgentRuns();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [session, screen, loadAgentRuns]);
 
   const toggleIntegration = useCallback(
     async (integration: Integration) => {
@@ -1971,6 +2118,15 @@ export default function App() {
             onToggle={toggleModelEnabled}
             onSave={saveModelPreferences}
           />
+        ) : screen === "agent-threads" ? (
+          <AgentThreadsScreen
+            runs={agentRuns}
+            threads={state.threads}
+            busyRunId={agentRunBusyId}
+            loading={agentRunsLoading}
+            onBack={() => setScreen(returnScreen)}
+            onCancel={cancelRun}
+          />
         ) : (
           <HistoryScreen
             threads={state.threads}
@@ -1996,6 +2152,7 @@ export default function App() {
               setScreen("history");
               setMenuOpen(false);
             }}
+            onAgentThreads={openAgentThreads}
             onIntegrations={openIntegrations}
             onSettings={openSettings}
           />

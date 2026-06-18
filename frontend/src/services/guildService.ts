@@ -12,6 +12,7 @@ import type {
   GitHubStatus,
   Integration,
   BugReportResponse,
+  AgentRun,
   ModelOption,
   SandboxInfo,
   StreamToolEvent,
@@ -707,6 +708,29 @@ export async function saveEnabledModels(token: string, enabledModelIds: string[]
 export async function fetchTools(token: string, sandboxId?: string): Promise<ToolSummary[]> {
   const query = sandboxId ? `?sandboxId=${encodeURIComponent(sandboxId)}` : "";
   return apiFetch<ToolSummary[]>(`/api/agent/tools${query}`, {}, token);
+}
+
+export async function fetchAgentRuns(token: string): Promise<AgentRun[]> {
+  return apiFetch<AgentRun[]>("/api/agent/runs", {}, token);
+}
+
+export async function cancelAgentRun(token: string, id: string): Promise<void> {
+  const response = await fetch(`/api/agent/runs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      if (body && typeof body.error === "string" && body.error) {
+        message = body.error;
+      }
+    } catch {
+      // Keep the status fallback when no JSON body is available.
+    }
+    throw new Error(message);
+  }
 }
 
 type GoogleReconnectResponse = {

@@ -228,6 +228,7 @@ public class AgentService {
         boolean nudgedForEmptyResponse = false;
 
         for (int i = 0; i < maxIterations; i++) {
+            ensureNotCancelled();
             if (Instant.now().isAfter(deadline)) {
                 log.warn("Agent request timed out after {}", requestTimeout);
                 return new AgentResponse(
@@ -239,13 +240,18 @@ public class AgentService {
             // become visible without a service restart.
             List<ToolDefinition> toolDefinitions = collectTools(workspace, includeWorkspaceTools);
 
-            ChatResponse response = stream
-                    ? (request.reasoningEffort() == null || request.reasoningEffort().isBlank()
-                        ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent, listener::onReasoning)
-                        : llmClient.chatStream(model, request.reasoningEffort(), messages, toolDefinitions, listener::onContent, listener::onReasoning))
-                    : (request.reasoningEffort() == null || request.reasoningEffort().isBlank()
-                        ? llmClient.chat(model, messages, toolDefinitions)
-                        : llmClient.chat(model, request.reasoningEffort(), messages, toolDefinitions));
+            ChatResponse response;
+            try {
+                response = stream
+                        ? (request.reasoningEffort() == null || request.reasoningEffort().isBlank()
+                            ? llmClient.chatStream(model, messages, toolDefinitions, listener::onContent, listener::onReasoning)
+                            : llmClient.chatStream(model, request.reasoningEffort(), messages, toolDefinitions, listener::onContent, listener::onReasoning))
+                        : (request.reasoningEffort() == null || request.reasoningEffort().isBlank()
+                            ? llmClient.chat(model, messages, toolDefinitions)
+                            : llmClient.chat(model, request.reasoningEffort(), messages, toolDefinitions));
+            } catch (RuntimeException e) {
+                throw maybeCancellation(e);
+            }
 
             // Guard against malformed/empty responses (null body, no choices, no message) so a
             // provider hiccup degrades to a graceful answer instead of an NPE/IndexOutOfBounds.
@@ -274,6 +280,7 @@ public class AgentService {
                 assistantMsg = normalizeToolCallAssistantMessage(assistantMsg);
                 messages.set(messages.size() - 1, assistantMsg);
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
+                    ensureNotCancelled();
                     listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall,
                             workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
@@ -565,6 +572,9 @@ public class AgentService {
                     workspace, sessionId, owner, agentId, channelMessages, sandboxId);
             try {
                 return localTool.execute(args, ctx);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AgentRunCancelledException("Request cancelled.", e);
             } catch (Exception e) {
                 String msg = "Tool call failed: " + e.getMessage();
                 log.error(msg, e);
@@ -607,5 +617,29 @@ public class AgentService {
             return "global";
         }
         return owner;
+    }
+
+    private static void ensureNotCancelled() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new AgentRunCancelledException("Request cancelled.");
+        }
+    }
+
+    private static RuntimeException maybeCancellation(RuntimeException e) {
+        if (e instanceof AgentRunCancelledException cancelled) {
+            return cancelled;
+        }
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                return new AgentRunCancelledException("Request cancelled.", e);
+            }
+            cause = cause.getCause();
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            return new AgentRunCancelledException("Request cancelled.", e);
+        }
+        return e;
     }
 }

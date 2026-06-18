@@ -145,3 +145,16 @@ export type BugReportResponse = {
   relativePath: string;
   logFiles: string[];
 };
+
+export type AgentRun = {
+  id: string;
+  owner: string;
+  sessionId?: string | null;
+  agentId?: string | null;
+  prompt: string;
+  model?: string | null;
+  sandboxId?: string | null;
+  startedAt: string;
+  disconnected: boolean;
+  cancellationRequested: boolean;
+};
