@@ -44,6 +44,7 @@ export type StreamEvent =
   | { type: "tool"; name: string; args: string }
   | { type: "tool_result"; name: string; result: string }
   | { type: "replace"; content: string }
+  | { type: "recover_thread"; thread: ChatThread }
   // Emitted client-side (never by the server) before a dropped stream is replayed, so the UI can
   // discard the partial answer from the failed attempt and stream the fresh one cleanly.
   | { type: "reset" }
@@ -353,6 +354,7 @@ export function completeAssistantEntry(state: AppState, threadId: string, assist
 }
 
 export type StreamOptions = {
+  thread: ChatThread;
   threadId: string;
   prompt: string;
   attachments?: ChatAttachment[];
@@ -483,14 +485,14 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
       // Stream ended without a terminal event: the connection dropped mid-run.
       lastError = new Error("Connection lost before the response completed.");
       if (executedTool || attempt >= maxAttempts) {
-        const recovered = await recoverAssistantAnswer(
+        const recoveredThread = await recoverThreadAfterDroppedStream(
           token,
-          options.threadId,
+          options.thread,
           options.priorMessages?.length ?? 0,
           options.prompt
         );
-        if (recovered) {
-          handlers.onEvent({ type: "replace", content: recovered });
+        if (recoveredThread) {
+          handlers.onEvent({ type: "recover_thread", thread: recoveredThread });
           handlers.onEvent({ type: "done" });
           return;
         }
@@ -503,6 +505,17 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
       lastError = error;
       // A tool already ran, or retries are exhausted: don't replay, just report.
       if (executedTool || attempt >= maxAttempts) {
+        const recoveredThread = await recoverThreadAfterDroppedStream(
+          token,
+          options.thread,
+          options.priorMessages?.length ?? 0,
+          options.prompt
+        );
+        if (recoveredThread) {
+          handlers.onEvent({ type: "recover_thread", thread: recoveredThread });
+          handlers.onEvent({ type: "done" });
+          return;
+        }
         throw error;
       }
       // Otherwise loop and reconnect.
@@ -512,7 +525,7 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
   if (lastError) throw lastError;
 }
 
-type ServerChatMessage = {
+export type ServerChatMessage = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   attachments?: ChatAttachment[];
@@ -531,58 +544,38 @@ async function fetchConversationHistory(token: string, sessionId: string): Promi
   return apiFetch<ServerChatMessage[]>(`/api/agent/history?sessionId=${encodeURIComponent(sessionId)}`, {}, token);
 }
 
-async function recoverAssistantAnswer(
-  token: string,
-  sessionId: string,
-  priorMessageCount: number,
-  prompt: string
-): Promise<string | null> {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    try {
-      const history = await fetchConversationHistory(token, sessionId);
-      if (history.length >= priorMessageCount + 2) {
-        const lastUser = history.at(-2);
-        const lastAssistant = history.at(-1);
-        if (lastUser?.role === "user"
-          && lastAssistant?.role === "assistant"
-          && (lastUser.content ?? "") === prompt
-          && (lastAssistant.content ?? "").trim()) {
-          return lastAssistant.content;
-        }
-      }
-    } catch {
-      // Ignore transient polling failures and keep trying until the deadline.
-    }
-    await delay(1000);
-  }
-  return null;
-}
-
-export function buildPriorMessages(thread: ChatThread): ChatMessage[] {
-  const messages: ChatMessage[] = [];
-  for (const entry of thread.entries) {
-    if (entry.type === "user") {
-      messages.push({
-        role: "user" as const,
-        content: entry.content,
-        attachments: entry.attachments
-      });
-      continue;
-    }
-    if (entry.type === "assistant") {
-      messages.push({
-        role: "assistant" as const,
-        content: entry.content,
-        reasoning_content: entry.reasoning || undefined
-      });
+function hasRecoveredTurn(history: ServerChatMessage[], priorMessageCount: number, prompt: string): boolean {
+  let lastUserIndex = -1;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message.role === "user" && (message.content ?? "") === prompt) {
+      lastUserIndex = index;
+      break;
     }
   }
-  return messages;
+  if (lastUserIndex < priorMessageCount || lastUserIndex === -1) {
+    return false;
+  }
+  const tail = history.slice(lastUserIndex + 1);
+  if (!tail.length) {
+    return false;
+  }
+  return tail.some((message) => {
+    if (message.role === "tool") {
+      return true;
+    }
+    if (message.role !== "assistant") {
+      return false;
+    }
+    return Boolean(
+      (message.content ?? "").trim()
+      || (message.reasoning_content ?? "").trim()
+      || (message.tool_calls?.length ?? 0) > 0
+    );
+  });
 }
 
-export async function syncThreadHistory(token: string, thread: ChatThread): Promise<ChatThread> {
-  const history = await fetchConversationHistory(token, thread.id);
+export function rebuildThreadFromHistory(thread: ChatThread, history: ServerChatMessage[]): ChatThread {
   const remote = history.filter((message) =>
     message.role === "user" || message.role === "assistant" || message.role === "tool");
   if (!remote.length) {
@@ -629,22 +622,20 @@ export async function syncThreadHistory(token: string, thread: ChatThread): Prom
       continue;
     }
 
-    if (message.role === "tool") {
-      const byCallId = message.tool_call_id ? toolEntriesByCallId.get(message.tool_call_id) : undefined;
-      const matchIndex = byCallId ?? [...entries].reverse().findIndex((entry) =>
-        entry.type === "tool" && !entry.tool.finishedAt);
-      const entryIndex = byCallId ?? (matchIndex === -1 ? -1 : entries.length - 1 - matchIndex);
-      if (entryIndex >= 0 && entries[entryIndex]?.type === "tool") {
-        const entry = entries[entryIndex] as Extract<ChatEntry, { type: "tool" }>;
-        entries[entryIndex] = {
-          ...entry,
-          tool: {
-            ...entry.tool,
-            result: message.content ?? "",
-            finishedAt: nowIso()
-          }
-        };
-      }
+    const byCallId = message.tool_call_id ? toolEntriesByCallId.get(message.tool_call_id) : undefined;
+    const matchIndex = byCallId ?? [...entries].reverse().findIndex((entry) =>
+      entry.type === "tool" && !entry.tool.finishedAt);
+    const entryIndex = byCallId ?? (matchIndex === -1 ? -1 : entries.length - 1 - matchIndex);
+    if (entryIndex >= 0 && entries[entryIndex]?.type === "tool") {
+      const entry = entries[entryIndex] as Extract<ChatEntry, { type: "tool" }>;
+      entries[entryIndex] = {
+        ...entry,
+        tool: {
+          ...entry.tool,
+          result: message.content ?? "",
+          finishedAt: nowIso()
+        }
+      };
     }
   }
 
@@ -653,6 +644,54 @@ export async function syncThreadHistory(token: string, thread: ChatThread): Prom
     updatedAt: nowIso(),
     entries
   };
+}
+
+export async function recoverThreadAfterDroppedStream(
+  token: string,
+  thread: ChatThread,
+  priorMessageCount: number,
+  prompt: string
+): Promise<ChatThread | null> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const history = await fetchConversationHistory(token, thread.id);
+      if (hasRecoveredTurn(history, priorMessageCount, prompt)) {
+        return rebuildThreadFromHistory(thread, history);
+      }
+    } catch {
+      // Ignore transient polling failures and keep trying until the deadline.
+    }
+    await delay(1000);
+  }
+  return null;
+}
+
+export function buildPriorMessages(thread: ChatThread): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  for (const entry of thread.entries) {
+    if (entry.type === "user") {
+      messages.push({
+        role: "user" as const,
+        content: entry.content,
+        attachments: entry.attachments
+      });
+      continue;
+    }
+    if (entry.type === "assistant") {
+      messages.push({
+        role: "assistant" as const,
+        content: entry.content,
+        reasoning_content: entry.reasoning || undefined
+      });
+    }
+  }
+  return messages;
+}
+
+export async function syncThreadHistory(token: string, thread: ChatThread): Promise<ChatThread> {
+  const history = await fetchConversationHistory(token, thread.id);
+  return rebuildThreadFromHistory(thread, history);
 }
 
 export async function createSandbox(token: string): Promise<SandboxInfo> {

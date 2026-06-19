@@ -1370,8 +1370,19 @@ export default function App() {
     let nextThread: ChatThread | null = null;
     const target = stateRef.current.threads.find((candidate) => candidate.id === threadId)
       ?? (threadRef.current.id === threadId ? threadRef.current : null);
+    if (!target) return;
+    if (event.type === "recover_thread") {
+      nextThread = event.thread;
+      activeAssistantIdsRef.current.delete(threadId);
+      upsertThread(nextThread);
+      if (threadRef.current.id === threadId) {
+        setThread(nextThread);
+        threadRef.current = nextThread;
+      }
+      return;
+    }
     const assistantId = activeAssistantIdsRef.current.get(threadId);
-    if (!target || !assistantId) return;
+    if (!assistantId) return;
     const result = applyStreamEvent(target, assistantId, event);
     activeAssistantIdsRef.current.set(threadId, result.assistantId);
     nextThread = result.thread;
@@ -1862,6 +1873,7 @@ export default function App() {
         await streamPrompt(
           session.token,
           {
+            thread: nextThread,
             threadId: nextThread.id,
             prompt: text,
             attachments: attachment ? [attachment] : undefined,
