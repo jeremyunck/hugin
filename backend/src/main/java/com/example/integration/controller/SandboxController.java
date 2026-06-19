@@ -88,7 +88,7 @@ public class SandboxController {
 
     private static String owner(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null || jwt.getSubject().isBlank()) {
-            return "global";
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required.");
         }
         return jwt.getSubject();
     }
