@@ -29,6 +29,7 @@ import {
   Signal,
   SlidersHorizontal,
   Settings2,
+  Trash2,
   User,
   Wifi,
   X
@@ -42,6 +43,8 @@ import {
   createSandbox,
   createGitHubSandbox,
   createThread,
+  deleteSandbox,
+  deleteThreadHistory,
   disconnectGitHub,
   disconnectGoogle,
   cancelAgentRun,
@@ -60,6 +63,7 @@ import {
   loadAuthSession,
   login as loginRequest,
   reconnectGoogle,
+  removeThread,
   reportBug,
   saveEnabledModels,
   saveAppState,
@@ -95,7 +99,8 @@ const COLORS = {
   badge: "#F1F2F4",
   hover: "#F4F4F6",
   bubble: "#EFEFF1",
-  green: "#20A65A"
+  green: "#20A65A",
+  danger: "#E5484D"
 };
 
 const CHIPS = [
@@ -999,10 +1004,12 @@ function HistoryScreen(props: {
   onMenu: () => void;
   onOpen: (thread: ChatThread) => void;
   onNew: () => void;
+  onDelete: (thread: ChatThread) => void;
+  deletingId: string | null;
   query: string;
   onQuery: (value: string) => void;
 }) {
-  const { threads, onMenu, onOpen, onNew, query, onQuery } = props;
+  const { threads, onMenu, onOpen, onNew, onDelete, deletingId, query, onQuery } = props;
   const lower = query.trim().toLowerCase();
   const match = (thread: ChatThread) => !lower || thread.title.toLowerCase().includes(lower);
   const now = Date.now();
@@ -1043,24 +1050,36 @@ function HistoryScreen(props: {
               <div className="history-group-label">{label}</div>
               <div className="history-cards">
                 {items.map((thread) => (
-                  <button key={thread.id} type="button" className="history-card" onClick={() => onOpen(thread)}>
-                    <div className="history-card-icon">
-                      {thread.kind === "sandbox" ? (
-                        <Box size={17} strokeWidth={2} color={COLORS.ink} />
-                      ) : thread.kind === "github" ? (
-                        <GitBranch size={17} strokeWidth={2} color={COLORS.ink} />
-                      ) : (
-                        <MessageSquare size={17} strokeWidth={2} color={COLORS.ink} />
-                      )}
-                    </div>
-                    <div className="history-card-copy">
-                      <div className="history-card-title">{thread.title}</div>
-                      <div className="history-card-meta">
-                        {formatTimestamp(thread.updatedAt)} · {messageCount(thread)} messages
+                  <div key={thread.id} className="history-card">
+                    <button type="button" className="history-card-main" onClick={() => onOpen(thread)}>
+                      <div className="history-card-icon">
+                        {thread.kind === "sandbox" ? (
+                          <Box size={17} strokeWidth={2} color={COLORS.ink} />
+                        ) : thread.kind === "github" ? (
+                          <GitBranch size={17} strokeWidth={2} color={COLORS.ink} />
+                        ) : (
+                          <MessageSquare size={17} strokeWidth={2} color={COLORS.ink} />
+                        )}
                       </div>
-                    </div>
-                    <ChevronRight size={18} color={COLORS.faint} />
-                  </button>
+                      <div className="history-card-copy">
+                        <div className="history-card-title">{thread.title}</div>
+                        <div className="history-card-meta">
+                          {formatTimestamp(thread.updatedAt)} · {messageCount(thread)} messages
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color={COLORS.faint} />
+                    </button>
+                    <button
+                      type="button"
+                      className="history-card-delete"
+                      aria-label="Delete conversation"
+                      title="Delete conversation"
+                      disabled={deletingId === thread.id}
+                      onClick={() => onDelete(thread)}
+                    >
+                      <Trash2 size={17} strokeWidth={2} color={COLORS.danger} />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -1375,6 +1394,7 @@ export default function App() {
   const [savingModels, setSavingModels] = useState(false);
 
   const [historyQuery, setHistoryQuery] = useState("");
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [returnScreen, setReturnScreen] = useState<Screen>("purechat");
 
   const [username, setUsername] = useState("");
@@ -1703,6 +1723,48 @@ export default function App() {
       }
     },
     [refreshFiles, syncThreadFromServer]
+  );
+
+  const deleteThread = useCallback(
+    async (item: ChatThread) => {
+      if (deletingThreadId) return;
+      const confirmed = typeof window === "undefined"
+        ? true
+        : window.confirm(`Delete “${item.title}”? This also removes any sandbox created for it.`);
+      if (!confirmed) return;
+
+      setDeletingThreadId(item.id);
+      setError(null);
+      try {
+        // Tear down the sandbox first so a backend failure leaves the chat in the list to retry.
+        if (item.sandboxId && session) {
+          await deleteSandbox(session.token, item.sandboxId);
+        }
+        if (session) {
+          await deleteThreadHistory(session.token, item.id);
+        }
+
+        setState((prev) => {
+          const next = removeThread(prev, item.id);
+          stateRef.current = next;
+          saveAppState(next);
+          return next;
+        });
+
+        // If the deleted conversation is the one currently open, drop back to a fresh chat.
+        if (threadRef.current.id === item.id) {
+          const fresh = createThread("chat");
+          setThread(fresh);
+          threadRef.current = fresh;
+          setFiles([]);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not delete this conversation.");
+      } finally {
+        setDeletingThreadId(null);
+      }
+    },
+    [deletingThreadId, session]
   );
 
   const openIntegrations = useCallback(async () => {
@@ -2283,6 +2345,8 @@ export default function App() {
             onMenu={() => setMenuOpen(true)}
             onOpen={openHistory}
             onNew={startChat}
+            onDelete={deleteThread}
+            deletingId={deletingThreadId}
             query={historyQuery}
             onQuery={setHistoryQuery}
           />

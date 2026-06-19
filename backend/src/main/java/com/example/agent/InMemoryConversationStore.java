@@ -70,6 +70,14 @@ public class InMemoryConversationStore implements ConversationStore {
         });
     }
 
+    @Override
+    public void delete(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        sessions.remove(sessionId);
+    }
+
     /** Sweeps idle sessions at most once per {@link #SWEEP_INTERVAL_MILLIS}. */
     private void sweepIfDue() {
         long now = clock.millis();

@@ -82,6 +82,22 @@ public class ConversationMemoryService {
     }
 
     /**
+     * Drops all stored history for {@code sessionId}, so a deleted chat leaves nothing behind to be
+     * replayed later. No-op when there is no session id (never throws).
+     */
+    public void delete(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        try {
+            store.delete(sessionId);
+            log.debug("Deleted conversation history for session {}", sessionId);
+        } catch (Exception e) {
+            log.warn("Conversation history delete failed for session {}: {}", sessionId, e.getMessage());
+        }
+    }
+
+    /**
      * Appends a completed turn transcript to the session exactly as it should be replayed later.
      * No-op when there is no session id or the transcript is empty (never throws).
      */

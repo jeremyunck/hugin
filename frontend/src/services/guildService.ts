@@ -695,6 +695,21 @@ export async function syncThreadHistory(token: string, thread: ChatThread): Prom
   return rebuildThreadFromHistory(thread, history);
 }
 
+/** Forgets the server-side conversation memory for a session. Best-effort; ignores a missing session. */
+export async function deleteThreadHistory(token: string, sessionId: string): Promise<void> {
+  await fetch(`/api/agent/history?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export function removeThread(state: AppState, threadId: string): AppState {
+  return {
+    ...state,
+    threads: state.threads.filter((thread) => thread.id !== threadId)
+  };
+}
+
 export async function createSandbox(token: string): Promise<SandboxInfo> {
   return apiFetch<SandboxInfo>("/api/sandboxes", { method: "POST", body: JSON.stringify({}) }, token);
 }
