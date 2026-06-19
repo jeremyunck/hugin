@@ -38,19 +38,25 @@ type AuthMeResponse = {
   expiresAt: string;
 };
 
+type StreamEventMeta = {
+  eventId?: number;
+  runId?: string;
+  sessionId?: string;
+};
+
 export type StreamEvent =
-  | { type: "config"; developerMode: boolean }
-  | { type: "token"; text: string }
-  | { type: "reasoning"; text: string }
-  | { type: "tool"; name: string; args: string }
-  | { type: "tool_result"; name: string; result: string }
-  | { type: "replace"; content: string }
-  | { type: "recover_thread"; thread: ChatThread }
+  | (StreamEventMeta & { type: "config"; developerMode: boolean })
+  | (StreamEventMeta & { type: "token"; text: string })
+  | (StreamEventMeta & { type: "reasoning"; text: string })
+  | (StreamEventMeta & { type: "tool"; name: string; args: string })
+  | (StreamEventMeta & { type: "tool_result"; name: string; result: string })
+  | (StreamEventMeta & { type: "replace"; content: string })
+  | (StreamEventMeta & { type: "recover_thread"; thread: ChatThread })
   // Emitted client-side (never by the server) before a dropped stream is replayed, so the UI can
   // discard the partial answer from the failed attempt and stream the fresh one cleanly.
-  | { type: "reset" }
-  | { type: "done" }
-  | { type: "error"; message: string };
+  | (StreamEventMeta & { type: "reset" })
+  | (StreamEventMeta & { type: "done" })
+  | (StreamEventMeta & { type: "error"; message: string });
 
 type StreamHandlers = {
   onEvent: (event: StreamEvent) => void;
@@ -366,6 +372,15 @@ export type StreamOptions = {
   sandboxId?: string;
 };
 
+type PersistedRunEvent = {
+  eventId: number;
+  runId: string;
+  sessionId?: string | null;
+  type: string;
+  createdAt: string;
+  data: Record<string, unknown>;
+};
+
 // Backoff schedule for reconnecting a dropped stream. The length also bounds the attempt count.
 const STREAM_RECONNECT_DELAYS_MS = [1000, 2000, 4000];
 
@@ -426,6 +441,8 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
 
     let receivedTerminal = false;
     let executedTool = false;
+    let currentRunId: string | null = null;
+    let lastEventId = 0;
 
     try {
       const response = await fetch("/api/agent/stream", {
@@ -458,6 +475,10 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
 
       const dispatch = (event: StreamEvent | null) => {
         if (!event) return;
+        if (event.runId) currentRunId = event.runId;
+        if (typeof event.eventId === "number") {
+          lastEventId = Math.max(lastEventId, event.eventId);
+        }
         if (event.type === "tool") executedTool = true;
         if (event.type === "done" || event.type === "error") receivedTerminal = true;
         handlers.onEvent(event);
@@ -485,6 +506,10 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
 
       // Stream ended without a terminal event: the connection dropped mid-run.
       lastError = new Error("Connection lost before the response completed.");
+      if (currentRunId) {
+        const recovered = await recoverRunAfterDisconnect(token, currentRunId, lastEventId, dispatch);
+        if (recovered) return;
+      }
       if (executedTool || attempt >= maxAttempts) {
         const recoveredThread = await recoverThreadAfterDroppedStream(
           token,
@@ -504,6 +529,16 @@ export async function streamPrompt(token: string, options: StreamOptions, handle
     } catch (e) {
       const error = e as Error & { status?: number };
       lastError = error;
+      if (currentRunId) {
+        const recovered = await recoverRunAfterDisconnect(token, currentRunId, lastEventId, (event) => {
+          if (!event) return;
+          if (typeof event.eventId === "number") {
+            lastEventId = Math.max(lastEventId, event.eventId);
+          }
+          handlers.onEvent(event);
+        });
+        if (recovered) return;
+      }
       // A tool already ran, or retries are exhausted: don't replay, just report.
       if (executedTool || attempt >= maxAttempts) {
         const recoveredThread = await recoverThreadAfterDroppedStream(
@@ -755,6 +790,16 @@ export async function fetchAgentRuns(token: string): Promise<AgentRun[]> {
   return apiFetch<AgentRun[]>("/api/agent/runs", {}, token);
 }
 
+export async function fetchRunEvents(token: string, runId: string, afterEventId = 0): Promise<PersistedRunEvent[]> {
+  const query = afterEventId > 0 ? `?after=${afterEventId}` : "";
+  return apiFetch<PersistedRunEvent[]>(`/api/agent/runs/${encodeURIComponent(runId)}/events${query}`, {}, token);
+}
+
+export async function fetchRunStreamEvents(token: string, runId: string, afterEventId = 0): Promise<StreamEvent[]> {
+  const events = await fetchRunEvents(token, runId, afterEventId);
+  return events.map((event) => parsePersistedRunEvent(event)).filter((event): event is StreamEvent => Boolean(event));
+}
+
 export async function cancelAgentRun(token: string, id: string): Promise<void> {
   const response = await fetch(`/api/agent/runs/${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -852,6 +897,34 @@ export async function fetchBugReports(token: string): Promise<BugReportSummary[]
   return apiFetch<BugReportSummary[]>("/api/agent/bug-reports", {}, token);
 }
 
+async function recoverRunAfterDisconnect(
+  token: string,
+  runId: string,
+  afterEventId: number,
+  dispatch: (event: StreamEvent | null) => void
+): Promise<boolean> {
+  const deadline = Date.now() + 30_000;
+  let cursor = afterEventId;
+
+  while (Date.now() < deadline) {
+    try {
+      const events = await fetchRunEvents(token, runId, cursor);
+      for (const persisted of events) {
+        cursor = Math.max(cursor, persisted.eventId);
+        dispatch(parsePersistedRunEvent(persisted));
+      }
+      if (events.some((event) => event.type === "done" || event.type === "error")) {
+        return true;
+      }
+    } catch {
+      // Ignore transient polling failures while the backend run is still active.
+    }
+    await delay(1000);
+  }
+
+  return false;
+}
+
 function parseSseEvent(rawEvent: string): StreamEvent | null {
   const lines = rawEvent
     .split(/\r?\n/)
@@ -874,29 +947,44 @@ function parseSseEvent(rawEvent: string): StreamEvent | null {
   if (!eventName || !dataLines.length) return null;
 
   const payload = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+  return buildStreamEvent(eventName, payload);
+}
+
+function parsePersistedRunEvent(event: PersistedRunEvent): StreamEvent | null {
+  return buildStreamEvent(event.type, event.data);
+}
+
+function buildStreamEvent(eventName: string, payload: Record<string, unknown>): StreamEvent | null {
+  const meta = {
+    eventId: typeof payload.eventId === "number" ? payload.eventId : undefined,
+    runId: typeof payload.runId === "string" ? payload.runId : undefined,
+    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined
+  };
   switch (eventName) {
     case "config":
-      return { type: "config", developerMode: payload.developerMode === true };
+      return { ...meta, type: "config", developerMode: payload.developerMode === true };
     case "token":
-      return { type: "token", text: String(payload.text ?? "") };
+      return { ...meta, type: "token", text: String(payload.text ?? "") };
     case "reasoning":
-      return { type: "reasoning", text: String(payload.text ?? "") };
+      return { ...meta, type: "reasoning", text: String(payload.text ?? "") };
     case "tool":
       return {
+        ...meta,
         type: "tool",
         name: String(payload.name ?? "tool"),
         args: String(payload.args ?? "")
       };
     case "tool_result":
       return {
+        ...meta,
         type: "tool_result",
         name: String(payload.name ?? "tool"),
         result: String(payload.result ?? "")
       };
     case "done":
-      return { type: "done" };
+      return { ...meta, type: "done" };
     case "error":
-      return { type: "error", message: String(payload.message ?? "Stream failed.") };
+      return { ...meta, type: "error", message: String(payload.message ?? "Stream failed.") };
     default:
       return null;
   }

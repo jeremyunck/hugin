@@ -51,6 +51,7 @@ import {
   fetchGitHubRepositories,
   fetchGitHubStatus,
   fetchModels,
+  fetchRunStreamEvents,
   fetchCurrentUser,
   fetchIntegrations,
   fetchSandboxFiles,
@@ -231,6 +232,11 @@ function defaultReasoningFor(model?: ModelOption) {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const RECOVERY_POLL_DELAYS_MS = [3000, 5000, 8000, 13000, 21000];
 
+type RunReplayState = {
+  runId: string;
+  lastEventId: number;
+};
+
 /** Folds a streamed agent event into the working thread, keyed by the active assistant entry. */
 function applyStreamEvent(thread: ChatThread, assistantId: string, event: StreamEvent): { thread: ChatThread; assistantId: string } {
   const entries = thread.entries.slice();
@@ -315,6 +321,30 @@ function applyStreamEvent(thread: ChatThread, assistantId: string, event: Stream
 
 function threadHasPendingAssistant(thread: ChatThread): boolean {
   return thread.entries.some((entry) => entry.type === "assistant" && !entry.completedAt);
+}
+
+function sameThreadEntries(left: ChatThread, right: ChatThread): boolean {
+  if (left.entries.length !== right.entries.length) return false;
+  return left.entries.every((entry, index) => {
+    const other = right.entries[index];
+    if (!other || entry.type !== other.type) return false;
+    if (entry.type === "user" && other.type === "user") {
+      return entry.content === other.content
+        && JSON.stringify(entry.attachments ?? []) === JSON.stringify(other.attachments ?? []);
+    }
+    if (entry.type === "assistant" && other.type === "assistant") {
+      return entry.content === other.content
+        && entry.reasoning === other.reasoning
+        && Boolean(entry.completedAt) === Boolean(other.completedAt);
+    }
+    if (entry.type === "tool" && other.type === "tool") {
+      return entry.tool.name === other.tool.name
+        && entry.tool.args === other.tool.args
+        && entry.tool.result === other.tool.result
+        && Boolean(entry.tool.finishedAt) === Boolean(other.tool.finishedAt);
+    }
+    return false;
+  });
 }
 
 function collectRecoveryCandidates(
@@ -1384,6 +1414,7 @@ export default function App() {
 
   const listRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const runReplayStateRef = useRef<Map<string, RunReplayState>>(new Map());
 
   useEffect(() => {
     stateRef.current = state;
@@ -1411,9 +1442,19 @@ export default function App() {
     const target = stateRef.current.threads.find((candidate) => candidate.id === threadId)
       ?? (threadRef.current.id === threadId ? threadRef.current : null);
     if (!target) return;
+    if (event.runId || typeof event.eventId === "number") {
+      const prior = runReplayStateRef.current.get(threadId);
+      runReplayStateRef.current.set(threadId, {
+        runId: event.runId ?? prior?.runId ?? "",
+        lastEventId: typeof event.eventId === "number"
+          ? Math.max(prior?.lastEventId ?? 0, event.eventId)
+          : prior?.lastEventId ?? 0
+      });
+    }
     if (event.type === "recover_thread") {
       nextThread = event.thread;
       activeAssistantIdsRef.current.delete(threadId);
+      runReplayStateRef.current.delete(threadId);
       upsertThread(nextThread);
       if (threadRef.current.id === threadId) {
         setThread(nextThread);
@@ -1421,7 +1462,8 @@ export default function App() {
       }
       return;
     }
-    const assistantId = activeAssistantIdsRef.current.get(threadId);
+    const assistantId = activeAssistantIdsRef.current.get(threadId)
+      ?? [...target.entries].reverse().find((entry) => entry.type === "assistant" && !entry.completedAt)?.id;
     if (!assistantId) return;
     const result = applyStreamEvent(target, assistantId, event);
     activeAssistantIdsRef.current.set(threadId, result.assistantId);
@@ -1433,6 +1475,7 @@ export default function App() {
     }
     if (event.type === "done" || event.type === "error") {
       activeAssistantIdsRef.current.delete(threadId);
+      runReplayStateRef.current.delete(threadId);
     }
   }, [upsertThread]);
 
@@ -1487,6 +1530,9 @@ export default function App() {
     if (!session || !candidate.entries.some((entry) => entry.type === "user")) return;
     try {
       const next = await syncThreadHistory(session.token, candidate);
+      if (sameThreadEntries(candidate, next)) {
+        return;
+      }
       upsertThread(next);
       if (threadRef.current.id === next.id) {
         setThread(next);
@@ -1496,6 +1542,21 @@ export default function App() {
       // Leave local state alone when the background resync cannot reach the server.
     }
   }, [session, upsertThread]);
+
+  const syncThreadFromRun = useCallback(async (candidate: ChatThread, run: AgentRun) => {
+    if (!session) return;
+    const replayState = runReplayStateRef.current.get(candidate.id);
+    const continuingSameRun = replayState?.runId === run.id;
+    const afterEventId = continuingSameRun ? replayState.lastEventId : 0;
+    if (!continuingSameRun) {
+      applyEventToThread(candidate.id, { type: "reset" });
+      runReplayStateRef.current.set(candidate.id, { runId: run.id, lastEventId: 0 });
+    }
+    const events = await fetchRunStreamEvents(session.token, run.id, afterEventId);
+    for (const event of events) {
+      applyEventToThread(candidate.id, event);
+    }
+  }, [session, applyEventToThread]);
 
   useEffect(() => {
     if (busy) return;
@@ -1581,7 +1642,24 @@ export default function App() {
         return;
       }
 
-      await Promise.all(pendingThreads.map((candidate) => syncThreadFromServer(candidate)));
+      let runs: AgentRun[] = [];
+      try {
+        runs = await fetchAgentRuns(session.token);
+        if (!cancelled) {
+          setAgentRuns(runs);
+        }
+      } catch {
+        runs = [];
+      }
+
+      await Promise.all(pendingThreads.map(async (candidate) => {
+        const run = runs.find((active) => active.sessionId === candidate.id);
+        if (run) {
+          await syncThreadFromRun(candidate, run);
+          return;
+        }
+        await syncThreadFromServer(candidate);
+      }));
 
       if (!cancelled && collectRecoveryCandidates(
         stateRef.current.threads,
@@ -1600,7 +1678,7 @@ export default function App() {
       cancelled = true;
       clearTimer();
     };
-  }, [session, syncThreadFromServer]);
+  }, [session, syncThreadFromRun, syncThreadFromServer]);
 
   const refreshFiles = useCallback(
     async (sandboxId?: string) => {
@@ -1904,6 +1982,7 @@ export default function App() {
         entries: [...currentThread.entries, userEntry, assistant]
       };
       activeAssistantIdsRef.current.set(nextThread.id, assistant.id);
+      runReplayStateRef.current.delete(nextThread.id);
       setThread(nextThread);
       threadRef.current = nextThread;
       upsertThread(nextThread);

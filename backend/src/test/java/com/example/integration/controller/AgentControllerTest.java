@@ -8,6 +8,7 @@ import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
 import com.example.integration.agent.UserAgentService;
+import com.example.integration.service.AgentRunEventStore;
 import com.example.integration.service.BugReportCatalogService;
 import com.example.integration.service.BugReportService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,6 +62,9 @@ class AgentControllerTest {
     @Mock
     BugReportCatalogService bugReportCatalogService;
 
+    @Mock
+    AgentRunEventStore eventStore;
+
     ObjectMapper objectMapper = new ObjectMapper();
     AgentRunRegistry runRegistry = new AgentRunRegistry();
     AgentController controller;
@@ -74,6 +78,7 @@ class AgentControllerTest {
                 developerModeService,
                 userAgentService,
                 runRegistry,
+                eventStore,
                 bugReportCatalogService,
                 bugReportService,
                 Duration.ofMinutes(5)
@@ -409,6 +414,7 @@ class AgentControllerTest {
                 developerModeService,
                 userAgentService,
                 runRegistry,
+                eventStore,
                 bugReportCatalogService,
                 bugReportService,
                 Duration.ofMinutes(5)
