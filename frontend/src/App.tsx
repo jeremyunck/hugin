@@ -23,6 +23,7 @@ import {
   Network,
   Plus,
   Puzzle,
+  RefreshCw,
   Search,
   Send,
   Signal,
@@ -1050,8 +1051,9 @@ function IntegrationsScreen(props: {
   busyId: string | null;
   onBack: () => void;
   onToggle: (integration: Integration) => void;
+  onReconnect: (integration: Integration) => void;
 }) {
-  const { integrations, busyId, onBack, onToggle } = props;
+  const { integrations, busyId, onBack, onToggle, onReconnect } = props;
 
   return (
     <>
@@ -1084,14 +1086,26 @@ function IntegrationsScreen(props: {
               <div className="integration-action">
                 {integration.reconnectable ? (
                   integration.connected ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={busyId === integration.id}
-                      onClick={() => onToggle(integration)}
-                    >
-                      {busyId === integration.id ? "…" : "Disconnect"}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="icon-button refresh-button"
+                        disabled={busyId === integration.id}
+                        onClick={() => onReconnect(integration)}
+                        aria-label={`Refresh ${integration.name} connection`}
+                        title="Reconnect to refresh permissions"
+                      >
+                        <RefreshCw size={18} strokeWidth={2} />
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={busyId === integration.id}
+                        onClick={() => onToggle(integration)}
+                      >
+                        {busyId === integration.id ? "…" : "Disconnect"}
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -1729,6 +1743,38 @@ export default function App() {
     [session]
   );
 
+  const reconnectIntegration = useCallback(
+    async (integration: Integration) => {
+      if (!session || (integration.id !== "google" && integration.id !== "github")) return;
+      setIntegrationBusy(integration.id);
+      try {
+        if (integration.id === "google") {
+          const authUrl = await reconnectGoogle(session.token, window.location.href);
+          if (authUrl) window.open(authUrl, "_blank", "noopener");
+        } else if (integration.id === "github") {
+          const response = await connectGitHub(session.token, window.location.href);
+          const installUrl = response.installUrl;
+          if (installUrl) {
+            window.location.assign(installUrl);
+            return;
+          }
+          setError(
+            typeof response.status?.message === "string" && response.status.message
+              ? response.status.message
+              : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
+          );
+        }
+        setIntegrations(await fetchIntegrations(session.token));
+        setGitHubStatus(await fetchGitHubStatus(session.token));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Integration update failed.");
+      } finally {
+        setIntegrationBusy(null);
+      }
+    },
+    [session]
+  );
+
   const send = useCallback(
     async (textArg?: string) => {
       const text = (textArg ?? draft).trim();
@@ -2094,6 +2140,7 @@ export default function App() {
             busyId={integrationBusy}
             onBack={() => setScreen(returnScreen)}
             onToggle={toggleIntegration}
+            onReconnect={reconnectIntegration}
           />
         ) : screen === "github-repo" ? (
           <RepoSetupScreen
