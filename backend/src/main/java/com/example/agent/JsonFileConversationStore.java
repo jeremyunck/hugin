@@ -102,6 +102,16 @@ public class JsonFileConversationStore implements ConversationStore {
         scheduleFlush();
     }
 
+    @Override
+    public synchronized void delete(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        if (sessions.remove(sessionId) != null) {
+            scheduleFlush();
+        }
+    }
+
     private synchronized void load() {
         if (!Files.isReadable(file)) {
             return;

@@ -147,6 +147,21 @@ class AgentControllerTest {
     }
 
     @Test
+    void deleteHistoryEndpointScopesSessionAndReturnsNoContent() {
+        ResponseEntity<Void> result = controller.deleteHistory("session-123", null, null);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(204);
+        verify(agentService).deleteHistory("global", null, "session-123");
+    }
+
+    @Test
+    void deleteHistoryEndpointRejectsBlankSessionId() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.deleteHistory("  ", null, null))
+                .isInstanceOf(ResponseStatusException.class);
+        verify(agentService, never()).deleteHistory(any(), any(), any());
+    }
+
+    @Test
     void bugReportEndpointExportsHistoryIntoWorkspaceReport() {
         Jwt jwt = mock(Jwt.class);
         when(jwt.getSubject()).thenReturn("global");

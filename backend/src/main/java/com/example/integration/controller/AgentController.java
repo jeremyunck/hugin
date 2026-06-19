@@ -113,6 +113,17 @@ public class AgentController {
         return ResponseEntity.ok(agentService.history(owner, agentId, sessionId));
     }
 
+    @DeleteMapping("/history")
+    public ResponseEntity<Void> deleteHistory(@RequestParam String sessionId,
+                                              @RequestParam(required = false) String agentId,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sessionId is required");
+        }
+        agentService.deleteHistory(owner(jwt), agentId, sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/runs")
     public ResponseEntity<List<AgentRunRegistry.ActiveRun>> runs(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(runRegistry.list(owner(jwt)));

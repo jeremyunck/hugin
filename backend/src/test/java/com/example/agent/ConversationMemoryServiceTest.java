@@ -151,6 +151,32 @@ class ConversationMemoryServiceTest {
     }
 
     @Test
+    void deleteForgetsASession() {
+        var service = service(20, Duration.ofHours(1));
+        service.record("keep", "hi", "hello");
+        service.record("drop", "secret", "answer");
+
+        service.delete("drop");
+
+        assertThat(service.history("drop")).isEmpty();
+        // Deleting one session leaves the others untouched.
+        assertThat(service.history("keep")).extracting(ChatMessage::content)
+                .containsExactly("hi", "hello");
+    }
+
+    @Test
+    void deleteIsANoOpWithoutASessionId() {
+        var service = service(20, Duration.ofHours(1));
+        service.record("s", "hi", "hello");
+
+        service.delete(null);
+        service.delete("  ");
+        service.delete("missing");
+
+        assertThat(service.history("s")).hasSize(2);
+    }
+
+    @Test
     void leavesSessionsAliveWhenTtlIsDisabled() {
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
         var props = new ConversationMemoryProperties(true, 20, null, "./conversation-memory.json");

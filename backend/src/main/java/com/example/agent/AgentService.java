@@ -161,6 +161,15 @@ public class AgentService {
                 .orElse(List.of());
     }
 
+    /** Forgets the stored conversation history for a session, scoped to its owner/agent. */
+    public void deleteHistory(String owner, String agentId, String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        conversationMemory.ifPresent(cm ->
+                cm.delete(sessionScope(normalizeOwner(owner), agentId, sessionId)));
+    }
+
     /** Whether a request is bound to a sandbox, which gives it filesystem/shell tools. */
     private static boolean hasSandbox(AgentRequest request) {
         return request != null && request.sandboxId() != null && !request.sandboxId().isBlank();

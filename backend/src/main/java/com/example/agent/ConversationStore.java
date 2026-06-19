@@ -28,4 +28,7 @@ public interface ConversationStore {
      * read-modify-write race, so implementations perform the append-and-trim as a single update.
      */
     void append(String sessionId, List<ChatMessage> newMessages, int maxMessages);
+
+    /** Removes any stored history for {@code sessionId}. A no-op when the session is unknown. */
+    void delete(String sessionId);
 }
