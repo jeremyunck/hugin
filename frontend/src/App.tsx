@@ -2051,11 +2051,11 @@ export default function App() {
     setBranchOptions([]);
     setBugReports([]);
     setLoadingRepos(true);
-    setLoadingBugReports(true);
+    setLoadingBugReports(githubStatus?.active === true);
     try {
       const [repos, reports] = await Promise.all([
         fetchGitHubRepositories(session.token),
-        fetchBugReports(session.token)
+        githubStatus?.active ? fetchBugReports(session.token) : Promise.resolve([])
       ]);
       setRepoOptions(repos);
       setBugReports(reports);
