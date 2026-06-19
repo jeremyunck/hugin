@@ -1136,6 +1136,21 @@ select {
 .integration-action {
   margin-left: auto;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refresh-button {
+  margin-right: 0;
+  border: 1px solid #e4e5e8;
+  background: #fafafb;
+  color: #3c414a;
+}
+
+.refresh-button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .dark-button,
