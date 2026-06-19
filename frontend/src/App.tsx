@@ -1136,7 +1136,16 @@ function SettingsScreen(props: {
   onSave: () => void;
 }) {
   const { models, saving, onBack, onToggle, onSave } = props;
+  const [searchQuery, setSearchQuery] = useState("");
   const enabledCount = models.filter((model) => model.enabled).length;
+
+  const filteredModels = searchQuery.trim()
+    ? models.filter(
+        (model) =>
+          model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          model.id.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : models;
 
   return (
     <>
@@ -1153,12 +1162,26 @@ function SettingsScreen(props: {
         </p>
       </div>
 
+      <div className="screen-pad">
+        <div className="search-bar">
+          <Search size={17} strokeWidth={2} color={COLORS.faint} />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search models…"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </div>
+      </div>
+
       <div className="integrations-list">
         <div className="history-group-label">AVAILABLE MODELS</div>
-        {models.length === 0 ? (
-          <p className="history-empty">No models available.</p>
+        {filteredModels.length === 0 ? (
+          <p className="history-empty">No models match your search.</p>
         ) : (
-          models.map((model) => (
+          filteredModels.map((model) => (
             <label key={model.id} className={`model-card ${model.enabled ? "model-card-enabled" : ""}`}>
               <div className="model-card-main">
                 <div className="model-toggle">
