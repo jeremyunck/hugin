@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -67,14 +68,16 @@ public class GitHubController {
 
     @GetMapping("/callback")
     public ResponseEntity<Void> callback(@RequestParam(required = false) String installation_id,
-                                         @RequestParam(required = false) String setup_action) {
-        return finishInstall(installation_id, setup_action);
+                                         @RequestParam(required = false) String setup_action,
+                                         @RequestParam(required = false) String state) {
+        return finishInstall(installation_id, setup_action, state);
     }
 
     @GetMapping("/setup")
     public ResponseEntity<Void> setup(@RequestParam(required = false) String installation_id,
-                                      @RequestParam(required = false) String setup_action) {
-        return finishInstall(installation_id, setup_action);
+                                      @RequestParam(required = false) String setup_action,
+                                      @RequestParam(required = false) String state) {
+        return finishInstall(installation_id, setup_action, state);
     }
 
     @PostMapping("/connect")
@@ -87,24 +90,65 @@ public class GitHubController {
         return github.disconnect();
     }
 
-    private ResponseEntity<Void> finishInstall(String installationId, String setupAction) {
+    private ResponseEntity<Void> finishInstall(String installationId, String setupAction, String state) {
         github.refresh();
-        String target = buildRedirect(installationId, setupAction);
+        String target = buildRedirect(state, installationId, setupAction);
         return ResponseEntity.status(HttpStatus.FOUND)
                 .header(HttpHeaders.LOCATION, target)
                 .build();
     }
 
-    private static String buildRedirect(String installationId, String setupAction) {
-        StringBuilder target = new StringBuilder("/?screen=integrations&github=installed");
+    private static String buildRedirect(String state, String installationId, String setupAction) {
+        String target = normalizeReturnTo(state);
+        URI uri = URI.create(target);
+        StringBuilder redirect = new StringBuilder();
+        if (uri.getScheme() != null) {
+            redirect.append(uri.getScheme()).append("://").append(uri.getRawAuthority());
+        }
+        String path = uri.getRawPath();
+        redirect.append(path == null || path.isBlank() ? "/" : path);
+        StringBuilder query = new StringBuilder(uri.getRawQuery() == null ? "" : uri.getRawQuery());
+        appendQueryParam(query, "github", "installed");
         if (installationId != null && !installationId.isBlank()) {
-            target.append("&installation_id=")
-                    .append(URLEncoder.encode(installationId, StandardCharsets.UTF_8));
+            appendQueryParam(query, "installation_id", installationId);
         }
         if (setupAction != null && !setupAction.isBlank()) {
-            target.append("&setup_action=")
-                    .append(URLEncoder.encode(setupAction, StandardCharsets.UTF_8));
+            appendQueryParam(query, "setup_action", setupAction);
         }
-        return target.toString();
+        if (query.length() > 0) {
+            redirect.append('?').append(query);
+        }
+        if (uri.getRawFragment() != null && !uri.getRawFragment().isBlank()) {
+            redirect.append('#').append(uri.getRawFragment());
+        }
+        return redirect.toString();
+    }
+
+    private static String normalizeReturnTo(String state) {
+        if (state == null || state.isBlank()) {
+            return "/?screen=integrations";
+        }
+        String trimmed = state.trim();
+        if (trimmed.startsWith("/")) {
+            return trimmed;
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            if ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())) {
+                return trimmed;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Fall through to the safe in-app default.
+        }
+        return "/?screen=integrations";
+    }
+
+    private static void appendQueryParam(StringBuilder query, String key, String value) {
+        if (query.length() > 0) {
+            query.append('&');
+        }
+        query.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
+                .append('=')
+                .append(URLEncoder.encode(value, StandardCharsets.UTF_8));
     }
 }

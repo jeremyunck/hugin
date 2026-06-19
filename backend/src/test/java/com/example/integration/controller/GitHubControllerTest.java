@@ -73,22 +73,33 @@ class GitHubControllerTest {
     }
 
     @Test
-    void callbackRedirectsBackToIntegrations() throws Exception {
+    void callbackRedirectsBackToState() throws Exception {
         mockMvc.perform(get("/api/github/callback")
+                        .param("state", "http://localhost:5173/chat?tab=repo#composer")
                         .param("installation_id", "123")
                         .param("setup_action", "install"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location",
-                        "/?screen=integrations&github=installed&installation_id=123&setup_action=install"));
+                        "http://localhost:5173/chat?tab=repo&github=installed&installation_id=123&setup_action=install#composer"));
 
         verify(github).refresh();
     }
 
     @Test
-    void setupRedirectAlsoWorks() throws Exception {
+    void setupRedirectFallsBackToIntegrations() throws Exception {
         mockMvc.perform(get("/api/github/setup"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "/?screen=integrations&github=installed"));
+
+        verify(github).refresh();
+    }
+
+    @Test
+    void setupRedirectSupportsRelativeState() throws Exception {
+        mockMvc.perform(get("/api/github/setup")
+                        .param("state", "/settings?view=integrations"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", "/settings?view=integrations&github=installed"));
 
         verify(github).refresh();
     }
