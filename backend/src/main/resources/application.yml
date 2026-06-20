@@ -5,8 +5,11 @@ spring:
   application:
     name: hugin
   datasource:
+    # Defaults target a local PostgreSQL for native development. Inside Docker, compose sets
+    # SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hugin to reach the postgres service.
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hugin}
     username: ${SPRING_DATASOURCE_USERNAME:hugin}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   sql:
     init:
       mode: always
@@ -18,12 +21,12 @@ spring:
       port: ${REDIS_PORT:6379}
 
 llm:
-  # Active LLM provider — must match a key under llm.providers below.
-  provider: openrouter
-  # Default model used when a request does not specify one.
+  # Active LLM provider — must match a key under llm.providers below. Override with LLM_PROVIDER.
+  provider: ${LLM_PROVIDER:openrouter}
+  # Default model used when a request does not specify one. Override with LLM_MODEL.
   # Must be a model that supports tool calling and be valid for the active provider
   # (e.g. llama3.2 / mistral-nemo for Ollama, openai/gpt-oss-120b for OpenRouter).
-  model: openai/gpt-oss-120b
+  model: ${LLM_MODEL:openai/gpt-oss-120b}
   # Reasoning effort sent to providers that support it. DeepSeek V4 maps medium to high.
   reasoning-effort: ${LLM_REASONING_EFFORT:medium}
   providers:
@@ -35,6 +38,12 @@ llm:
     openrouter:
       base-url: https://openrouter.ai/api/v1
       api-key: ${OPEN_ROUTER_API_KEY:}
+    # OpenAI — authenticates with an Authorization: Bearer <api-key> header.
+    # Set OPENAI_API_KEY in the environment (sk-...) and switch provider to "openai"
+    # (LLM_PROVIDER=openai). Remember to also set a valid OpenAI model, e.g. LLM_MODEL=gpt-4o-mini.
+    openai:
+      base-url: https://api.openai.com/v1
+      api-key: ${OPENAI_API_KEY:}
 
 conversation:
   memory:
@@ -113,7 +122,8 @@ agent:
     enabled: true
     # Directory that file operations are confined to and the working dir for shell commands.
     # Relative paths and '~/' are NOT expanded here; use an absolute path to pin the workspace.
-    workspace-root: .
+    # In Docker this is set to /workspace (a named volume) via AGENT_WORKSPACE_ROOT.
+    workspace-root: ${AGENT_WORKSPACE_ROOT:.}
     # Wall-clock limit for a single run_bash command.
     bash-timeout: 30s
     # Shell binary run_bash invokes. Blank auto-detects the user's login shell from $SHELL

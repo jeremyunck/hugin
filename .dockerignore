@@ -1,0 +1,42 @@
+# Keep the build context small and avoid copying host-only artifacts into images.
+
+# Version control / CI
+.git
+.github
+.gitignore
+
+# Node / frontend build artifacts (rebuilt inside the image)
+**/node_modules
+frontend/dist
+frontend/node_modules
+
+# Maven / Java build artifacts (rebuilt inside the image)
+**/target
+backend/src/main/resources/static/
+
+# Local environment files and secrets — never bake these into an image
+.env
+.env.*
+!.env.example
+mcp-servers-user.json
+application-local.yml
+
+# Runtime / local state
+data/
+.data/
+sandboxes/
+bug-reports/
+.hugin/
+**/*.log
+logs/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Docker files themselves
+Dockerfile
+docker-compose*.yml
+.dockerignore

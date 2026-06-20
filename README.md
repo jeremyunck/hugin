@@ -7,9 +7,71 @@ endpoint, exposes a web UI, and ships with local tools for file access, shell co
 search, Google Workspace, email, scheduling, optional repo-local skills, and optional
 Redis-backed memory.
 
-## Getting started
+## Docker quickstart
 
-Clone the repo and install Hugin:
+Run the whole stack — app, PostgreSQL, and Redis — with Docker. No host Java, Node, Maven,
+PostgreSQL, or Redis required.
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows)
+or Docker Engine + the Compose plugin (Linux).
+
+```bash
+git clone https://github.com/jeremyunck/hugin.git
+cd hugin
+cp .env.example .env
+# Edit .env and add an LLM key:
+#   - OPEN_ROUTER_API_KEY=sk-or-v1-...   (keep LLM_PROVIDER=openrouter), or
+#   - OPENAI_API_KEY=sk-...              (set LLM_PROVIDER=openai and LLM_MODEL=gpt-4o-mini)
+docker compose up --build
+```
+
+Then open **http://localhost:8080**.
+
+Compose starts three services and creates everything automatically:
+
+- **hugin** — the app (multi-stage build: React frontend → Spring Boot jar → slim Java 21 runtime)
+- **postgres** — creates the `hugin` database, user, and schema on first boot (no manual SQL)
+- **redis** — available to the app for optional long-term memory
+
+The app waits for PostgreSQL to pass its healthcheck before starting, so the first `up` may take a
+few seconds longer while the database initializes.
+
+**Login:** a bootstrap account is created on first start from `AUTH_BOOTSTRAP_USERNAME` /
+`AUTH_BOOTSTRAP_PASSWORD` in `.env` (defaults `admin` / `change-me`). Change the password before
+exposing Hugin beyond localhost.
+
+**Stop the stack:**
+
+```bash
+docker compose down
+```
+
+**Reset all local data** (database, Redis, agent home, and workspace volumes):
+
+```bash
+docker compose down -v
+```
+
+### Notes and limitations
+
+- **LLM credentials are required for the agent to chat.** The stack boots without a key, but you
+  must add `OPEN_ROUTER_API_KEY` (or `OPENAI_API_KEY` with `LLM_PROVIDER=openai`) for model calls to
+  succeed.
+- **Sandbox mode is disabled by default** (`SANDBOX_ENABLED=false`). Hugin's per-session Docker
+  sandboxes need access to a Docker daemon. To enable them, layer in the override — note this mounts
+  the host Docker socket, which grants the container control of the host's Docker daemon:
+
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
+  ```
+
+- **Secrets stay out of the image.** Keys are read from `.env` at runtime; `.env` is gitignored and
+  never baked into the build.
+
+## Getting started (native install)
+
+The native CLI install is the advanced/alternative path and runs Hugin directly on your machine
+(requires Java 21 and Maven, plus a reachable PostgreSQL).
 
 ```bash
 git clone https://github.com/jeremyunck/hugin.git && cd hugin

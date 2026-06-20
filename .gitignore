@@ -9,6 +9,10 @@ target/
 .DS_Store
 mcp-servers-user.json
 application-local.yml
+# Local environment files (never commit secrets); .env.example is tracked.
+.env
+.env.*
+!.env.example
 node_modules/
 data/
 .data/

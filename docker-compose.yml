@@ -1,0 +1,78 @@
+# Hugin — Docker quickstart stack: the app plus its PostgreSQL and Redis backends.
+#
+#   cp .env.example .env   # then add your LLM key
+#   docker compose up --build
+#
+# App is served on http://localhost:8080. Stop with `docker compose down`;
+# reset all local data (DB, Redis, agent home, workspace) with `docker compose down -v`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SPRING_DATASOURCE_DB:-hugin}
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-hugin}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hugin}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-hugin} -d ${SPRING_DATASOURCE_DB:-hugin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  hugin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Reach the postgres service inside the compose network instead of localhost.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${SPRING_DATASOURCE_DB:-hugin}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-hugin}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hugin}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      # LLM provider / credentials.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-120b}
+      OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-medium}
+      # Agent runtime.
+      AGENT_HOME: ${AGENT_HOME:-/home/hugin/.hugin}
+      AGENT_WORKSPACE_ROOT: /workspace
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
+      MEMORY_ENABLED: ${MEMORY_ENABLED:-false}
+      # Bootstrap login.
+      AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-change-me}
+    ports:
+      - "8080:8080"
+    volumes:
+      - hugin_home:/home/hugin/.hugin
+      - workspace:/workspace
+
+volumes:
+  pgdata:
+  redisdata:
+  hugin_home:
+  workspace:
