@@ -42,3 +42,58 @@ create table if not exists user_model_preferences (
 );
 
 create index if not exists idx_user_model_preferences_owner on user_model_preferences(owner_username);
+
+create table if not exists chat_sessions (
+    id varchar(36) primary key,
+    owner_username varchar(100) not null references app_users(username) on delete cascade,
+    title text,
+    mode varchar(32) not null,
+    last_event_seq bigint not null default 0,
+    created_at timestamp with time zone not null default current_timestamp,
+    updated_at timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists idx_chat_sessions_owner on chat_sessions(owner_username);
+
+create table if not exists chat_messages (
+    id varchar(36) primary key,
+    session_id varchar(36) not null references chat_sessions(id) on delete cascade,
+    run_id varchar(36),
+    role varchar(32) not null,
+    content text not null default '',
+    status varchar(32) not null,
+    created_at timestamp with time zone not null default current_timestamp,
+    updated_at timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists idx_chat_messages_session_created on chat_messages(session_id, created_at);
+create index if not exists idx_chat_messages_run on chat_messages(run_id);
+
+create table if not exists agent_runs (
+    id varchar(36) primary key,
+    session_id varchar(36) not null references chat_sessions(id) on delete cascade,
+    mode varchar(32) not null,
+    status varchar(32) not null,
+    error_message text,
+    started_at timestamp with time zone not null default current_timestamp,
+    completed_at timestamp with time zone
+);
+
+create index if not exists idx_agent_runs_session_started on agent_runs(session_id, started_at);
+
+create table if not exists chat_events (
+    id varchar(36) primary key,
+    session_id varchar(36) not null references chat_sessions(id) on delete cascade,
+    run_id varchar(36),
+    message_id varchar(36),
+    seq bigint not null,
+    type varchar(64) not null,
+    role varchar(32),
+    content text,
+    metadata text,
+    created_at timestamp with time zone not null default current_timestamp,
+    constraint uq_chat_events_session_seq unique (session_id, seq)
+);
+
+create index if not exists idx_chat_events_session_seq on chat_events(session_id, seq);
+create index if not exists idx_chat_events_run_seq on chat_events(run_id, seq);

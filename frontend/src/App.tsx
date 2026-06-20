@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Bug,
   Box,
-  Check,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -33,9 +32,6 @@ import {
 } from "lucide-react";
 
 import {
-  buildAssistantEntry,
-  buildPriorMessages,
-  buildUserEntry,
   connectGitHub,
   createSandbox,
   createGitHubSandbox,
@@ -47,11 +43,11 @@ import {
   cancelAgentRun,
   fetchBugReports,
   fetchAgentRuns,
+  fetchChatSessionEvents,
   fetchGitHubBranches,
   fetchGitHubRepositories,
   fetchGitHubStatus,
   fetchModels,
-  fetchRunStreamEvents,
   fetchCurrentUser,
   fetchIntegrations,
   fetchSandboxFiles,
@@ -66,14 +62,15 @@ import {
   saveEnabledModels,
   saveAppState,
   saveAuthSession,
-  streamPrompt,
-  syncThreadHistory,
-  type StreamEvent
+  sendChatMessage,
+  openChatEventStream,
+  type ChatEvent
 } from "./services/guildService";
 import type {
   AppState,
   AuthSession,
   AgentRun,
+  ChatActivity,
   ChatAttachment,
   ChatEntry,
   ChatThread,
@@ -115,13 +112,6 @@ const WORKSPACE_ACTION_RE =
 const WORKSPACE_TARGET_RE =
   /\b(code|repo|repository|file|files|folder|directory|project|frontend|backend|component|markdown|ui|function|class|css|html|typescript|javascript|java|python|bash|shell|command)\b/i;
 const WORKSPACE_PATH_RE = /(^|\s)(\.\/|\/|~\/)[^\s]+/;
-
-function entryId(prefix: string) {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
-  }
-  return `${prefix}-${Math.random().toString(16).slice(2, 10)}`;
-}
 
 function nowIso() {
   return new Date().toISOString();
@@ -238,142 +228,146 @@ function defaultReasoningFor(model?: ModelOption) {
 }
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const RECOVERY_POLL_DELAYS_MS = [3000, 5000, 8000, 13000, 21000];
 
-type RunReplayState = {
-  runId: string;
-  lastEventId: number;
-};
+function activityLabel(event: ChatEvent) {
+  const metadata = event.metadata ?? {};
+  const name = typeof metadata.name === "string" ? metadata.name : event.type;
+  switch (event.type) {
+    case "run_started":
+      return "Run started";
+    case "run_completed":
+      return "Run completed";
+    case "run_error":
+      return "Run failed";
+    case "tool_call_started":
+      return `Tool started: ${name}`;
+    case "tool_call_completed":
+      return `Tool completed: ${name}`;
+    case "tool_call_error":
+      return `Tool failed: ${name}`;
+    default:
+      return event.type.replaceAll("_", " ");
+  }
+}
 
-/** Folds a streamed agent event into the working thread, keyed by the active assistant entry. */
-function applyStreamEvent(thread: ChatThread, assistantId: string, event: StreamEvent): { thread: ChatThread; assistantId: string } {
+function activityDetail(event: ChatEvent) {
+  const metadata = event.metadata ?? {};
+  if (typeof metadata.result === "string" && metadata.result) return metadata.result;
+  if (typeof metadata.args === "string" && metadata.args) return metadata.args;
+  if (typeof metadata.message === "string" && metadata.message) return metadata.message;
+  return event.content ?? undefined;
+}
+
+function activityStatus(event: ChatEvent): ChatActivity["status"] {
+  if (event.type.endsWith("_error") || event.type === "run_error") return "error";
+  if (event.type.endsWith("_completed") || event.type === "run_completed") return "completed";
+  if (event.type.endsWith("_started") || event.type === "run_started") return "running";
+  return "info";
+}
+
+function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThread {
+  if ((thread.lastSeq ?? 0) >= event.seq) {
+    return thread;
+  }
+
   const entries = thread.entries.slice();
-  const idx = entries.findIndex((entry) => entry.id === assistantId);
-  if (idx === -1) return { thread, assistantId };
-  const assistant = entries[idx] as Extract<ChatEntry, { type: "assistant" }>;
-  let nextAssistantId = assistantId;
+  const activities = (thread.activities ?? []).slice();
+  const messageId = event.messageId ?? undefined;
+  const index = messageId ? entries.findIndex((entry) => entry.id === messageId) : -1;
+  const attachments = Array.isArray(event.metadata?.attachments)
+    ? event.metadata.attachments as ChatAttachment[]
+    : undefined;
 
   switch (event.type) {
-    case "token":
-      entries[idx] = { ...assistant, content: assistant.content + event.text };
-      break;
-    case "reasoning":
-      entries[idx] = { ...assistant, reasoning: assistant.reasoning + event.text };
-      break;
-    case "tool": {
-      const toolEntry: ChatEntry = {
-        id: entryId("entry-tool"),
-        type: "tool",
-        tool: {
-          id: entryId("tool"),
-          name: event.name,
-          args: event.args,
-          result: "",
-          startedAt: nowIso()
-        },
-        createdAt: nowIso()
-      };
-      if (assistant.content.trim() || assistant.reasoning.trim()) {
-        const nextAssistant = buildAssistantEntry();
-        entries[idx] = { ...assistant, completedAt: assistant.completedAt ?? nowIso() };
-        entries.splice(idx + 1, 0, toolEntry, nextAssistant);
-        nextAssistantId = nextAssistant.id;
-      } else {
-        entries.splice(idx, 0, toolEntry);
+    case "user_message_created":
+      if (messageId && index === -1) {
+        entries.push({
+          id: messageId,
+          type: "user",
+          content: event.content ?? "",
+          ...(attachments?.length ? { attachments } : {}),
+          createdAt: event.createdAt
+        });
       }
       break;
-    }
-    case "tool_result": {
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
-        if (entry.type === "tool" && !entry.tool.finishedAt && entry.tool.name === event.name) {
-          entries[i] = {
-            ...entry,
-            tool: { ...entry.tool, result: event.result, finishedAt: nowIso() }
-          };
-          break;
+    case "assistant_message_started":
+      if (messageId && index === -1) {
+        entries.push({
+          id: messageId,
+          type: "assistant",
+          content: "",
+          reasoning: "",
+          createdAt: event.createdAt
+        });
+      }
+      break;
+    case "assistant_token":
+      if (messageId) {
+        if (index === -1) {
+          entries.push({
+            id: messageId,
+            type: "assistant",
+            content: event.content ?? "",
+            reasoning: "",
+            createdAt: event.createdAt
+          });
+        } else if (entries[index]?.type === "assistant") {
+          const current = entries[index] as Extract<ChatEntry, { type: "assistant" }>;
+          entries[index] = { ...current, content: `${current.content}${event.content ?? ""}` };
         }
       }
       break;
-    }
-    case "error":
-      entries[idx] = { ...assistant, content: assistant.content || `⚠️ ${event.message}` };
-      break;
-    case "replace":
-      entries[idx] = { ...assistant, content: event.content, completedAt: nowIso() };
-      break;
-    case "reset": {
-      const resetIdx = entries.findIndex((entry) => entry.id === assistantId);
-      if (resetIdx !== -1) {
-        entries[resetIdx] = { ...assistant, content: "", reasoning: "" };
+    case "assistant_message_completed":
+      if (messageId && index !== -1 && entries[index]?.type === "assistant") {
+        const current = entries[index] as Extract<ChatEntry, { type: "assistant" }>;
+        entries[index] = {
+          ...current,
+          content: current.content || event.content || "",
+          completedAt: event.createdAt
+        };
       }
       break;
-    }
-    case "done": {
-      if (!assistant.content.trim() && !assistant.reasoning.trim()) {
-        entries.splice(idx, 1);
-      } else {
-        entries[idx] = { ...assistant, completedAt: assistant.completedAt ?? nowIso() };
+    case "assistant_message_error":
+      if (messageId) {
+        if (index === -1) {
+          entries.push({
+            id: messageId,
+            type: "assistant",
+            content: event.content ?? "The run failed.",
+            reasoning: "",
+            createdAt: event.createdAt,
+            completedAt: event.createdAt
+          });
+        } else if (entries[index]?.type === "assistant") {
+          const current = entries[index] as Extract<ChatEntry, { type: "assistant" }>;
+          entries[index] = {
+            ...current,
+            content: current.content || event.content || "The run failed.",
+            completedAt: event.createdAt
+          };
+        }
       }
       break;
-    }
     default:
+      activities.push({
+        id: event.id,
+        runId: event.runId ?? undefined,
+        type: event.type,
+        label: activityLabel(event),
+        status: activityStatus(event),
+        detail: activityDetail(event),
+        createdAt: event.createdAt
+      });
       break;
   }
 
   return {
-    thread: { ...thread, updatedAt: nowIso(), entries },
-    assistantId: nextAssistantId
+    ...thread,
+    entries,
+    activities,
+    lastSeq: event.seq,
+    updatedAt: event.createdAt
   };
-}
-
-function threadHasPendingAssistant(thread: ChatThread): boolean {
-  return thread.entries.some((entry) => entry.type === "assistant" && !entry.completedAt);
-}
-
-function sameThreadEntries(left: ChatThread, right: ChatThread): boolean {
-  if (left.entries.length !== right.entries.length) return false;
-  return left.entries.every((entry, index) => {
-    const other = right.entries[index];
-    if (!other || entry.type !== other.type) return false;
-    if (entry.type === "user" && other.type === "user") {
-      return entry.content === other.content
-        && JSON.stringify(entry.attachments ?? []) === JSON.stringify(other.attachments ?? []);
-    }
-    if (entry.type === "assistant" && other.type === "assistant") {
-      return entry.content === other.content
-        && entry.reasoning === other.reasoning
-        && Boolean(entry.completedAt) === Boolean(other.completedAt);
-    }
-    if (entry.type === "tool" && other.type === "tool") {
-      return entry.tool.name === other.tool.name
-        && entry.tool.args === other.tool.args
-        && entry.tool.result === other.tool.result
-        && Boolean(entry.tool.finishedAt) === Boolean(other.tool.finishedAt);
-    }
-    return false;
-  });
-}
-
-function collectRecoveryCandidates(
-  threads: ChatThread[],
-  currentThread: ChatThread,
-  activeThreadIds: Iterable<string>
-): ChatThread[] {
-  const candidates = new Map<string, ChatThread>();
-  for (const thread of threads) {
-    if (threadHasPendingAssistant(thread)) {
-      candidates.set(thread.id, thread);
-    }
-  }
-  for (const threadId of activeThreadIds) {
-    const candidate = threads.find((thread) => thread.id === threadId)
-      ?? (currentThread.id === threadId ? currentThread : null);
-    if (candidate) {
-      candidates.set(threadId, candidate);
-    }
-  }
-  return [...candidates.values()];
 }
 
 function screenForThread(thread: ChatThread): Screen {
@@ -715,33 +709,8 @@ function Messages({
           );
         }
 
-        if (entry.type === "tool") {
-          return (
-            <div key={entry.id} className="message-row message-row-assistant fade-in">
-              <details className="tool-event">
-                <summary className="assistant-event">
-                  {entry.tool.finishedAt ? (
-                    <Check size={15} strokeWidth={3} color={COLORS.green} />
-                  ) : (
-                    <TypingDots />
-                  )}
-                  <span>
-                    Used <span className="mono">{entry.tool.name}</span>
-                  </span>
-                </summary>
-                <div className="tool-event-body">
-                  <div className="tool-event-section">
-                    <span className="tool-event-label">Input</span>
-                    <pre>{entry.tool.args || "(empty)"}</pre>
-                  </div>
-                  <div className="tool-event-section">
-                    <span className="tool-event-label">Output</span>
-                    <pre>{entry.tool.result || (entry.tool.finishedAt ? "(empty)" : "Running…")}</pre>
-                  </div>
-                </div>
-              </details>
-            </div>
-          );
+        if (entry.type !== "assistant") {
+          return null;
         }
 
         const empty = !entry.content && !entry.reasoning;
@@ -762,6 +731,26 @@ function Messages({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ActivityPanel({ activities }: { activities: ChatActivity[] }) {
+  if (!activities.length) return null;
+  return (
+    <div className="activity-panel">
+      <div className="activity-header">Activity</div>
+      <div className="activity-list">
+        {activities.map((activity) => (
+          <div key={activity.id} className="activity-item">
+            <div className="activity-item-head">
+              <span className={`activity-status activity-status-${activity.status}`} />
+              <span>{activity.label}</span>
+            </div>
+            {activity.detail ? <pre className="activity-detail">{activity.detail}</pre> : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1385,7 +1374,6 @@ export default function App() {
   const [thread, setThread] = useState<ChatThread>(() => createThread("chat"));
   const stateRef = useRef(state);
   const threadRef = useRef(thread);
-  const activeAssistantIdsRef = useRef(new Map<string, string>());
 
   const [draft, setDraft] = useState("");
   const [draftAttachment, setDraftAttachment] = useState<ChatAttachment | null>(null);
@@ -1430,7 +1418,7 @@ export default function App() {
 
   const listRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const runReplayStateRef = useRef<Map<string, RunReplayState>>(new Map());
+  const streamRef = useRef<{ threadId: string; close: () => void } | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -1457,45 +1445,23 @@ export default function App() {
     });
   }, []);
 
-  const applyEventToThread = useCallback((threadId: string, event: StreamEvent) => {
-    let nextThread: ChatThread | null = null;
+  const applyEventsToThread = useCallback((threadId: string, events: ChatEvent[], replace = false) => {
     const target = stateRef.current.threads.find((candidate) => candidate.id === threadId)
       ?? (threadRef.current.id === threadId ? threadRef.current : null);
     if (!target) return;
-    if (event.runId || typeof event.eventId === "number") {
-      const prior = runReplayStateRef.current.get(threadId);
-      runReplayStateRef.current.set(threadId, {
-        runId: event.runId ?? prior?.runId ?? "",
-        lastEventId: typeof event.eventId === "number"
-          ? Math.max(prior?.lastEventId ?? 0, event.eventId)
-          : prior?.lastEventId ?? 0
-      });
-    }
-    if (event.type === "recover_thread") {
-      nextThread = event.thread;
-      activeAssistantIdsRef.current.delete(threadId);
-      runReplayStateRef.current.delete(threadId);
-      upsertThread(nextThread);
-      if (threadRef.current.id === threadId) {
-        setThread(nextThread);
-        threadRef.current = nextThread;
-      }
-      return;
-    }
-    const assistantId = activeAssistantIdsRef.current.get(threadId)
-      ?? [...target.entries].reverse().find((entry) => entry.type === "assistant" && !entry.completedAt)?.id;
-    if (!assistantId) return;
-    const result = applyStreamEvent(target, assistantId, event);
-    activeAssistantIdsRef.current.set(threadId, result.assistantId);
-    nextThread = result.thread;
+    const start = replace
+      ? { ...target, entries: [], activities: [], lastSeq: 0 }
+      : target;
+    const nextThread = events.reduce((current, event) => reduceChatEvent(current, event), start);
     upsertThread(nextThread);
     if (threadRef.current.id === threadId) {
       setThread(nextThread);
       threadRef.current = nextThread;
-    }
-    if (event.type === "done" || event.type === "error") {
-      activeAssistantIdsRef.current.delete(threadId);
-      runReplayStateRef.current.delete(threadId);
+      if (nextThread.entries.some((entry) => entry.type === "assistant" && !entry.completedAt)) {
+        setBusy(true);
+      } else {
+        setBusy(false);
+      }
     }
   }, [upsertThread]);
 
@@ -1588,42 +1554,77 @@ export default function App() {
       .catch(() => setGitHubStatus(null));
   }, [session]);
 
-  const syncThreadFromServer = useCallback(async (candidate: ChatThread) => {
-    if (!session || !candidate.entries.some((entry) => entry.type === "user")) return;
+  const hydrateThreadFromEvents = useCallback(async (candidate: ChatThread, afterSeq?: number) => {
+    if (!session) return;
     try {
-      const next = await syncThreadHistory(session.token, candidate);
-      if (sameThreadEntries(candidate, next)) {
+      const events = await fetchChatSessionEvents(session.token, candidate.id, afterSeq ?? 0);
+      if (!events.length && afterSeq == null) {
+        if (candidate.entries.length || (candidate.activities?.length ?? 0)) {
+          // The server has no persisted events for this session yet (e.g. a thread restored
+          // from local storage whose first message was never accepted). Keep the local
+          // transcript instead of wiping it; a real server-side history will replace it.
+          return;
+        }
+        const emptyThread = { ...candidate, entries: [], activities: [], lastSeq: 0 };
+        upsertThread(emptyThread);
+        if (threadRef.current.id === candidate.id) {
+          setThread(emptyThread);
+          threadRef.current = emptyThread;
+          setBusy(false);
+        }
         return;
       }
-      upsertThread(next);
-      if (threadRef.current.id === next.id) {
-        setThread(next);
-        threadRef.current = next;
-      }
-    } catch {
-      // Leave local state alone when the background resync cannot reach the server.
+      applyEventsToThread(candidate.id, events, afterSeq == null);
+    } catch (error) {
+      // Leave local state as-is on transient sync failures, but surface the cause for debugging.
+      console.warn("Failed to hydrate chat thread from events", error);
     }
-  }, [session, upsertThread]);
+  }, [session, applyEventsToThread, upsertThread]);
 
-  const syncThreadFromRun = useCallback(async (candidate: ChatThread, run: AgentRun) => {
+  const ensureStream = useCallback((candidate: ChatThread) => {
     if (!session) return;
-    const replayState = runReplayStateRef.current.get(candidate.id);
-    const continuingSameRun = replayState?.runId === run.id;
-    const afterEventId = continuingSameRun ? replayState.lastEventId : 0;
-    if (!continuingSameRun) {
-      applyEventToThread(candidate.id, { type: "reset" });
-      runReplayStateRef.current.set(candidate.id, { runId: run.id, lastEventId: 0 });
+    if (streamRef.current?.threadId === candidate.id) {
+      return;
     }
-    const events = await fetchRunStreamEvents(session.token, run.id, afterEventId);
-    for (const event of events) {
-      applyEventToThread(candidate.id, event);
-    }
-  }, [session, applyEventToThread]);
+    streamRef.current?.close();
+    streamRef.current = {
+      threadId: candidate.id,
+      close: openChatEventStream(session.token, candidate.id, candidate.lastSeq ?? 0, {
+        onEvent: (event) => applyEventsToThread(candidate.id, [event]),
+        onStatus: (status) => {
+          const target = stateRef.current.threads.find((item) => item.id === candidate.id)
+            ?? (threadRef.current.id === candidate.id ? threadRef.current : null);
+          if (!target) return;
+          const connectionStatus: ChatThread["connectionStatus"] = status === "closed" ? "idle" : status;
+          const nextThread: ChatThread = {
+            ...target,
+            connectionStatus
+          };
+          upsertThread(nextThread);
+          if (threadRef.current.id === candidate.id) {
+            setThread(nextThread);
+            threadRef.current = nextThread;
+          }
+        },
+        onError: () => {
+          const target = stateRef.current.threads.find((item) => item.id === candidate.id)
+            ?? (threadRef.current.id === candidate.id ? threadRef.current : null);
+          if (!target) return;
+          const nextThread: ChatThread = { ...target, connectionStatus: "error" };
+          upsertThread(nextThread);
+          if (threadRef.current.id === candidate.id) {
+            setThread(nextThread);
+            threadRef.current = nextThread;
+          }
+        }
+      }).close
+    };
+  }, [session, applyEventsToThread, upsertThread]);
 
   useEffect(() => {
-    if (busy) return;
-    void syncThreadFromServer(threadRef.current);
-  }, [busy, thread.id, syncThreadFromServer]);
+    if (!session) return;
+    void hydrateThreadFromEvents(threadRef.current).then(() => ensureStream(threadRef.current));
+  }, [session, thread.id, hydrateThreadFromEvents, ensureStream]);
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -1645,7 +1646,6 @@ export default function App() {
   }, [models, thread.modelId, thread.reasoningEffort]);
 
   useEffect(() => {
-    if (!thread.entries.some((entry) => entry.type === "user")) return;
     upsertThread(thread);
   }, [thread, upsertThread]);
 
@@ -1653,14 +1653,8 @@ export default function App() {
     if (!session) return;
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
-      const candidates = collectRecoveryCandidates(
-        stateRef.current.threads,
-        threadRef.current,
-        activeAssistantIdsRef.current.keys()
-      );
-      for (const candidate of candidates) {
-        void syncThreadFromServer(candidate);
-      }
+      const current = threadRef.current;
+      void hydrateThreadFromEvents(current, current.lastSeq ?? 0).then(() => ensureStream(threadRef.current));
     };
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleVisibility);
@@ -1668,79 +1662,12 @@ export default function App() {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleVisibility);
     };
-  }, [session, syncThreadFromServer]);
+  }, [session, hydrateThreadFromEvents, ensureStream]);
 
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    let timer: number | null = null;
-    let recoveryAttempt = 0;
-
-    const clearTimer = () => {
-      if (timer !== null) {
-        window.clearTimeout(timer);
-        timer = null;
-      }
-    };
-
-    const schedule = () => {
-      clearTimer();
-      const delayMs = RECOVERY_POLL_DELAYS_MS[Math.min(recoveryAttempt, RECOVERY_POLL_DELAYS_MS.length - 1)];
-      recoveryAttempt += 1;
-      timer = window.setTimeout(() => {
-        void recoverPendingThreads();
-      }, delayMs);
-    };
-
-    const recoverPendingThreads = async () => {
-      if (cancelled || document.visibilityState !== "visible") return;
-      const pendingThreads = collectRecoveryCandidates(
-        stateRef.current.threads,
-        threadRef.current,
-        activeAssistantIdsRef.current.keys()
-      );
-      if (!pendingThreads.length) {
-        recoveryAttempt = 0;
-        return;
-      }
-
-      let runs: AgentRun[] = [];
-      try {
-        runs = await fetchAgentRuns(session.token);
-        if (!cancelled) {
-          setAgentRuns(runs);
-        }
-      } catch {
-        runs = [];
-      }
-
-      await Promise.all(pendingThreads.map(async (candidate) => {
-        const run = runs.find((active) => active.sessionId === candidate.id);
-        if (run) {
-          await syncThreadFromRun(candidate, run);
-          return;
-        }
-        await syncThreadFromServer(candidate);
-      }));
-
-      if (!cancelled && collectRecoveryCandidates(
-        stateRef.current.threads,
-        threadRef.current,
-        activeAssistantIdsRef.current.keys()
-      ).length) {
-        schedule();
-      } else {
-        recoveryAttempt = 0;
-      }
-    };
-
-    void recoverPendingThreads();
-
-    return () => {
-      cancelled = true;
-      clearTimer();
-    };
-  }, [session, syncThreadFromRun, syncThreadFromServer]);
+  useEffect(() => () => {
+    streamRef.current?.close();
+    streamRef.current = null;
+  }, []);
 
   const refreshFiles = useCallback(
     async (sandboxId?: string) => {
@@ -1823,7 +1750,7 @@ export default function App() {
   const openHistory = useCallback(
     (item: ChatThread) => {
       setThread(item);
-      void syncThreadFromServer(item);
+      void hydrateThreadFromEvents(item).then(() => ensureStream(item));
       setDraftAttachment(null);
       setBugReportNotice(null);
       setError(null);
@@ -1842,7 +1769,7 @@ export default function App() {
         setScreen("purechat");
       }
     },
-    [refreshFiles, syncThreadFromServer]
+    [refreshFiles, hydrateThreadFromEvents, ensureStream]
   );
 
   const deleteThread = useCallback(
@@ -2091,8 +2018,6 @@ export default function App() {
       setBugReportNotice(null);
       setError(null);
 
-      const userEntry = buildUserEntry(text, attachment ? [attachment] : undefined);
-      const assistant = buildAssistantEntry();
       const currentThread = threadRef.current;
       const isFirst = !currentThread.entries.some((entry) => entry.type === "user");
       const nextThread: ChatThread = {
@@ -2103,40 +2028,32 @@ export default function App() {
         title: isFirst && currentThread.kind !== "github"
           ? getThreadTitle(text || attachment?.name || "Image attachment")
           : currentThread.title,
-        updatedAt: nowIso(),
-        entries: [...currentThread.entries, userEntry, assistant]
+        updatedAt: nowIso()
       };
-      activeAssistantIdsRef.current.set(nextThread.id, assistant.id);
-      runReplayStateRef.current.delete(nextThread.id);
       setThread(nextThread);
       threadRef.current = nextThread;
       upsertThread(nextThread);
 
       try {
-        const priorMessages = buildPriorMessages(currentThread);
-        await streamPrompt(
-          session.token,
-          {
-            thread: nextThread,
-            threadId: nextThread.id,
-            prompt: text,
-            attachments: attachment ? [attachment] : undefined,
-            priorMessages,
-            model: selectedModel.id,
-            reasoningEffort: selectedReasoning,
-            sandboxId
-          },
-          { onEvent: (event) => applyEventToThread(nextThread.id, event) }
-        );
+        await sendChatMessage(session.token, nextThread.id, {
+          content: text,
+          mode: nextThread.kind === "github" ? "GITHUB" : sandboxId ? "SANDBOX" : "CHAT",
+          title: nextThread.title,
+          attachments: attachment ? [attachment] : undefined,
+          model: selectedModel.id,
+          reasoningEffort: selectedReasoning,
+          sandboxId
+        });
+        await hydrateThreadFromEvents(nextThread, currentThread.lastSeq ?? 0);
+        ensureStream(nextThread);
       } catch (e) {
-        const message = e instanceof Error ? e.message : "The agent request failed.";
-        applyEventToThread(nextThread.id, { type: "error", message });
-      } finally {
         setBusy(false);
+        setError(e instanceof Error ? e.message : "The agent request failed.");
+      } finally {
         if (sandboxId) void refreshFiles(sandboxId);
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, models, upsertThread, applyEventToThread]
+    [draft, draftAttachment, busy, session, refreshFiles, models, upsertThread, hydrateThreadFromEvents, ensureStream]
   );
 
   useEffect(() => {
@@ -2163,7 +2080,9 @@ export default function App() {
           url: typeof window === "undefined" ? null : window.location.href,
           userAgent: typeof navigator === "undefined" ? null : navigator.userAgent,
           busy,
-          activeAssistantId: activeAssistantIdsRef.current.get(activeThread.id) ?? null
+          activeAssistantId: [...activeThread.entries]
+            .reverse()
+            .find((entry) => entry.type === "assistant" && !entry.completedAt)?.id ?? null
         }
       });
       setBugReportNotice(`Saved to ${response.relativePath}`);
@@ -2408,7 +2327,10 @@ export default function App() {
                 <Greeting name={name} onChip={send} />
               </div>
             ) : (
-              <Messages entries={thread.entries} busy={busy} listRef={listRef} />
+              <div className="chat-stack">
+                <Messages entries={thread.entries} busy={busy} listRef={listRef} />
+                <ActivityPanel activities={thread.activities ?? []} />
+              </div>
             )}
             <InputBar
               value={draft}

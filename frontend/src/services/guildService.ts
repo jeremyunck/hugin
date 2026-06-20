@@ -2,6 +2,7 @@ import type {
   AppState,
   AuthSession,
   BugReportSummary,
+  ChatActivity,
   ChatAttachment,
   ChatEntry,
   ChatKind,
@@ -38,28 +39,44 @@ type AuthMeResponse = {
   expiresAt: string;
 };
 
-type StreamEventMeta = {
-  eventId?: number;
-  runId?: string;
-  sessionId?: string;
+export type ChatEvent = {
+  id: string;
+  seq: number;
+  type: string;
+  messageId?: string | null;
+  runId?: string | null;
+  role?: string | null;
+  content?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
 };
 
-export type StreamEvent =
-  | (StreamEventMeta & { type: "config"; developerMode: boolean })
-  | (StreamEventMeta & { type: "token"; text: string })
-  | (StreamEventMeta & { type: "reasoning"; text: string })
-  | (StreamEventMeta & { type: "tool"; name: string; args: string })
-  | (StreamEventMeta & { type: "tool_result"; name: string; result: string })
-  | (StreamEventMeta & { type: "replace"; content: string })
-  | (StreamEventMeta & { type: "recover_thread"; thread: ChatThread })
-  // Emitted client-side (never by the server) before a dropped stream is replayed, so the UI can
-  // discard the partial answer from the failed attempt and stream the fresh one cleanly.
-  | (StreamEventMeta & { type: "reset" })
-  | (StreamEventMeta & { type: "done" })
-  | (StreamEventMeta & { type: "error"; message: string });
+type ChatEventsResponse = {
+  sessionId: string;
+  events: ChatEvent[];
+};
 
-type StreamHandlers = {
-  onEvent: (event: StreamEvent) => void;
+type SendChatMessageOptions = {
+  content: string;
+  mode: "CHAT" | "SANDBOX" | "GITHUB";
+  title: string;
+  attachments?: ChatAttachment[];
+  model?: string;
+  reasoningEffort?: string;
+  sandboxId?: string;
+};
+
+type SendChatMessageResponse = {
+  sessionId: string;
+  messageId: string;
+  runId: string;
+  lastSeq: number;
+};
+
+type ChatEventStreamHandlers = {
+  onEvent: (event: ChatEvent) => void;
+  onStatus?: (status: "connecting" | "open" | "reconnecting" | "closed" | "error") => void;
+  onError?: (error: Error) => void;
 };
 
 function nowIso() {
@@ -164,6 +181,39 @@ async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string)
   return (await response.json()) as T;
 }
 
+export async function sendChatMessage(
+  token: string,
+  sessionId: string,
+  options: SendChatMessageOptions
+): Promise<SendChatMessageResponse> {
+  return apiFetch<SendChatMessageResponse>(
+    `/api/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        content: options.content,
+        mode: options.mode,
+        title: options.title,
+        ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
+        ...(options.sandboxId ? { sandboxId: options.sandboxId } : {})
+      })
+    },
+    token
+  );
+}
+
+export async function fetchChatSessionEvents(token: string, sessionId: string, afterSeq = 0): Promise<ChatEvent[]> {
+  const query = afterSeq > 0 ? `?afterSeq=${afterSeq}` : "";
+  const response = await apiFetch<ChatEventsResponse>(
+    `/api/chat/sessions/${encodeURIComponent(sessionId)}/events${query}`,
+    {},
+    token
+  );
+  return response.events;
+}
+
 export async function login(username: string, password: string): Promise<AuthSession> {
   const response = await apiFetch<AuthLoginResponse>("/api/auth/login", {
     method: "POST",
@@ -214,7 +264,10 @@ export function createThread(kind: ChatKind = "chat", options: CreateThreadOptio
     reasoningEffort: undefined,
     createdAt,
     updatedAt: createdAt,
-    entries: []
+    entries: [],
+    activities: [],
+    lastSeq: 0,
+    connectionStatus: "idle"
   };
 }
 
@@ -360,37 +413,8 @@ export function completeAssistantEntry(state: AppState, threadId: string, assist
   }));
 }
 
-export type StreamOptions = {
-  thread: ChatThread;
-  threadId: string;
-  prompt: string;
-  attachments?: ChatAttachment[];
-  priorMessages?: ChatMessage[];
-  model?: string;
-  reasoningEffort?: string;
-  /** When set, the agent runs inside this sandbox and gets filesystem/shell tools. */
-  sandboxId?: string;
-};
-
-type PersistedRunEvent = {
-  eventId: number;
-  runId: string;
-  sessionId?: string | null;
-  type: string;
-  createdAt: string;
-  data: Record<string, unknown>;
-};
-
-// Backoff schedule for reconnecting a dropped stream. The length also bounds the attempt count.
-const STREAM_RECONNECT_DELAYS_MS = [1000, 2000, 4000];
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Status codes worth reconnecting on: rate limit and transient upstream/server errors. */
-function isRetryableStatus(status: number): boolean {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 async function errorFromResponse(response: Response): Promise<Error & { status?: number }> {
@@ -406,159 +430,6 @@ async function errorFromResponse(response: Response): Promise<Error & { status?:
   const error = new Error(message) as Error & { status?: number };
   error.status = response.status;
   return error;
-}
-
-/**
- * Streams a prompt, transparently reconnecting if the connection drops before the agent finishes.
- *
- * A normal run ends with a server `done` (or `error`) event. If the stream instead ends — or the
- * fetch throws — without one, the connection was lost; we replay the request after a short backoff
- * (emitting a `reset` first so the partial answer is discarded). We do NOT reconnect once a tool
- * call has been observed in the dropped attempt, since replaying the run could repeat tool
- * side-effects; that case surfaces an error instead.
- */
-export async function streamPrompt(token: string, options: StreamOptions, handlers: StreamHandlers) {
-  const requestBody = JSON.stringify({
-    prompt: options.prompt,
-    ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-    ...(options.priorMessages?.length ? { priorMessages: options.priorMessages } : {}),
-    ...(options.model ? { model: options.model } : {}),
-    ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
-    sessionId: options.threadId,
-    // Only sandbox sessions advertise filesystem tools; pure chats omit sandboxId entirely.
-    ...(options.sandboxId ? { sandboxId: options.sandboxId } : {})
-  });
-
-  const maxAttempts = STREAM_RECONNECT_DELAYS_MS.length;
-  let lastError: (Error & { status?: number }) | null = null;
-
-  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
-    if (attempt > 0) {
-      // Discard whatever the failed attempt streamed so the replay renders cleanly.
-      handlers.onEvent({ type: "reset" });
-      await delay(STREAM_RECONNECT_DELAYS_MS[attempt - 1]);
-    }
-
-    let receivedTerminal = false;
-    let executedTool = false;
-    let currentRunId: string | null = null;
-    let lastEventId = 0;
-
-    try {
-      const response = await fetch("/api/agent/stream", {
-        method: "POST",
-        headers: {
-          Accept: "text/event-stream",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: requestBody
-      });
-
-      if (!response.ok) {
-        const error = await errorFromResponse(response);
-        // Transient server-side failures are worth replaying; anything else is final.
-        if (isRetryableStatus(response.status) && attempt < maxAttempts) {
-          lastError = error;
-          continue;
-        }
-        throw error;
-      }
-
-      if (!response.body) {
-        throw new Error("Stream body was not available.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      const dispatch = (event: StreamEvent | null) => {
-        if (!event) return;
-        if (event.runId) currentRunId = event.runId;
-        if (typeof event.eventId === "number") {
-          lastEventId = Math.max(lastEventId, event.eventId);
-        }
-        if (event.type === "tool") executedTool = true;
-        if (event.type === "done" || event.type === "error") receivedTerminal = true;
-        handlers.onEvent(event);
-      };
-
-      while (!receivedTerminal) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const rawEvent of parts) {
-          dispatch(parseSseEvent(rawEvent));
-        }
-      }
-
-      if (!receivedTerminal) {
-        buffer += decoder.decode();
-        dispatch(parseSseEvent(buffer));
-      }
-
-      if (receivedTerminal) return;
-
-      // Stream ended without a terminal event: the connection dropped mid-run.
-      lastError = new Error("Connection lost before the response completed.");
-      if (currentRunId) {
-        const recovered = await recoverRunAfterDisconnect(token, currentRunId, lastEventId, dispatch);
-        if (recovered) return;
-      }
-      if (executedTool || attempt >= maxAttempts) {
-        const recoveredThread = await recoverThreadAfterDroppedStream(
-          token,
-          options.thread,
-          options.priorMessages?.length ?? 0,
-          options.prompt
-        );
-        if (recoveredThread) {
-          handlers.onEvent({ type: "recover_thread", thread: recoveredThread });
-          handlers.onEvent({ type: "done" });
-          return;
-        }
-        handlers.onEvent({ type: "error", message: lastError.message });
-        return;
-      }
-      // Fall through to the next attempt.
-    } catch (e) {
-      const error = e as Error & { status?: number };
-      lastError = error;
-      if (currentRunId) {
-        const recovered = await recoverRunAfterDisconnect(token, currentRunId, lastEventId, (event) => {
-          if (!event) return;
-          if (typeof event.eventId === "number") {
-            lastEventId = Math.max(lastEventId, event.eventId);
-          }
-          handlers.onEvent(event);
-        });
-        if (recovered) return;
-      }
-      // A tool already ran, or retries are exhausted: don't replay, just report.
-      if (executedTool || attempt >= maxAttempts) {
-        const recoveredThread = await recoverThreadAfterDroppedStream(
-          token,
-          options.thread,
-          options.priorMessages?.length ?? 0,
-          options.prompt
-        );
-        if (recoveredThread) {
-          handlers.onEvent({ type: "recover_thread", thread: recoveredThread });
-          handlers.onEvent({ type: "done" });
-          return;
-        }
-        throw error;
-      }
-      // Otherwise loop and reconnect.
-    }
-  }
-
-  if (lastError) throw lastError;
 }
 
 export type ServerChatMessage = {
@@ -805,16 +676,6 @@ export async function fetchAgentRuns(token: string): Promise<AgentRun[]> {
   return apiFetch<AgentRun[]>("/api/agent/runs", {}, token);
 }
 
-export async function fetchRunEvents(token: string, runId: string, afterEventId = 0): Promise<PersistedRunEvent[]> {
-  const query = afterEventId > 0 ? `?after=${afterEventId}` : "";
-  return apiFetch<PersistedRunEvent[]>(`/api/agent/runs/${encodeURIComponent(runId)}/events${query}`, {}, token);
-}
-
-export async function fetchRunStreamEvents(token: string, runId: string, afterEventId = 0): Promise<StreamEvent[]> {
-  const events = await fetchRunEvents(token, runId, afterEventId);
-  return events.map((event) => parsePersistedRunEvent(event)).filter((event): event is StreamEvent => Boolean(event));
-}
-
 export async function cancelAgentRun(token: string, id: string): Promise<void> {
   const response = await fetch(`/api/agent/runs/${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -912,35 +773,7 @@ export async function fetchBugReports(token: string): Promise<BugReportSummary[]
   return apiFetch<BugReportSummary[]>("/api/agent/bug-reports", {}, token);
 }
 
-async function recoverRunAfterDisconnect(
-  token: string,
-  runId: string,
-  afterEventId: number,
-  dispatch: (event: StreamEvent | null) => void
-): Promise<boolean> {
-  const deadline = Date.now() + 30_000;
-  let cursor = afterEventId;
-
-  while (Date.now() < deadline) {
-    try {
-      const events = await fetchRunEvents(token, runId, cursor);
-      for (const persisted of events) {
-        cursor = Math.max(cursor, persisted.eventId);
-        dispatch(parsePersistedRunEvent(persisted));
-      }
-      if (events.some((event) => event.type === "done" || event.type === "error")) {
-        return true;
-      }
-    } catch {
-      // Ignore transient polling failures while the backend run is still active.
-    }
-    await delay(1000);
-  }
-
-  return false;
-}
-
-function parseSseEvent(rawEvent: string): StreamEvent | null {
+function parseChatSseEvent(rawEvent: string): ChatEvent | null {
   const lines = rawEvent
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
@@ -959,48 +792,84 @@ function parseSseEvent(rawEvent: string): StreamEvent | null {
     }
   }
 
-  if (!eventName || !dataLines.length) return null;
-
-  const payload = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
-  return buildStreamEvent(eventName, payload);
+  if (eventName !== "chat_event" || !dataLines.length) return null;
+  return JSON.parse(dataLines.join("\n")) as ChatEvent;
 }
 
-function parsePersistedRunEvent(event: PersistedRunEvent): StreamEvent | null {
-  return buildStreamEvent(event.type, event.data);
-}
+export function openChatEventStream(
+  token: string,
+  sessionId: string,
+  initialAfterSeq: number,
+  handlers: ChatEventStreamHandlers
+) {
+  const controller = new AbortController();
+  let afterSeq = initialAfterSeq;
+  let closed = false;
 
-function buildStreamEvent(eventName: string, payload: Record<string, unknown>): StreamEvent | null {
-  const meta = {
-    eventId: typeof payload.eventId === "number" ? payload.eventId : undefined,
-    runId: typeof payload.runId === "string" ? payload.runId : undefined,
-    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined
+  const run = async () => {
+    let attempt = 0;
+    while (!closed) {
+      handlers.onStatus?.(attempt === 0 ? "connecting" : "reconnecting");
+      try {
+        const response = await fetch(
+          `/api/chat/sessions/${encodeURIComponent(sessionId)}/stream?afterSeq=${encodeURIComponent(String(afterSeq))}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "text/event-stream",
+              Authorization: `Bearer ${token}`
+            },
+            signal: controller.signal
+          }
+        );
+        if (!response.ok) {
+          throw await errorFromResponse(response);
+        }
+        if (!response.body) {
+          throw new Error("Stream body was not available.");
+        }
+
+        handlers.onStatus?.("open");
+        attempt = 0;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!closed) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+          for (const rawEvent of parts) {
+            const event = parseChatSseEvent(rawEvent);
+            if (!event) continue;
+            afterSeq = Math.max(afterSeq, event.seq);
+            handlers.onEvent(event);
+          }
+        }
+
+        if (closed) {
+          return;
+        }
+      } catch (error) {
+        if (closed || controller.signal.aborted) {
+          return;
+        }
+        handlers.onError?.(error instanceof Error ? error : new Error("Chat stream failed."));
+      }
+
+      attempt += 1;
+      await delay(Math.min(5000, 1000 * attempt));
+    }
   };
-  switch (eventName) {
-    case "config":
-      return { ...meta, type: "config", developerMode: payload.developerMode === true };
-    case "token":
-      return { ...meta, type: "token", text: String(payload.text ?? "") };
-    case "reasoning":
-      return { ...meta, type: "reasoning", text: String(payload.text ?? "") };
-    case "tool":
-      return {
-        ...meta,
-        type: "tool",
-        name: String(payload.name ?? "tool"),
-        args: String(payload.args ?? "")
-      };
-    case "tool_result":
-      return {
-        ...meta,
-        type: "tool_result",
-        name: String(payload.name ?? "tool"),
-        result: String(payload.result ?? "")
-      };
-    case "done":
-      return { ...meta, type: "done" };
-    case "error":
-      return { ...meta, type: "error", message: String(payload.message ?? "Stream failed.") };
-    default:
-      return null;
-  }
+
+  void run();
+  return {
+    close() {
+      closed = true;
+      controller.abort();
+      handlers.onStatus?.("closed");
+    }
+  };
 }

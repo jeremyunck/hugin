@@ -31,6 +31,11 @@ public class AgentRunRegistry {
 
     public String register(String owner, AgentRequest request, String model, Thread worker) {
         String id = UUID.randomUUID().toString();
+        register(id, owner, request, model, worker);
+        return id;
+    }
+
+    public String register(String id, String owner, AgentRequest request, String model, Thread worker) {
         ActiveRun summary = new ActiveRun(
                 id,
                 owner,

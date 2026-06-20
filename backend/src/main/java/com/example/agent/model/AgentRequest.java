@@ -169,4 +169,18 @@ public record AgentRequest(
                         String sessionId, List<String> recentMessages) {
         this(prompt, (List<ChatAttachment>) null, null, null, decision, complex, simple, null, null, sessionId, null, recentMessages, null, null);
     }
+
+    /**
+     * Single-model session request that replays a server-built transcript. The one {@code model}
+     * both drives generation and stands in for the routing slots ({@code decision}/{@code complex}/
+     * {@code simple} all collapse to it), matching the single-model convenience constructors above.
+     * Used by the persisted chat session flow, which supplies its own {@code priorMessages} and owns
+     * short-term context ({@code clientManagedContext}).
+     */
+    public AgentRequest(String prompt, List<ChatAttachment> attachments, String model, String reasoningEffort,
+                        String sessionId, List<ChatMessage> priorMessages, String sandboxId,
+                        Boolean clientManagedContext) {
+        this(prompt, attachments, model, reasoningEffort, model, model, model, null, null, sessionId,
+                priorMessages, null, sandboxId, clientManagedContext);
+    }
 }

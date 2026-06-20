@@ -222,6 +222,13 @@ select {
   overflow-y: auto;
 }
 
+.chat-stack {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .greeting {
   display: flex;
   flex-direction: column;
@@ -269,8 +276,77 @@ select {
 }
 
 .messages {
+  flex: 1;
   padding: 16px 20px 8px;
   overflow-x: hidden;
+}
+
+.activity-panel {
+  border-top: 1px solid #eaebed;
+  background: #fafafb;
+  padding: 10px 20px 12px;
+}
+
+.activity-header {
+  margin-bottom: 8px;
+  color: #8b9099;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activity-list {
+  display: flex;
+  max-height: 160px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  border: 1px solid #e4e5e8;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.activity-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #30353d;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.activity-status {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #bfc3ca;
+}
+
+.activity-status-running {
+  background: #d28b16;
+}
+
+.activity-status-completed {
+  background: #20a65a;
+}
+
+.activity-status-error {
+  background: #e5484d;
+}
+
+.activity-detail {
+  margin: 8px 0 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #5c626c;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .message-row {

@@ -45,6 +45,16 @@ export type ChatEntry =
       createdAt: string;
     };
 
+export type ChatActivity = {
+  id: string;
+  runId?: string;
+  type: string;
+  label: string;
+  status: "running" | "completed" | "error" | "info";
+  detail?: string;
+  createdAt: string;
+};
+
 export type ChatKind = "chat" | "sandbox" | "github";
 
 export type ChatMessage = {
@@ -67,6 +77,9 @@ export type ChatThread = {
   createdAt: string;
   updatedAt: string;
   entries: ChatEntry[];
+  activities?: ChatActivity[];
+  lastSeq?: number;
+  connectionStatus?: "idle" | "connecting" | "open" | "reconnecting" | "error";
 };
 
 export type AppState = {

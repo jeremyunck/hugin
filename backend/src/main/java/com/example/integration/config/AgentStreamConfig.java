@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Thread pool that runs the (blocking) agent loop behind the {@code /api/agent/stream} SSE
@@ -17,6 +18,15 @@ public class AgentStreamConfig {
     public ExecutorService agentStreamExecutor() {
         return Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "agent-stream");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    @Bean
+    public ScheduledExecutorService chatStreamHeartbeatExecutor() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "chat-stream-heartbeat");
             t.setDaemon(true);
             return t;
         });
