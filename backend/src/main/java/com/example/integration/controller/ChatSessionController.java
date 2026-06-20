@@ -79,6 +79,9 @@ public class ChatSessionController {
     public SseEmitter stream(@PathVariable String sessionId,
                              @RequestParam(defaultValue = "0") long afterSeq,
                              @AuthenticationPrincipal Jwt jwt) {
+        // A not-yet-persisted session is allowed: the UI opens the event stream for a freshly
+        // created chat before its first message creates the session row, so requiring existence
+        // here would 404 every new conversation. Existing sessions must still belong to the caller.
         if (!chatSessionService.allowStream(sessionId, owner(jwt))) {
             throw new ResponseStatusException(NOT_FOUND, "Chat session not found");
         }

@@ -1559,6 +1559,12 @@ export default function App() {
     try {
       const events = await fetchChatSessionEvents(session.token, candidate.id, afterSeq ?? 0);
       if (!events.length && afterSeq == null) {
+        if (candidate.entries.length || (candidate.activities?.length ?? 0)) {
+          // The server has no persisted events for this session yet (e.g. a thread restored
+          // from local storage whose first message was never accepted). Keep the local
+          // transcript instead of wiping it; a real server-side history will replace it.
+          return;
+        }
         const emptyThread = { ...candidate, entries: [], activities: [], lastSeq: 0 };
         upsertThread(emptyThread);
         if (threadRef.current.id === candidate.id) {
