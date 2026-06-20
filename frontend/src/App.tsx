@@ -1029,12 +1029,12 @@ function AgentThreadsScreen(props: {
   );
 }
 
-function HistoryScreen(props: {
+export function HistoryScreen(props: {
   threads: ChatThread[];
   onMenu: () => void;
   onOpen: (thread: ChatThread) => void;
-  onNew: () => void;
   onDelete: (thread: ChatThread) => void;
+  onNew: () => void;
   deletingId: string | null;
   query: string;
   onQuery: (value: string) => void;
@@ -1080,8 +1080,8 @@ function HistoryScreen(props: {
               <div className="history-group-label">{label}</div>
               <div className="history-cards">
                 {items.map((thread) => (
-                  <div key={thread.id} className="history-card">
-                    <button type="button" className="history-card-main" onClick={() => onOpen(thread)}>
+                  <div key={thread.id} className="history-card-row">
+                    <button type="button" className="history-card" onClick={() => onOpen(thread)}>
                       <div className="history-card-icon">
                         {thread.kind === "sandbox" ? (
                           <Box size={17} strokeWidth={2} color={COLORS.ink} />
@@ -1102,7 +1102,7 @@ function HistoryScreen(props: {
                     <button
                       type="button"
                       className="history-card-delete"
-                      aria-label="Delete conversation"
+                      aria-label={`Delete ${thread.title}`}
                       title="Delete conversation"
                       disabled={deletingId === thread.id}
                       onClick={() => onDelete(thread)}
@@ -2423,8 +2423,8 @@ export default function App() {
             threads={state.threads}
             onMenu={() => setMenuOpen(true)}
             onOpen={openHistory}
-            onNew={startChat}
             onDelete={deleteThread}
+            onNew={startChat}
             deletingId={deletingThreadId}
             query={historyQuery}
             onQuery={setHistoryQuery}
