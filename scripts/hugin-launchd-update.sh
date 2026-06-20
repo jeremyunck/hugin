@@ -92,8 +92,13 @@ if [[ "$local_head" == "$remote_head" ]] \
 fi
 
 if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
-  info "Resetting dedicated deployment checkout to ${remote_head:0:7}..."
-  git reset --hard "$remote_head"
+  info "Attempting fast-forward for dedicated deployment checkout..."
+  if git merge --ff-only "$remote_head"; then
+    :
+  else
+    warn "Deployment checkout could not fast-forward cleanly; resetting to ${remote_head:0:7}."
+    git reset --hard "$remote_head"
+  fi
 else
   info "Fast-forwarding to ${remote_head:0:7}..."
   git merge --ff-only "$remote_head"
