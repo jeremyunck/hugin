@@ -423,6 +423,55 @@ class AgentServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void injectsGithubRepoContextForRepoSandbox() {
+        var props = new LocalToolProperties(true, ".", Duration.ofSeconds(30), 30_000, List.of());
+        var workspaceRegistry = new WorkspaceRegistry(new Workspace(props));
+        workspaceRegistry.registerGithubRepo("sbx-1", "octocat/hello-world");
+        var service = new AgentService(
+                llmClient,
+                registry(new RecordingLocalTool("get_time", "12:00")),
+                jitRegistry(Path.of(".")),
+                objectMapper,
+                FIVE_MINUTES,
+                DEFAULT_MODEL,
+                MAX_ITERATIONS,
+                workspaceRegistry,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithContent("ok"));
+
+        service.chat(new AgentRequest(PROMPT, MODEL, MODEL, MODEL, MODEL, null, null, null, null, "sbx-1"));
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        assertThat(captor.getValue()).anySatisfy(message -> {
+            assertThat(message.role()).isEqualTo("system");
+            assertThat(message.content()).contains("software engineer working in the GitHub repository octocat/hello-world");
+        });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void omitsGithubRepoContextForNonRepoSandbox() {
+        var service = serviceWithTools(new RecordingLocalTool("get_time", "12:00"));
+
+        when(llmClient.chat(eq(MODEL), anyList(), anyList()))
+                .thenReturn(responseWithContent("ok"));
+
+        service.chat(new AgentRequest(PROMPT, MODEL, MODEL, MODEL, MODEL, null, null, null, null, "sbx-1"));
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
+        assertThat(captor.getValue()).noneSatisfy(message ->
+                assertThat(message.content()).contains("software engineer working in the GitHub repository"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldNotPrependSystemPromptWhenNoToolsAvailable() {
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(responseWithContent("Hi!"));

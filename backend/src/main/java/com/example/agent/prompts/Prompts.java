@@ -101,6 +101,32 @@ public final class Prompts {
             If no tool is relevant, simply answer normally.""";
 
 
+    // ── GitHub-repo chat context ──────────────────────────────────────────────
+
+    /**
+     * Injected as a system message on every request bound to a GitHub-repo sandbox. It tells the
+     * model it is a software engineer working inside a specific cloned repository so it frames its
+     * work — investigation, edits, builds, tests, and git operations — as changes to that repo.
+     *
+     * @param repoFullName the {@code owner/repo} the sandbox was cloned from
+     */
+    public static String githubRepoContext(String repoFullName) {
+        String repo = repoFullName == null || repoFullName.isBlank() ? "this repository" : repoFullName.trim();
+        return ("""
+                You are a software engineer working in the GitHub repository %s. The workspace root \
+                is a fresh clone of this repository's selected branch — the repository's own files \
+                are the root of your workspace, so paths are relative to the repository root (there \
+                is no extra nesting). Use your file tools to read, search, and edit these files, and \
+                use run_bash from the repository root to run builds, tests, linters, and git \
+                commands.
+                \
+                Treat every request as engineering work on this repository: investigate the existing \
+                code before changing it, follow the project's established conventions and structure, \
+                and verify your changes by building or testing them before reporting back. Keep all \
+                file and shell work inside this repository workspace unless the user explicitly asks \
+                otherwise.""").formatted(repo);
+    }
+
     // ── Long-term memory injection ────────────────────────────────────────────
 
     /**

@@ -44,7 +44,7 @@ class SandboxControllerTest {
         when(github.installationToken()).thenReturn(Optional.of("token-123"));
         when(github.cloneUrl("octocat/hello-world")).thenReturn("https://github.com/octocat/hello-world.git");
         when(sandboxManager.createGitHubRepoSandbox(
-                eq(null), eq("https://github.com/octocat/hello-world.git"), eq("hello-world"), eq("develop"), eq("token-123"), eq(null)))
+                eq(null), eq("https://github.com/octocat/hello-world.git"), eq("octocat/hello-world"), eq("develop"), eq("token-123"), eq(null)))
                 .thenReturn(sandbox);
 
         var result = controller.createGitHubSandbox(
@@ -75,7 +75,7 @@ class SandboxControllerTest {
         when(github.cloneUrl("octocat/hello-world")).thenReturn("https://github.com/octocat/hello-world.git");
         when(bugReportCatalogService.find("owner-1", "bug-123")).thenReturn(Optional.of(bugReport));
         when(sandboxManager.createGitHubRepoSandbox(
-                eq(null), eq("https://github.com/octocat/hello-world.git"), eq("hello-world"), eq("develop"),
+                eq(null), eq("https://github.com/octocat/hello-world.git"), eq("octocat/hello-world"), eq("develop"),
                 eq("token-123"), eq(bugReport)))
                 .thenReturn(sandbox);
 

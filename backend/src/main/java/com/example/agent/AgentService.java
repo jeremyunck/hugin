@@ -204,6 +204,8 @@ public class AgentService {
         if (!initialToolDefinitions.isEmpty()) {
             messages.add(ChatMessage.system(Prompts.TOOL_USE));
         }
+        workspaceRegistry.githubRepo(request.sandboxId()).ifPresent(repoFullName ->
+                messages.add(ChatMessage.system(Prompts.githubRepoContext(repoFullName))));
         if (includeWorkspaceTools) {
             String skillPrompt = Prompts.workspaceSkills(WorkspaceSkills.list(workspace));
             if (!skillPrompt.isBlank()) {

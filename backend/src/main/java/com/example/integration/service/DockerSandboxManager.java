@@ -69,16 +69,27 @@ public class DockerSandboxManager implements SandboxRuntime {
         return createSandbox(imageOverride);
     }
 
+    /**
+     * Creates a sandbox whose workspace root <em>is</em> a clone of the given GitHub repository. The
+     * repository is cloned directly into the workspace directory (named after the repo, e.g.
+     * {@code hugin}) rather than into a nested {@code workspace/<repo>} subfolder, so the agent and
+     * the file tree see the repository's files at the workspace root.
+     *
+     * @param repoFullName the {@code owner/repo} being cloned; used to name the workspace and to give
+     *                     the agent repository context
+     */
     public SandboxInfo createGitHubRepoSandbox(
             String imageOverride,
             String cloneUrl,
-            String repoName,
+            String repoFullName,
             String branch,
             String accessToken,
             BugReportCatalogService.StoredBugReport bugReport) {
-        SandboxInfo info = createSandbox(imageOverride);
+        String repoName = repoLeafName(repoFullName);
+        SandboxInfo info = createSandbox(imageOverride, repoName);
         try {
-            cloneRepository(info, cloneUrl, repoName, branch, accessToken, bugReport);
+            cloneRepository(info, cloneUrl, branch, accessToken, bugReport);
+            workspaceRegistry.registerGithubRepo(info.id(), repoFullName);
             return info;
         } catch (RuntimeException e) {
             delete(info.id());
@@ -86,7 +97,31 @@ public class DockerSandboxManager implements SandboxRuntime {
         }
     }
 
+    /**
+     * Derives a safe, single-segment workspace directory name from an {@code owner/repo} (or bare
+     * repo) string, falling back to {@code "workspace"} when nothing usable remains.
+     */
+    private static String repoLeafName(String repoFullName) {
+        if (repoFullName == null || repoFullName.isBlank()) {
+            return "workspace";
+        }
+        String leaf = repoFullName.trim();
+        int slash = leaf.lastIndexOf('/');
+        if (slash >= 0) {
+            leaf = leaf.substring(slash + 1);
+        }
+        leaf = leaf.replaceAll("[^A-Za-z0-9._-]", "-");
+        while (leaf.startsWith(".")) {
+            leaf = leaf.substring(1);
+        }
+        return leaf.isBlank() ? "workspace" : leaf;
+    }
+
     private SandboxInfo createSandbox(String imageOverride) {
+        return createSandbox(imageOverride, "workspace");
+    }
+
+    private SandboxInfo createSandbox(String imageOverride, String workspaceDirName) {
         if (!properties.enabled()) {
             throw new IllegalStateException(
                     "Sandboxes are disabled. Set agent.sandbox.enabled=true to enable.");
@@ -102,7 +137,7 @@ public class DockerSandboxManager implements SandboxRuntime {
 
         Path workspace;
         try {
-            Path dir = sandboxesHome.resolve(id).resolve("workspace");
+            Path dir = sandboxesHome.resolve(id).resolve(workspaceDirName);
             Files.createDirectories(dir);
             workspace = dir.toRealPath();
         } catch (IOException e) {
@@ -149,20 +184,21 @@ public class DockerSandboxManager implements SandboxRuntime {
     private void cloneRepository(
             SandboxInfo sandbox,
             String cloneUrl,
-            String repoName,
             String branch,
             String accessToken,
             BugReportCatalogService.StoredBugReport bugReport) {
+        // Clone directly into the workspace root so the repository's files are the workspace root
+        // (no nested workspace/<repo> directory). The workspace directory already exists and is
+        // empty, which git clone accepts as the destination.
         Path workspace = Path.of(sandbox.workspace());
-        Path targetDir = workspace.resolve(repoName);
         List<String> command = new ArrayList<>(List.of("git", "clone", "--single-branch"));
         if (branch != null && !branch.isBlank()) {
             command.addAll(List.of("--branch", branch));
         }
-        command.addAll(List.of(cloneUrl, targetDir.toString()));
+        command.addAll(List.of(cloneUrl, workspace.toString()));
 
         ProcessBuilder builder = new ProcessBuilder(command);
-        builder.directory(workspace.toFile());
+        builder.directory(workspace.getParent().toFile());
         builder.redirectErrorStream(true);
         configureGitCredentials(builder, accessToken);
 
@@ -172,7 +208,7 @@ public class DockerSandboxManager implements SandboxRuntime {
                     + (result.timedOut() ? "git clone timed out" : result.output()));
         }
         if (bugReport != null) {
-            importBugReport(targetDir, bugReport);
+            importBugReport(workspace, bugReport);
         }
     }
 

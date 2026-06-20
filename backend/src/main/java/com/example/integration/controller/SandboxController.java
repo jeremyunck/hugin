@@ -79,7 +79,7 @@ public class SandboxController {
         SandboxInfo info = sandboxManager.createGitHubRepoSandbox(
                 req.image(),
                 github.cloneUrl(req.repoFullName()),
-                parts[1],
+                req.repoFullName(),
                 req.branch(),
                 accessToken,
                 bugReport);
