@@ -292,11 +292,11 @@ public class AgentService {
                 messages.set(messages.size() - 1, assistantMsg);
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     ensureNotCancelled();
-                    listener.onToolCall(toolCall.function().name(), toolCall.function().arguments());
+                    listener.onToolCall(toolCall.id(), toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall,
                             workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
                             request.sandboxId());
-                    listener.onToolResult(toolCall.function().name(), toolResult);
+                    listener.onToolResult(toolCall.id(), toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
             } else {

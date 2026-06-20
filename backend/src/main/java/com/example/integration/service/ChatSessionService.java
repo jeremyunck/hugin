@@ -116,15 +116,25 @@ public class ChatSessionService {
                 }
 
                 @Override
-                public void onToolCall(String toolName, String arguments) {
+                public void onReasoning(String delta) {
+                    if (delta == null || delta.isEmpty()) {
+                        return;
+                    }
+                    appendAssistantReasoning(sessionId, runId, assistantMessageId, delta);
+                }
+
+                @Override
+                public void onToolCall(String toolCallId, String toolName, String arguments) {
                     appendActivity(sessionId, runId, "tool_call_started", Map.of(
+                            "callId", toolCallId == null ? "" : toolCallId,
                             "name", toolName == null ? "tool" : toolName,
                             "args", arguments == null ? "" : arguments));
                 }
 
                 @Override
-                public void onToolResult(String toolName, String result) {
+                public void onToolResult(String toolCallId, String toolName, String result) {
                     appendActivity(sessionId, runId, "tool_call_completed", Map.of(
+                            "callId", toolCallId == null ? "" : toolCallId,
                             "name", toolName == null ? "tool" : toolName,
                             "result", result == null ? "" : result));
                 }
@@ -162,6 +172,11 @@ public class ChatSessionService {
             repository.appendMessageContent(assistantMessageId, delta, now);
             appendEvent(sessionId, runId, assistantMessageId, "assistant_token", "assistant", delta, Map.of());
         });
+    }
+
+    protected void appendAssistantReasoning(String sessionId, String runId, String assistantMessageId, String delta) {
+        transactionTemplate.executeWithoutResult(status ->
+                appendEvent(sessionId, runId, assistantMessageId, "assistant_reasoning", "assistant", delta, Map.of()));
     }
 
     protected void completeAssistantMessage(String sessionId, String runId, String assistantMessageId) {

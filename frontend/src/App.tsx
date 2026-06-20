@@ -174,6 +174,39 @@ function readLaunchScreen() {
   return params.get("screen");
 }
 
+const ACTIVE_THREAD_STORAGE_KEY = "hugin-active-thread-v1";
+
+function readActiveThreadRestore() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { threadId?: string; screen?: Screen };
+    if (!parsed.threadId || !parsed.screen) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveThreadRestore(threadId: string, screen: Screen) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, JSON.stringify({ threadId, screen }));
+  } catch {
+    // Ignore storage write failures so reconnect support never blocks the active session.
+  }
+}
+
+function clearActiveThreadRestore() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures; the next successful write will overwrite stale data.
+  }
+}
+
 function clearLaunchScreen() {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
@@ -265,7 +298,27 @@ function activityStatus(event: ChatEvent): ChatActivity["status"] {
   return "info";
 }
 
-function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThread {
+function toolCallId(event: ChatEvent) {
+  const raw = event.metadata?.callId;
+  return typeof raw === "string" && raw ? raw : undefined;
+}
+
+function findToolCompletionIndex(entries: ChatEntry[], name: string, callId?: string) {
+  if (callId) {
+    return entries.findIndex((entry) => entry.type === "tool" && entry.tool.callId === callId);
+  }
+  // Legacy events may not have callIds. Match the most recent unfinished tool with the same
+  // name so reconnect replay does not accidentally bind to an older completed entry.
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry?.type === "tool" && entry.tool.name === name && !entry.tool.finishedAt) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+export function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThread {
   if ((thread.lastSeq ?? 0) >= event.seq) {
     return thread;
   }
@@ -301,6 +354,22 @@ function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThread {
         });
       }
       break;
+    case "assistant_reasoning":
+      if (messageId) {
+        if (index === -1) {
+          entries.push({
+            id: messageId,
+            type: "assistant",
+            content: "",
+            reasoning: event.content ?? "",
+            createdAt: event.createdAt
+          });
+        } else if (entries[index]?.type === "assistant") {
+          const current = entries[index] as Extract<ChatEntry, { type: "assistant" }>;
+          entries[index] = { ...current, reasoning: `${current.reasoning}${event.content ?? ""}` };
+        }
+      }
+      break;
     case "assistant_token":
       if (messageId) {
         if (index === -1) {
@@ -317,6 +386,85 @@ function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThread {
         }
       }
       break;
+    case "tool_call_started": {
+      const name = typeof event.metadata?.name === "string" && event.metadata.name
+        ? event.metadata.name
+        : "tool";
+      const args = typeof event.metadata?.args === "string" ? event.metadata.args : "";
+      const callId = toolCallId(event);
+      const toolIndex = callId
+        ? entries.findIndex((entry) => entry.type === "tool" && entry.tool.callId === callId)
+        : -1;
+      if (toolIndex === -1) {
+        entries.push({
+          id: event.id,
+          type: "tool",
+          tool: {
+            id: event.id,
+            ...(callId ? { callId } : {}),
+            name,
+            args,
+            result: "",
+            startedAt: event.createdAt
+          },
+          createdAt: event.createdAt
+        });
+      }
+      activities.push({
+        id: event.id,
+        runId: event.runId ?? undefined,
+        type: event.type,
+        label: activityLabel(event),
+        status: activityStatus(event),
+        detail: activityDetail(event),
+        createdAt: event.createdAt
+      });
+      break;
+    }
+    case "tool_call_completed": {
+      const name = typeof event.metadata?.name === "string" && event.metadata.name
+        ? event.metadata.name
+        : "tool";
+      const result = typeof event.metadata?.result === "string" ? event.metadata.result : "";
+      const callId = toolCallId(event);
+      const toolIndex = findToolCompletionIndex(entries, name, callId);
+      if (toolIndex === -1) {
+        entries.push({
+          id: event.id,
+          type: "tool",
+          tool: {
+            id: event.id,
+            ...(callId ? { callId } : {}),
+            name,
+            args: "",
+            result,
+            startedAt: event.createdAt,
+            finishedAt: event.createdAt
+          },
+          createdAt: event.createdAt
+        });
+      } else if (entries[toolIndex]?.type === "tool") {
+        const current = entries[toolIndex] as Extract<ChatEntry, { type: "tool" }>;
+        entries[toolIndex] = {
+          ...current,
+          tool: {
+            ...current.tool,
+            result,
+            finishedAt: event.createdAt
+          }
+        };
+      }
+      activities.push({
+        id: event.id,
+        runId: event.runId ?? undefined,
+        type: event.type,
+        label: activityLabel(event),
+        status: activityStatus(event),
+        detail: activityDetail(event),
+        createdAt: event.createdAt
+      });
+      break;
+    }
     case "assistant_message_completed":
       if (messageId && index !== -1 && entries[index]?.type === "assistant") {
         const current = entries[index] as Extract<ChatEntry, { type: "assistant" }>;
@@ -379,6 +527,25 @@ function mostRecentThread(threads: ChatThread[]): ChatThread | null {
   return threads.reduce((latest, candidate) =>
     Date.parse(candidate.updatedAt) > Date.parse(latest.updatedAt) ? candidate : latest
   );
+}
+
+export function restorePreferredThread(threads: ChatThread[]) {
+  const active = readActiveThreadRestore();
+  if (active?.threadId) {
+    const match = threads.find((thread) => thread.id === active.threadId);
+    if (match) {
+      return {
+        thread: match,
+        screen: active.screen
+      };
+    }
+  }
+  const fallback = mostRecentThread(threads);
+  if (!fallback) return null;
+  return {
+    thread: fallback,
+    screen: screenForThread(fallback)
+  };
 }
 
 function AppHeader({
@@ -673,7 +840,7 @@ function normalizeAssistantMarkdown(content: string) {
   return content.replace(/<br\s*\/?>/gi, "\n");
 }
 
-function Messages({
+export function Messages({
   entries,
   busy,
   listRef
@@ -711,6 +878,28 @@ function Messages({
         }
 
         if (entry.type !== "assistant") {
+          if (entry.type === "tool") {
+            return (
+              <details key={entry.id} className="message-row tool-event fade-in" open>
+                <summary className="assistant-event">
+                  <div className="assistant-response">
+                    <span className="bullet-mark">•</span>{" "}
+                    <span className="mono">{entry.tool.name}</span>
+                  </div>
+                </summary>
+                <div className="tool-event-body">
+                  <div className="tool-event-section">
+                    <span className="tool-event-label">Arguments</span>
+                    <pre>{entry.tool.args || "(none)"}</pre>
+                  </div>
+                  <div className="tool-event-section">
+                    <span className="tool-event-label">Result</span>
+                    <pre>{entry.tool.result || "(running)"}</pre>
+                  </div>
+                </div>
+              </details>
+            );
+          }
           return null;
         }
 
@@ -1475,12 +1664,13 @@ export default function App() {
     }
     fetchCurrentUser(existing.token)
       .then((validated) => {
-        const restoredThread = mostRecentThread(stateRef.current.threads) ?? createThread("chat");
+        const restored = restorePreferredThread(stateRef.current.threads);
+        const restoredThread = restored?.thread ?? createThread("chat");
         saveAuthSession(validated);
         setSession(validated);
         setThread(restoredThread);
         threadRef.current = restoredThread;
-        setScreen(readLaunchScreen() === "integrations" ? "integrations" : screenForThread(restoredThread));
+        setScreen(readLaunchScreen() === "integrations" ? "integrations" : (restored?.screen ?? screenForThread(restoredThread)));
         fetchGitHubStatus(validated.token).then((status) => setGitHubStatus(status)).catch(() => setGitHubStatus(null));
       })
       .catch(() => saveAuthSession(null))
@@ -1582,9 +1772,9 @@ export default function App() {
     }
   }, [session, applyEventsToThread, upsertThread]);
 
-  const ensureStream = useCallback((candidate: ChatThread) => {
+  const ensureStream = useCallback((candidate: ChatThread, forceRestart = false) => {
     if (!session) return;
-    if (streamRef.current?.threadId === candidate.id) {
+    if (!forceRestart && streamRef.current?.threadId === candidate.id) {
       return;
     }
     streamRef.current?.close();
@@ -1652,10 +1842,21 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return;
+    if (screen === "chat" || screen === "purechat") {
+      saveActiveThreadRestore(thread.id, screen);
+      return;
+    }
+    if (screen === "login") {
+      clearActiveThreadRestore();
+    }
+  }, [session, thread.id, screen]);
+
+  useEffect(() => {
+    if (!session) return;
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
       const current = threadRef.current;
-      void hydrateThreadFromEvents(current, current.lastSeq ?? 0).then(() => ensureStream(threadRef.current));
+      void hydrateThreadFromEvents(current, current.lastSeq ?? 0).then(() => ensureStream(threadRef.current, true));
     };
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleVisibility);

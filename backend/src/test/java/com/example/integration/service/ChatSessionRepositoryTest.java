@@ -136,18 +136,20 @@ class ChatSessionRepositoryTest {
         // Mirrors ChatSessionService.appendActivity for the activity panel: tool call lifecycle
         // events carry no message id but must round-trip their metadata and ordering.
         repository.insertEvent(SESSION_ID, "run-1", null, 1, "tool_call_started", null,
-                null, Map.of("name", "read_file", "args", "{\"path\":\"a.txt\"}"), Instant.now());
+                null, Map.of("callId", "call-1", "name", "read_file", "args", "{\"path\":\"a.txt\"}"), Instant.now());
         repository.insertEvent(SESSION_ID, "run-1", null, 2, "tool_call_completed", null,
-                null, Map.of("name", "read_file", "result", "contents"), Instant.now());
+                null, Map.of("callId", "call-1", "name", "read_file", "result", "contents"), Instant.now());
 
         List<ChatSessionEvent> events = repository.readEvents(SESSION_ID, 0);
 
         assertThat(events).extracting(ChatSessionEvent::type)
                 .containsExactly("tool_call_started", "tool_call_completed");
         assertThat(events.get(0).metadata())
+                .containsEntry("callId", "call-1")
                 .containsEntry("name", "read_file")
                 .containsEntry("args", "{\"path\":\"a.txt\"}");
         assertThat(events.get(1).metadata())
+                .containsEntry("callId", "call-1")
                 .containsEntry("name", "read_file")
                 .containsEntry("result", "contents");
         // Tool activity has no associated message, so it must not leak into the replayed transcript.
@@ -171,23 +173,26 @@ class ChatSessionRepositoryTest {
         // assistant turn streamed token-by-token
         repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 2, "assistant_message_started", "assistant",
                 "", Map.of(), Instant.now());
-        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 3, "assistant_token", "assistant",
-                "It is ", Map.of(), Instant.now());
+        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 3, "assistant_reasoning", "assistant",
+                "Think first. ", Map.of(), Instant.now());
         repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 4, "assistant_token", "assistant",
+                "It is ", Map.of(), Instant.now());
+        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 5, "assistant_token", "assistant",
                 "sunny.", Map.of(), Instant.now());
-        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 5, "assistant_message_completed", "assistant",
+        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 6, "assistant_message_completed", "assistant",
                 "It is sunny.", Map.of(), Instant.now());
         // a run-level event without a message id should be ignored by the replay
-        repository.insertEvent(SESSION_ID, "run-1", null, 6, "run_completed", null,
+        repository.insertEvent(SESSION_ID, "run-1", null, 7, "run_completed", null,
                 null, Map.of(), Instant.now());
 
-        List<ChatMessage> transcript = repository.buildPriorMessages(SESSION_ID, 7);
+        List<ChatMessage> transcript = repository.buildPriorMessages(SESSION_ID, 8);
 
         assertThat(transcript).hasSize(2);
         assertThat(transcript.get(0).role()).isEqualTo("user");
         assertThat(transcript.get(0).content()).isEqualTo("What is the weather?");
         assertThat(transcript.get(1).role()).isEqualTo("assistant");
         assertThat(transcript.get(1).content()).isEqualTo("It is sunny.");
+        assertThat(transcript.get(1).reasoningContent()).isEqualTo("Think first. ");
     }
 
     @Test

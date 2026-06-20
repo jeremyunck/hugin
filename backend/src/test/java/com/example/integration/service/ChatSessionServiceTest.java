@@ -78,10 +78,12 @@ class ChatSessionServiceTest {
     void createMessagePersistsOrderedRunLifecycleEvents() {
         doAnswer(invocation -> {
             AgentStreamListener listener = invocation.getArgument(1);
+            listener.onReasoning("Think");
+            listener.onReasoning("ing");
             listener.onContent("Hel");
             listener.onContent("lo");
-            listener.onToolCall("read_file", "{}");
-            listener.onToolResult("read_file", "ok");
+            listener.onToolCall("call-1", "read_file", "{}");
+            listener.onToolResult("call-1", "read_file", "ok");
             return null;
         }).when(agentService).chatStream(any(), any(), any());
 
@@ -92,6 +94,8 @@ class ChatSessionServiceTest {
                 "user_message_created",
                 "run_started",
                 "assistant_message_started",
+                "assistant_reasoning",
+                "assistant_reasoning",
                 "assistant_token",
                 "assistant_token",
                 "tool_call_started",
@@ -101,11 +105,13 @@ class ChatSessionServiceTest {
 
         // Sequence numbers are gap-free and the acceptance points at the user message seq.
         assertThat(events).extracting(ChatSessionEvent::seq)
-                .containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L);
+                .containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L);
         assertThat(accepted.lastSeq()).isEqualTo(1L);
 
         // The completed assistant message holds the concatenated streamed tokens.
-        assertThat(events.get(7).content()).isEqualTo("Hello");
+        assertThat(events.get(9).content()).isEqualTo("Hello");
+        assertThat(events.get(7).metadata()).containsEntry("callId", "call-1");
+        assertThat(events.get(8).metadata()).containsEntry("callId", "call-1");
 
         // Every persisted event was published to the broker after commit, in the same order.
         assertThat(published).extracting(ChatSessionEvent::type)

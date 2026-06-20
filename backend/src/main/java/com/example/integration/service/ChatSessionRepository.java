@@ -196,6 +196,13 @@ public class ChatSessionRepository {
                         order.add(messageId);
                     }
                 }
+                case "assistant_reasoning" -> {
+                    ReplayMessage message = messagesById.computeIfAbsent(messageId, ignored -> new ReplayMessage("assistant"));
+                    message.reasoning += event.content() == null ? "" : event.content();
+                    if (!order.contains(messageId)) {
+                        order.add(messageId);
+                    }
+                }
                 case "assistant_token" -> {
                     ReplayMessage message = messagesById.computeIfAbsent(messageId, ignored -> new ReplayMessage("assistant"));
                     message.content += event.content() == null ? "" : event.content();
@@ -226,7 +233,7 @@ public class ChatSessionRepository {
             if ("user".equals(message.role)) {
                 transcript.add(ChatMessage.user(message.content == null ? "" : message.content, message.attachments));
             } else if ("assistant".equals(message.role) && message.content != null && !message.content.isBlank()) {
-                transcript.add(ChatMessage.assistant(message.content));
+                transcript.add(ChatMessage.assistant(message.content, message.reasoning.isBlank() ? null : message.reasoning));
             }
         }
         return transcript;
@@ -285,6 +292,7 @@ public class ChatSessionRepository {
     private static final class ReplayMessage {
         private final String role;
         private String content = "";
+        private String reasoning = "";
         private List<ChatAttachment> attachments = List.of();
 
         private ReplayMessage(String role) {
