@@ -24,5 +24,5 @@ Agents working in this repository should follow this workflow:
 7. Push the update.
 8. After each PR update, poll the PR every 20 seconds for reviewer comments until the reviewer comment check is finished, up to 1 minute total, then check the current PR rating.
 9. Continue that fix, push, and re-check cycle until the reviewer gives the PR a rating of at least `4/5`.
-10. Once the reviewer rating is at least `4/5`, wait for checks to finish and confirm there are no critical-level concerns left in review.
+10. Once the reviewer rating is at least `4/5`, poll the PR every 1 minute until all required checks finish.
 11. Merge once those conditions are satisfied.
