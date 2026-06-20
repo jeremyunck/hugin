@@ -880,7 +880,7 @@ export function Messages({
         if (entry.type !== "assistant") {
           if (entry.type === "tool") {
             return (
-              <details key={entry.id} className="message-row tool-event fade-in" open>
+              <details key={entry.id} className="message-row tool-event fade-in">
                 <summary className="assistant-event">
                   <div className="assistant-response">
                     <span className="bullet-mark">•</span>{" "}
@@ -1892,6 +1892,18 @@ export default function App() {
     setFiles([]);
     void refreshFiles(thread.sandboxId);
   }, [session, screen, thread.sandboxId, refreshFiles]);
+
+  // Refresh the sandbox file tree whenever a run finishes (busy true -> false), so
+  // files the agent created/edited during the run are reflected. The refresh in
+  // send()'s finally block only fires as the stream opens, before any tools run.
+  const prevBusyRef = useRef(busy);
+  useEffect(() => {
+    const justFinished = prevBusyRef.current && !busy;
+    prevBusyRef.current = busy;
+    if (justFinished && screen === "chat" && threadRef.current.sandboxId) {
+      void refreshFiles(threadRef.current.sandboxId);
+    }
+  }, [busy, screen, refreshFiles]);
 
   const signIn = useCallback(async () => {
     if (!username.trim() || !password.trim() || signingIn) return;

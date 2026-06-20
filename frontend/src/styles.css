@@ -559,6 +559,21 @@ select {
   width: min(88%, 100%);
 }
 
+/* Tool calls are collapsed by default; show a caret affordance that rotates open. */
+.tool-event > summary .assistant-response::after {
+  content: "›";
+  margin-left: 6px;
+  color: #8b9099;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.tool-event[open] > summary .assistant-response::after {
+  transform: rotate(90deg);
+}
+
 .tool-event-body {
   margin-top: 8px;
   border-left: 2px solid #eaebed;
