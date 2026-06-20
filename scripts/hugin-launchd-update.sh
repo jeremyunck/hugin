@@ -7,6 +7,8 @@ SERVICE_LABEL="${HUGIN_DEV_SERVICE_LABEL:-com.jnku.hugin.repo-server}"
 SERVICE_PLIST="${HUGIN_DEV_SERVICE_PLIST:-$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist}"
 UPDATE_LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
 DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
+DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
+REPO_URL="${HUGIN_DEV_REPO_URL:-}"
 
 info() { printf '[hugin-update] %s\n' "$*"; }
 warn() { printf '[hugin-update] %s\n' "$*" >&2; }
@@ -38,6 +40,7 @@ if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
   export AGENT_HOME="$DEV_HOME"
 fi
 mkdir -p "$AGENT_HOME"
+mkdir -p "$DEPLOY_REPO_DIR"
 
 if [[ -x /opt/homebrew/opt/openjdk@21/bin/java ]]; then
   export JAVA_HOME="/opt/homebrew/opt/openjdk@21"
@@ -49,37 +52,52 @@ else
 fi
 export PATH="$JAVA_HOME/bin:$PATH"
 
-cd "$REPO_DIR"
-
 if [[ ! -f "$SERVICE_PLIST" ]]; then
   warn "LaunchAgent plist not found at ${SERVICE_PLIST}."
   exit 1
 fi
 
-current_branch="$(git rev-parse --abbrev-ref HEAD)"
-if [[ "$current_branch" != "main" ]]; then
-  warn "Skipping update because checkout is on branch '$current_branch'."
-  exit 0
+if [[ ! -d "$DEPLOY_REPO_DIR/.git" ]]; then
+  if [[ -z "$REPO_URL" ]]; then
+    REPO_URL="$(git -C "$REPO_DIR" remote get-url origin)"
+  fi
+  info "Cloning deployment checkout into ${DEPLOY_REPO_DIR}..."
+  git clone "$REPO_URL" "$DEPLOY_REPO_DIR"
 fi
 
-if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
-  warn "Skipping update because the checkout has tracked local changes."
-  exit 0
-fi
+cd "$DEPLOY_REPO_DIR"
 
 info "Fetching origin/main..."
 git fetch origin main --prune
 
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$current_branch" != "main" ]]; then
+  info "Switching deployment checkout to main..."
+  git checkout main >/dev/null 2>&1 || git checkout -B main origin/main
+fi
+
 local_head="$(git rev-parse HEAD)"
 remote_head="$(git rev-parse origin/main)"
+built_jar=""
+if [[ -d "$DEPLOY_REPO_DIR/backend/target" ]]; then
+  built_jar="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
+fi
 
-if [[ "$local_head" == "$remote_head" ]]; then
+if [[ "$local_head" == "$remote_head" ]] \
+  && [[ -n "$built_jar" ]] \
+  && git diff --quiet --ignore-submodules -- \
+  && git diff --cached --quiet --ignore-submodules --; then
   info "No changes to deploy."
   exit 0
 fi
 
-info "Fast-forwarding to ${remote_head:0:7}..."
-git pull --ff-only origin main
+if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
+  info "Resetting dedicated deployment checkout to ${remote_head:0:7}..."
+  git reset --hard "$remote_head"
+else
+  info "Fast-forwarding to ${remote_head:0:7}..."
+  git merge --ff-only "$remote_head"
+fi
 
 info "Rebuilding frontend and backend artifacts..."
 # The backend Maven build runs the frontend build first, then packages the

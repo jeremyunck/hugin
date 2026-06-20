@@ -7,14 +7,16 @@ ENV_DIR="$HOME/.config/hugin-dev"
 ENV_FILE="$ENV_DIR/env"
 LOG_DIR="$REPO_DIR/.data/logs"
 DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
+DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
 SERVICE_LABEL="com.jnku.hugin.repo-server"
 UPDATE_LABEL="com.jnku.hugin.repo-autoupdate"
 SERVICE_PLIST="$LAUNCH_AGENTS_DIR/${SERVICE_LABEL}.plist"
 UPDATE_PLIST="$LAUNCH_AGENTS_DIR/${UPDATE_LABEL}.plist"
 RUN_SCRIPT="$REPO_DIR/scripts/hugin-launchd-run.sh"
 UPDATE_SCRIPT="$REPO_DIR/scripts/hugin-launchd-update.sh"
+REPO_URL="$(git -C "$REPO_DIR" remote get-url origin)"
 
-mkdir -p "$LAUNCH_AGENTS_DIR" "$ENV_DIR" "$LOG_DIR" "$DEV_HOME"
+mkdir -p "$LAUNCH_AGENTS_DIR" "$ENV_DIR" "$LOG_DIR" "$DEV_HOME" "$DEPLOY_REPO_DIR"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -67,6 +69,8 @@ append_if_set HUGIN_DEV_HOME "$DEV_HOME"
 append_if_set HUGIN_DEV_ENV_FILE "$ENV_FILE"
 append_if_set HUGIN_DEV_LOG_DIR "$LOG_DIR"
 append_if_set HUGIN_DEV_SERVICE_LABEL "$SERVICE_LABEL"
+append_if_set HUGIN_DEV_DEPLOY_REPO_DIR "$DEPLOY_REPO_DIR"
+append_if_set HUGIN_DEV_REPO_URL "$REPO_URL"
 chmod 600 "$ENV_FILE"
 
 cat > "$SERVICE_PLIST" <<EOF

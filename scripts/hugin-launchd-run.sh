@@ -5,6 +5,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HUGIN_DEV_ENV_FILE:-$HOME/.config/hugin-dev/env}"
 LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
 DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
+DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
 
 mkdir -p "$LOG_DIR"
 
@@ -31,11 +32,11 @@ else
 fi
 export PATH="$JAVA_HOME/bin:$PATH"
 
-cd "$REPO_DIR"
+cd "$DEPLOY_REPO_DIR"
 
-jar_path="$(find "$REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
+jar_path="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
 if [[ -z "$jar_path" ]]; then
-  printf '[hugin-run] Built backend jar not found under %s/backend/target\n' "$REPO_DIR" >&2
+  printf '[hugin-run] Built backend jar not found under %s/backend/target\n' "$DEPLOY_REPO_DIR" >&2
   exit 1
 fi
 
