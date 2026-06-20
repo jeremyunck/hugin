@@ -194,6 +194,12 @@ function clearLaunchScreen() {
   window.history.replaceState({}, "", url.toString());
 }
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function formatBytes(size?: number) {
   if (size == null) return "";
   if (size < 1024) return `${size} b`;
@@ -1116,12 +1122,14 @@ export function HistoryScreen(props: {
 
 function IntegrationsScreen(props: {
   integrations: Integration[];
+  loading: boolean;
+  error: string | null;
   busyId: string | null;
   onBack: () => void;
   onToggle: (integration: Integration) => void;
   onReconnect: (integration: Integration) => void;
 }) {
-  const { integrations, busyId, onBack, onToggle, onReconnect } = props;
+  const { integrations, loading, error, busyId, onBack, onToggle, onReconnect } = props;
 
   return (
     <>
@@ -1134,12 +1142,14 @@ function IntegrationsScreen(props: {
       <div className="screen-pad">
         <h1 className="screen-title integration-title">Integrations</h1>
         <p className="integration-subtitle">Manage your connected services. Connected tools are made available to Hugin.</p>
+        {loading ? <p className="integration-subtitle">Refreshing integration status…</p> : null}
+        {!loading && error ? <p className="login-error">{error}</p> : null}
       </div>
 
       <div className="integrations-list">
         <div className="history-group-label">SERVICES</div>
         {integrations.length === 0 ? (
-          <p className="history-empty">No integrations available.</p>
+          <p className="history-empty">{loading ? "Refreshing integrations…" : "No integrations available."}</p>
         ) : (
           integrations.map((integration) => (
             <div key={integration.id} className="integration-card">
@@ -1399,6 +1409,8 @@ export default function App() {
   const [pendingAutoPrompt, setPendingAutoPrompt] = useState<string | null>(null);
 
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsError, setIntegrationsError] = useState<string | null>(null);
   const [integrationBusy, setIntegrationBusy] = useState<string | null>(null);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [agentRunsLoading, setAgentRunsLoading] = useState(false);
@@ -1503,17 +1515,50 @@ export default function App() {
       .finally(() => setBooting(false));
   }, []);
 
+  const loadIntegrations = useCallback(
+    async (options?: { clearOnFailure?: boolean }) => {
+      if (!session) return null;
+      setIntegrationsLoading(true);
+      setIntegrationsError(null);
+      try {
+        const next = await fetchIntegrations(session.token);
+        setIntegrations(next);
+        return next;
+      } catch (e) {
+        if (options?.clearOnFailure) {
+          setIntegrations([]);
+        }
+        setIntegrationsError(e instanceof Error ? e.message : "Could not refresh integrations.");
+        return null;
+      } finally {
+        setIntegrationsLoading(false);
+      }
+    },
+    [session]
+  );
+
   useEffect(() => {
     if (!session || screen !== "integrations") return;
-    fetchIntegrations(session.token)
-      .then((next) => setIntegrations(next))
-      .catch(() => setIntegrations([]))
-      .finally(() => {
-        if (readLaunchScreen() === "integrations") {
-          clearLaunchScreen();
-        }
-      });
-  }, [session, screen]);
+    void loadIntegrations({ clearOnFailure: true }).finally(() => {
+      if (readLaunchScreen() === "integrations") {
+        clearLaunchScreen();
+      }
+    });
+  }, [session, screen, loadIntegrations]);
+
+  useEffect(() => {
+    if (!session || screen !== "integrations") return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadIntegrations();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [session, screen, loadIntegrations]);
 
   useEffect(() => {
     if (!session) return;
@@ -1834,12 +1879,19 @@ export default function App() {
     setMenuOpen(false);
     setBugReportNotice(null);
     if (!session) return;
-    try {
-      setIntegrations(await fetchIntegrations(session.token));
-    } catch {
-      setIntegrations([]);
+    await loadIntegrations({ clearOnFailure: true });
+  }, [screen, returnScreen, session, loadIntegrations]);
+
+  const pollGoogleIntegrationRefresh = useCallback(async () => {
+    if (!session) return;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const next = await loadIntegrations();
+      if (next?.find((integration) => integration.id === "google")?.connected) {
+        return;
+      }
+      await delay(1500);
     }
-  }, [screen, returnScreen, session]);
+  }, [session, loadIntegrations]);
 
   const openSettings = useCallback(async () => {
     setReturnScreen(screen === "settings" ? returnScreen : screen);
@@ -1906,9 +1958,15 @@ export default function App() {
         if (integration.id === "google") {
           if (integration.connected) {
             await disconnectGoogle(session.token);
+            setIntegrations((current) => current.map((item) => (
+              item.id === "google" ? { ...item, connected: false } : item
+            )));
           } else {
             const authUrl = await reconnectGoogle(session.token, window.location.href);
-            if (authUrl) window.open(authUrl, "_blank", "noopener");
+            if (authUrl) {
+              window.open(authUrl, "_blank", "noopener");
+              void pollGoogleIntegrationRefresh();
+            }
           }
         } else if (integration.id === "github") {
           if (integration.connected) {
@@ -1925,11 +1983,11 @@ export default function App() {
                 ? response.status.message
                 : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
             );
-            setIntegrations(await fetchIntegrations(session.token));
+            await loadIntegrations();
             return;
           }
         }
-        setIntegrations(await fetchIntegrations(session.token));
+        await loadIntegrations();
         setGitHubStatus(await fetchGitHubStatus(session.token));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Integration update failed.");
@@ -1947,7 +2005,12 @@ export default function App() {
       try {
         if (integration.id === "google") {
           const authUrl = await reconnectGoogle(session.token, window.location.href);
-          if (authUrl) window.open(authUrl, "_blank", "noopener");
+          if (authUrl) {
+            window.open(authUrl, "_blank", "noopener");
+            void pollGoogleIntegrationRefresh();
+          } else {
+            await loadIntegrations();
+          }
         } else if (integration.id === "github") {
           const response = await connectGitHub(session.token, window.location.href);
           const installUrl = response.installUrl;
@@ -1961,7 +2024,7 @@ export default function App() {
               : integration.message || "GitHub connect is unavailable until the GitHub App is configured."
           );
         }
-        setIntegrations(await fetchIntegrations(session.token));
+        await loadIntegrations();
         setGitHubStatus(await fetchGitHubStatus(session.token));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Integration update failed.");
@@ -2357,6 +2420,8 @@ export default function App() {
         ) : screen === "integrations" ? (
           <IntegrationsScreen
             integrations={integrations}
+            loading={integrationsLoading}
+            error={integrationsError}
             busyId={integrationBusy}
             onBack={() => setScreen(returnScreen)}
             onToggle={toggleIntegration}

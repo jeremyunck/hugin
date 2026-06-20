@@ -49,6 +49,20 @@ class IntegrationsControllerTest {
     }
 
     @Test
+    void googleListsDriveTools() throws Exception {
+        when(google.status()).thenReturn(new GoogleWorkspaceStatus(
+                true, true, true, "oauth", "Google OAuth is connected."));
+        when(github.status()).thenReturn(new GitHubStatus(
+                false, false, false, "github-app", "", "GitHub App is not configured."));
+
+        mockMvc.perform(get("/api/integrations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("google"))
+                .andExpect(jsonPath("$[0].tools[0]").value("google_drive_search"))
+                .andExpect(jsonPath("$[0].tools[1]").value("google_drive_read_file"));
+    }
+
+    @Test
     void githubListsPullRequestTool() throws Exception {
         when(google.status()).thenReturn(new GoogleWorkspaceStatus(
                 false, true, true, "oauth", "Google OAuth is not connected."));

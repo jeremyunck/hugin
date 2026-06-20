@@ -139,7 +139,7 @@ public class GoogleWorkspaceClientFactory {
                             true,
                             true,
                             "oauth",
-                            "Google OAuth is connected and the Docs, Sheets, Calendar, and Gmail tools are ready.");
+                            "Google OAuth is connected and the Drive, Docs, Sheets, Calendar, and Gmail tools are ready.");
                 }
                 return new GoogleWorkspaceStatus(
                         false,

@@ -56,6 +56,8 @@ class GoogleWorkspaceToolsTest {
     void allToolsReturnUnavailableMessageWithoutCredentials() throws Exception {
         GoogleWorkspaceClientFactory f = unconfiguredFactory();
         List<? extends com.example.agent.tool.LocalTool> tools = List.of(
+                new GoogleDriveSearchTool(f),
+                new GoogleDriveReadFileTool(f),
                 new GoogleDocsCreateTool(f),
                 new GoogleDocsReadTool(f),
                 new GoogleDocsEditTool(f),
@@ -70,7 +72,7 @@ class GoogleWorkspaceToolsTest {
         for (var tool : tools) {
             // document_id/spreadsheet_id are required by some tools but the unavailable check runs first.
             String result = tool.execute(Map.of(
-                    "document_id", "x", "spreadsheet_id", "x",
+                    "document_id", "x", "spreadsheet_id", "x", "fileId", "x",
                     "operation", "append", "text", "hi",
                     "range", "Sheet1!A1", "values", List.of(List.of("a"))));
             assertThat(result).as(tool.name()).contains("unavailable");
@@ -80,6 +82,8 @@ class GoogleWorkspaceToolsTest {
     @Test
     void toolNamesAndSchemasAreCorrect() {
         GoogleWorkspaceClientFactory f = unconfiguredFactory();
+        assertThat(new GoogleDriveSearchTool(f).name()).isEqualTo("google_drive_search");
+        assertThat(new GoogleDriveReadFileTool(f).name()).isEqualTo("google_drive_read_file");
         assertThat(new GoogleDocsCreateTool(f).name()).isEqualTo("google_docs_create");
         assertThat(new GoogleDocsReadTool(f).name()).isEqualTo("google_docs_read");
         assertThat(new GoogleDocsEditTool(f).name()).isEqualTo("google_docs_edit");
@@ -94,6 +98,18 @@ class GoogleWorkspaceToolsTest {
         @SuppressWarnings("unchecked")
         var props = (Map<String, ?>) new GoogleSheetsReadTool(f).inputSchema().get("properties");
         assertThat(props).containsKeys("spreadsheet_id", "range");
+    }
+
+    @Test
+    void driveToolSchemasExposeExpectedFields() {
+        GoogleWorkspaceClientFactory f = unconfiguredFactory();
+        @SuppressWarnings("unchecked")
+        var searchProps = (Map<String, ?>) new GoogleDriveSearchTool(f).inputSchema().get("properties");
+        assertThat(searchProps).containsKeys("query", "mimeType", "maxResults");
+
+        @SuppressWarnings("unchecked")
+        var readProps = (Map<String, ?>) new GoogleDriveReadFileTool(f).inputSchema().get("properties");
+        assertThat(readProps).containsKey("fileId");
     }
 
     @Test

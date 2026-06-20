@@ -196,8 +196,8 @@ auth:
     default-zone: ${SCHEDULER_DEFAULT_ZONE:}
 
 google:
-  # Google Workspace integration powering the google_docs_*, google_sheets_*,
-  # google_calendar_* and google_gmail_* tools.
+  # Google Workspace integration powering the google_drive_*, google_docs_*,
+  # google_sheets_*, google_calendar_* and google_gmail_* tools.
   #
   # Preferred setup for a personal install:
   #   1. In a Google Cloud project, enable the Google Docs, Sheets, Drive, Calendar and Gmail APIs.

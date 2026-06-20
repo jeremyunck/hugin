@@ -27,6 +27,7 @@ import java.util.List;
 public class IntegrationsController {
 
     private static final List<String> GOOGLE_TOOLS = List.of(
+            "google_drive_search", "google_drive_read_file",
             "google_docs_create", "google_docs_read", "google_docs_edit",
             "google_sheets_create", "google_sheets_read", "google_sheets_write", "google_sheets_append",
             "google_gmail_search", "google_gmail_read", "google_gmail_send",
@@ -74,7 +75,7 @@ public class IntegrationsController {
         return new IntegrationStatus(
                 "google",
                 "Google Workspace",
-                "Docs, Sheets, Gmail, and Calendar",
+                "Drive, Docs, Sheets, Gmail, and Calendar",
                 status.active(),
                 status.reconnectable(),
                 status.authMode(),
