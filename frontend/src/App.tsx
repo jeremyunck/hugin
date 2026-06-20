@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
-  BatteryFull,
   Bug,
   Box,
   Check,
@@ -26,12 +25,10 @@ import {
   RefreshCw,
   Search,
   Send,
-  Signal,
   SlidersHorizontal,
   Settings2,
   Trash2,
   User,
-  Wifi,
   X
 } from "lucide-react";
 
@@ -381,20 +378,6 @@ function mostRecentThread(threads: ChatThread[]): ChatThread | null {
   if (!threads.length) return null;
   return threads.reduce((latest, candidate) =>
     Date.parse(candidate.updatedAt) > Date.parse(latest.updatedAt) ? candidate : latest
-  );
-}
-
-function StatusBar() {
-  return (
-    <div className="status-bar">
-      <span className="status-time">9:41</span>
-      <div className="status-notch" />
-      <div className="status-icons">
-        <Signal size={16} strokeWidth={2.4} />
-        <Wifi size={16} strokeWidth={2.4} />
-        <BatteryFull size={22} strokeWidth={1.8} />
-      </div>
-    </div>
   );
 }
 
@@ -2282,7 +2265,6 @@ export default function App() {
     return (
       <div className="mock-page">
         <div className="device-shell">
-          <StatusBar />
           <div className="chat-body">
             <div className="greeting">
               <p>Loading…</p>
@@ -2299,8 +2281,6 @@ export default function App() {
   return (
     <div className="mock-page">
       <div className="device-shell">
-        <StatusBar />
-
         {!session || screen === "login" ? (
           <LoginScreen
             username={username}

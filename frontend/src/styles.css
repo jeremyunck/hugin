@@ -101,39 +101,6 @@ select {
   }
 }
 
-.status-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px 4px;
-  color: #1c1f23;
-  user-select: none;
-}
-
-.status-time {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.status-notch {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  height: 26px;
-  width: 96px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: #000;
-}
-
-.status-icons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .app-header {
   display: flex;
   align-items: center;
@@ -885,35 +852,46 @@ select {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
   border: 1px solid #eaebed;
   border-radius: 12px;
-  padding: 14px;
+  padding: 10px 8px 10px 14px;
   text-align: left;
-  cursor: pointer;
   transition: background 0.2s ease;
 }
 
-.history-card:active {
-  background: #fafafb;
+.history-card-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.history-card-main:active {
+  opacity: 0.7;
 }
 
 .history-card-delete {
-  display: flex;
+  display: inline-flex;
   width: 46px;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
   border: 1px solid #eaebed;
   border-radius: 12px;
   color: #8b9099;
   cursor: pointer;
   flex-shrink: 0;
   background: none;
+  padding: 0 10px;
   transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .history-card-delete:active {
-  background: #fafafb;
+  background: #f1f2f4;
+  opacity: 0.7;
 }
 
 .history-card-delete:hover {
@@ -939,6 +917,7 @@ select {
 
 .history-card-copy {
   min-width: 0;
+  flex: 1;
   line-height: 1.2;
 }
 
