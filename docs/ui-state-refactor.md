@@ -146,6 +146,10 @@ App
 | `openChatEventStream()` | guildService.ts | Keep but connect through store |
 | `recoverThreadAfterDroppedStream()` | guildService.ts | Keep or move to store |
 
+**Phase 2 constraint:** Phase 2 must not change backend APIs unless the frontend store proves an endpoint is missing.
+
+**Reducer invariant:** The same ordered event list must produce the exact same UI projection whether loaded from `GET /events` or received live through SSE.
+
 ## Backend Event Types (from ChatSessionService)
 
 | Event Type | Has messageId | Has runId | content | Has metadata |
