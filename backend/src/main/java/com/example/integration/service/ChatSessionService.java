@@ -7,6 +7,8 @@ import com.example.agent.AgentStreamListener;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
+import com.example.agent.tool.HomeWorkspaceService;
+import com.example.agent.tool.WorkspaceRegistry;
 import com.example.integration.controller.ChatSessionMessageRequest;
 import com.example.integration.modelsettings.ModelContextService;
 import org.slf4j.Logger;
@@ -53,6 +55,8 @@ public class ChatSessionService {
     private final AgentRunRegistry runRegistry;
     private final TransactionTemplate transactionTemplate;
     private final ModelContextService modelContextService;
+    private final WorkspaceRegistry workspaceRegistry;
+    private final HomeWorkspaceService homeWorkspaceService;
     private final String defaultModel;
 
     public ChatSessionService(ChatSessionRepository repository,
@@ -62,6 +66,8 @@ public class ChatSessionService {
                               AgentRunRegistry runRegistry,
                               TransactionTemplate transactionTemplate,
                               ModelContextService modelContextService,
+                              WorkspaceRegistry workspaceRegistry,
+                              HomeWorkspaceService homeWorkspaceService,
                               @Value("${llm.model:}") String defaultModel) {
         this.repository = repository;
         this.broker = broker;
@@ -70,6 +76,8 @@ public class ChatSessionService {
         this.runRegistry = runRegistry;
         this.transactionTemplate = transactionTemplate;
         this.modelContextService = modelContextService;
+        this.workspaceRegistry = workspaceRegistry;
+        this.homeWorkspaceService = homeWorkspaceService;
         this.defaultModel = defaultModel;
     }
 
@@ -115,6 +123,13 @@ public class ChatSessionService {
                           String runId,
                           long userMessageSeq,
                           ChatSessionMessageRequest request) {
+        // "Agent" mode runs the agent directly against the server's home directory (~/) rather than a
+        // Docker sandbox. Registering a home-rooted workspace by session id both roots the agent's
+        // filesystem/shell tools at ~/ and (via WorkspaceRegistry.isRegistered) grants those tools to a
+        // request that carries no sandbox id.
+        if ("AGENT".equalsIgnoreCase(request.mode())) {
+            workspaceRegistry.register(sessionId, homeWorkspaceService.workspace());
+        }
         List<ChatMessage> priorMessages = repository.buildPriorMessages(sessionId, userMessageSeq);
         AgentRequest agentRequest = new AgentRequest(
                 request.content(),

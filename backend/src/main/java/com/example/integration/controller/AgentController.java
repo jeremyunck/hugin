@@ -7,6 +7,8 @@ import com.example.agent.DeveloperModeService;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
+import com.example.agent.model.FileNode;
+import com.example.agent.tool.HomeWorkspaceService;
 import com.example.integration.agent.UserAgent;
 import com.example.integration.agent.UserAgentService;
 import com.example.integration.controller.BugReportSummaryResponse;
@@ -72,6 +74,7 @@ public class AgentController {
     private final BugReportService bugReportService;
     private final AgentRunRegistry runRegistry;
     private final AgentRunEventStore eventStore;
+    private final HomeWorkspaceService homeWorkspaceService;
 
     public AgentController(AgentService agentService,
                            ObjectMapper objectMapper,
@@ -82,6 +85,7 @@ public class AgentController {
                            AgentRunEventStore eventStore,
                            BugReportCatalogService bugReportCatalogService,
                            BugReportService bugReportService,
+                           HomeWorkspaceService homeWorkspaceService,
                            @Value("${agent.request-timeout:5m}") Duration requestTimeout) {
         this.agentService = agentService;
         this.objectMapper = objectMapper;
@@ -92,6 +96,7 @@ public class AgentController {
         this.eventStore = eventStore;
         this.bugReportCatalogService = bugReportCatalogService;
         this.bugReportService = bugReportService;
+        this.homeWorkspaceService = homeWorkspaceService;
         // Allow a margin beyond the agent's own deadline before the SSE connection is torn down.
         this.streamTimeoutMillis = requestTimeout.plusSeconds(60).toMillis();
     }
@@ -101,6 +106,13 @@ public class AgentController {
         // Mirror the dynamic tool set the agent would advertise for this request: a blank sandboxId
         // is a "pure chat" with no filesystem tools; a sandbox id includes the workspace tools.
         return agentService.availableTools(sandboxId);
+    }
+
+    @GetMapping("/workspace/files")
+    public ResponseEntity<List<FileNode>> workspaceFiles() {
+        // The "Agent" chat mode operates on the server's home directory (~/); expose its file tree so
+        // the UI workspace panel can render the structure even before the first agent run.
+        return ResponseEntity.ok(homeWorkspaceService.files());
     }
 
     @PostMapping("/chat")

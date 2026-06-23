@@ -15,7 +15,7 @@ describe("recoverThreadAfterDroppedStream", () => {
 
   it("rebuilds the thread from saved history after a dropped stream that already executed a tool", async () => {
     const baseThread: ChatThread = {
-      ...createThread("sandbox", { sandboxId: "sandbox-1" }),
+      ...createThread("github", { sandboxId: "sandbox-1" }),
       id: "thread-1",
       entries: [buildUserEntry("Please update the file.")]
     };

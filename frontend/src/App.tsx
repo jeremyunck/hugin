@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowLeft,
-  Box,
+  Bot,
   ChevronRight,
   Github,
   History,
@@ -17,7 +17,6 @@ import {
 
 import {
   connectGitHub,
-  createSandbox,
   createGitHubSandbox,
   createThread,
   deleteSandbox,
@@ -27,6 +26,7 @@ import {
   cancelAgentRun,
   fetchBugReports,
   fetchAgentRuns,
+  fetchAgentWorkspaceFiles,
   fetchGitHubBranches,
   fetchGitHubRepositories,
   fetchGitHubStatus,
@@ -75,12 +75,6 @@ const LOGO = "/hugin-bird.jpg";
 
 type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings" | "github-repo" | "agent-threads";
 
-const WORKSPACE_ACTION_RE =
-  /\b(debug|fix|edit|change|update|inspect|investigate|search|grep|find|open|read|write|modify|patch|refactor|run|build|test|render)\b/i;
-const WORKSPACE_TARGET_RE =
-  /\b(code|repo|repository|file|files|folder|directory|project|frontend|backend|component|markdown|ui|function|class|css|html|typescript|javascript|java|python|bash|shell|command)\b/i;
-const WORKSPACE_PATH_RE = /(^|\s)(\.\/|\/|~\/)[^\s]+/;
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -128,12 +122,6 @@ function buildGitHubBugReportPrompt(report: BugReportSummary) {
     "Before making changes, read `docs/skills/hugin-bug-reports/SKILL.md` and use that skill's workflow to inspect the bug report.",
     "Then diagnose the failure, add or update a regression test that covers it, and implement the fix."
   ].join(" ");
-}
-
-function promptNeedsWorkspace(prompt: string) {
-  return (WORKSPACE_ACTION_RE.test(prompt) && WORKSPACE_TARGET_RE.test(prompt))
-    || WORKSPACE_PATH_RE.test(prompt)
-    || prompt.includes("```");
 }
 
 function readLaunchScreen() {
@@ -193,6 +181,8 @@ function formatContext(value?: number | null) {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function screenForThread(thread: ChatThread): Screen {
+  // Agent and Project threads carry a workspace file tree, so they use the "chat" screen; a plain
+  // chat has no workspace and uses "purechat".
   return thread.kind === "chat" ? "purechat" : "chat";
 }
 
@@ -270,9 +260,9 @@ function RepoSetupScreen(props: {
       </div>
 
       <div className="screen-pad">
-        <h1 className="screen-title integration-title">GitHub repo chat</h1>
+        <h1 className="screen-title integration-title">Project</h1>
         <p className="integration-subtitle">
-          Pick a repository and branch, then Hugin will open a fresh sandbox with a clean pull of that branch.
+          Pick a repository and branch, then Hugin will open a fresh workspace with a clean pull of that branch.
         </p>
       </div>
 
@@ -342,7 +332,7 @@ function RepoSetupScreen(props: {
         {error ? <p className="login-error">{error}</p> : null}
 
         <button type="button" className="primary-button repo-confirm-button" onClick={onConfirm} disabled={!ready}>
-          {busy ? "Creating sandbox…" : "Open repo sandbox"}
+          {busy ? "Creating workspace…" : "Open project"}
         </button>
       </div>
     </>
@@ -354,7 +344,7 @@ function MenuOverlay(props: {
   roles: string[];
   githubConnected: boolean;
   onClose: () => void;
-  onSandbox: () => void;
+  onAgent: () => void;
   onGitHubRepo: () => void;
   onChat: () => void;
   onHistory: () => void;
@@ -362,7 +352,7 @@ function MenuOverlay(props: {
   onIntegrations: () => void;
   onSettings: () => void;
 }) {
-  const { username, roles, githubConnected, onClose, onSandbox, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings } = props;
+  const { username, roles, githubConnected, onClose, onAgent, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings } = props;
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
@@ -380,14 +370,14 @@ function MenuOverlay(props: {
             <MessageCirclePlus size={18} strokeWidth={2} color={COLORS.ink} />
             <span>New chat</span>
           </button>
-          <button type="button" className="menu-item" onClick={onSandbox}>
-            <Box size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>New sandbox</span>
+          <button type="button" className="menu-item" onClick={onAgent}>
+            <Bot size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>Agent</span>
           </button>
           {githubConnected ? (
             <button type="button" className="menu-item" onClick={onGitHubRepo}>
               <Github size={18} strokeWidth={2} color={COLORS.ink} />
-              <span>GitHub repo chat</span>
+              <span>Project</span>
             </button>
           ) : null}
           <button type="button" className="menu-item" onClick={onHistory}>
@@ -719,6 +709,10 @@ export default function App() {
   // store object identity (which would otherwise re-run the file-loading effect every render).
   const activeSandboxRef = useRef<string | undefined>(thread?.sandboxId);
   activeSandboxRef.current = thread?.sandboxId;
+  // Mirror the active thread kind so post-run file refreshes know whether to read the host (~/) tree
+  // (Agent mode) or a sandbox tree (Project mode).
+  const activeKindRef = useRef(thread?.kind);
+  activeKindRef.current = thread?.kind;
 
   useEffect(() => {
     integrationsVisibleRef.current = screen === "integrations";
@@ -859,25 +853,43 @@ export default function App() {
     [session]
   );
 
+  // Loads the server home directory (~/) file tree that backs Agent-mode chats.
+  const refreshAgentFiles = useCallback(async () => {
+    if (!session) return;
+    try {
+      setFiles(await fetchAgentWorkspaceFiles(session.token));
+    } catch {
+      setFiles([]);
+    }
+  }, [session]);
+
   useEffect(() => {
-    if (!session || screen !== "chat" || !thread?.sandboxId) {
+    if (!session || screen !== "chat" || !thread) {
       setFiles([]);
       return;
     }
     setFiles([]);
-    void refreshFiles(thread.sandboxId);
-  }, [session, screen, thread?.sandboxId, refreshFiles]);
+    if (thread.kind === "agent") {
+      void refreshAgentFiles();
+    } else if (thread.sandboxId) {
+      void refreshFiles(thread.sandboxId);
+    }
+  }, [session, screen, thread?.id, thread?.kind, thread?.sandboxId, refreshFiles, refreshAgentFiles]);
 
-  // Refresh the sandbox file tree whenever a run finishes (busy true -> false), so files the agent
+  // Refresh the workspace file tree whenever a run finishes (busy true -> false), so files the agent
   // created/edited during the run are reflected.
   const prevBusyRef = useRef(busy);
   useEffect(() => {
     const justFinished = prevBusyRef.current && !busy;
     prevBusyRef.current = busy;
-    if (justFinished && screen === "chat" && activeSandboxRef.current) {
-      void refreshFiles(activeSandboxRef.current);
+    if (justFinished && screen === "chat") {
+      if (activeKindRef.current === "agent") {
+        void refreshAgentFiles();
+      } else if (activeSandboxRef.current) {
+        void refreshFiles(activeSandboxRef.current);
+      }
     }
-  }, [busy, screen, refreshFiles]);
+  }, [busy, screen, refreshFiles, refreshAgentFiles]);
 
   const signIn = useCallback(async () => {
     if (!username.trim() || !password.trim() || signingIn) return;
@@ -914,7 +926,7 @@ export default function App() {
     setMenuOpen(false);
   }, [store]);
 
-  const startSandbox = useCallback(async () => {
+  const startAgent = useCallback(() => {
     if (!session) return;
     setMenuOpen(false);
     setHistoryQuery("");
@@ -923,20 +935,12 @@ export default function App() {
     setFiles([]);
     setWsOpen(true);
     setDraftAttachment(null);
-    setWorkspaceBusy(true);
-    try {
-      const sandbox = await createSandbox(session.token);
-      store.switchThread(createThread("sandbox", { sandboxId: sandbox.id }));
-      setScreen("chat");
-      void refreshFiles(sandbox.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start a sandbox.");
-      store.switchThread(createThread("sandbox"));
-      setScreen("chat");
-    } finally {
-      setWorkspaceBusy(false);
-    }
-  }, [session, store, refreshFiles]);
+    // Agent mode runs against the server home directory (~/); no sandbox is provisioned. The thread
+    // is created locally and the home file tree is loaded for the workspace panel.
+    store.switchThread(createThread("agent"));
+    setScreen("chat");
+    void refreshAgentFiles();
+  }, [session, store, refreshAgentFiles]);
 
   const openHistory = useCallback(
     (item: ChatThread) => {
@@ -945,11 +949,11 @@ export default function App() {
       setBugReportNotice(null);
       setError(null);
       setMenuOpen(false);
-      if (item.kind === "sandbox") {
+      if (item.kind === "agent") {
         setScreen("chat");
         setFiles([]);
         setWsOpen(true);
-        if (item.sandboxId) void refreshFiles(item.sandboxId);
+        void refreshAgentFiles();
       } else if (item.kind === "github") {
         setScreen("chat");
         setFiles([]);
@@ -959,7 +963,7 @@ export default function App() {
         setScreen("purechat");
       }
     },
-    [store, refreshFiles]
+    [store, refreshFiles, refreshAgentFiles]
   );
 
   const deleteThread = useCallback(
@@ -1178,24 +1182,7 @@ export default function App() {
         ? current.reasoningEffort
         : defaultReasoningFor(selectedModel);
 
-      let sandboxId = current.sandboxId;
-      if (!sandboxId && promptNeedsWorkspace(text)) {
-        setWorkspaceBusy(true);
-        setError(null);
-        try {
-          const sandbox = await createSandbox(session.token);
-          sandboxId = sandbox.id;
-          store.patchThread(current.id, { kind: current.kind === "github" ? "github" : "sandbox", sandboxId });
-          setScreen("chat");
-          setWsOpen(true);
-          void refreshFiles(sandbox.id);
-        } catch (e) {
-          setWorkspaceBusy(false);
-          setError(e instanceof Error ? e.message : "Could not start a sandbox for this task.");
-          return;
-        }
-        setWorkspaceBusy(false);
-      }
+      const sandboxId = current.sandboxId;
 
       setDraft("");
       setDraftAttachment(null);
@@ -1207,17 +1194,18 @@ export default function App() {
         ? getThreadTitle(text || attachment?.name || "Image attachment")
         : current.title;
       store.patchThread(current.id, {
-        ...(sandboxId ? { kind: current.kind === "github" ? "github" as const : "sandbox" as const, sandboxId } : {}),
         modelId: selectedModel.id,
         reasoningEffort: selectedReasoning,
         title,
         updatedAt: nowIso()
       });
 
+      const mode = current.kind === "github" ? "GITHUB" : current.kind === "agent" ? "AGENT" : "CHAT";
+
       try {
         await store.sendMessage(current.id, {
           content: text,
-          mode: current.kind === "github" ? "GITHUB" : sandboxId ? "SANDBOX" : "CHAT",
+          mode,
           title,
           attachments: attachment ? [attachment] : undefined,
           model: selectedModel.id,
@@ -1227,10 +1215,14 @@ export default function App() {
       } catch (e) {
         setError(e instanceof Error ? e.message : "The agent request failed.");
       } finally {
-        if (sandboxId) void refreshFiles(sandboxId);
+        if (current.kind === "agent") {
+          void refreshAgentFiles();
+        } else if (sandboxId) {
+          void refreshFiles(sandboxId);
+        }
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, models, store]
+    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store]
   );
 
   useEffect(() => {
@@ -1489,11 +1481,11 @@ export default function App() {
                 onToggleWs={() => setWsOpen((current) => !current)}
                 label={thread.kind === "github"
                   ? `${thread.repoName ?? thread.repoFullName ?? "repo"} · ${thread.branchName ?? "branch"}`
-                  : `~/sandbox/${thread.id.slice(0, 8)}`}
+                  : "~/"}
                 rootName={thread.kind === "github"
                   ? (thread.repoName ?? thread.repoFullName ?? "repo")
-                  : `sandbox-${thread.id.slice(0, 8)}`}
-                badge={thread.kind === "github" ? "github" : "sandbox"}
+                  : "~"}
+                badge={thread.kind === "github" ? "github" : "agent"}
                 defaultOpenDirectories={thread.kind !== "github"}
               />
             ) : null}
@@ -1589,7 +1581,7 @@ export default function App() {
             roles={session.roles}
             githubConnected={githubStatus?.active === true}
             onClose={() => setMenuOpen(false)}
-            onSandbox={startSandbox}
+            onAgent={startAgent}
             onGitHubRepo={openGitHubRepoSetup}
             onChat={startChat}
             onHistory={() => {

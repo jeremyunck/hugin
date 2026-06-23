@@ -67,14 +67,14 @@ export function WorkspacePanel(props: {
   badge: string;
   defaultOpenDirectories: boolean;
 }) {
-  const { sessionId, files, wsOpen, onToggleWs, label, rootName, badge, defaultOpenDirectories } = props;
+  const { files, wsOpen, onToggleWs, label, rootName, badge, defaultOpenDirectories } = props;
 
   return (
     <div className="file-tree">
       <TreeRow>
         <ChevronDown size={13} color={COLORS.faint} />
         <Network size={14} strokeWidth={2} color={COLORS.ink} />
-        <span className="mono">{label || `~/sandbox/${sessionId.slice(0, 8)}`}</span>
+        <span className="mono">{label || "~/"}</span>
         <span className="tree-badge">{badge}</span>
       </TreeRow>
 

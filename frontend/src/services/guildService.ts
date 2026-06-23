@@ -57,7 +57,7 @@ type ChatEventsResponse = {
 
 type SendChatMessageOptions = {
   content: string;
-  mode: "CHAT" | "SANDBOX" | "GITHUB";
+  mode: "CHAT" | "AGENT" | "GITHUB";
   title: string;
   attachments?: ChatAttachment[];
   model?: string;
@@ -266,10 +266,10 @@ type CreateThreadOptions = {
 
 export function createThread(kind: ChatKind = "chat", options: CreateThreadOptions = {}): ChatThread {
   const createdAt = nowIso();
-  const title = kind === "sandbox"
-    ? "New sandbox"
+  const title = kind === "agent"
+    ? "New agent"
     : kind === "github"
-    ? `${options.repoFullName ?? "GitHub repo"}${options.branchName ? ` (${options.branchName})` : ""}`
+    ? `${options.repoFullName ?? "Project"}${options.branchName ? ` (${options.branchName})` : ""}`
     : "New chat";
   return {
     id: uid("thread"),
@@ -635,8 +635,9 @@ export function removeThread(state: AppState, threadId: string): AppState {
   };
 }
 
-export async function createSandbox(token: string): Promise<SandboxInfo> {
-  return apiFetch<SandboxInfo>("/api/sandboxes", { method: "POST", body: JSON.stringify({}) }, token);
+/** Lists the server home directory (~/) file tree backing the "Agent" chat mode. */
+export async function fetchAgentWorkspaceFiles(token: string): Promise<FileNode[]> {
+  return apiFetch<FileNode[]>("/api/agent/workspace/files", {}, token);
 }
 
 export async function createGitHubSandbox(

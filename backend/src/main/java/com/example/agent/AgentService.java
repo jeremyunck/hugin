@@ -402,12 +402,15 @@ public class AgentService {
         // sandbox id; otherwise fall back to the session id, preserving the previous behaviour.
         String workspaceKey = firstNonBlank(request.sandboxId(), request.sessionId());
         Workspace workspace = workspaceRegistry.resolve(workspaceKey);
-        List<ToolDefinition> initialToolDefinitions = collectTools(workspace, includeWorkspaceTools);
+        // Host-backed agent sessions (the "Agent" mode rooted at ~/) register a workspace by session id
+        // but carry no sandbox, so grant them filesystem/shell tools when a workspace is registered.
+        boolean workspaceTools = includeWorkspaceTools || workspaceRegistry.isRegistered(workspaceKey);
+        List<ToolDefinition> initialToolDefinitions = collectTools(workspace, workspaceTools);
 
         log.debug("Agent chat: model={}, route={}, decisionModel={}, tools available={} (local={}), "
                         + "workspaceTools={}, stream={}",
                 model, routing.route(), routing.decisionModel(), initialToolDefinitions.size(),
-                localTools.tools().size(), includeWorkspaceTools, stream);
+                localTools.tools().size(), workspaceTools, stream);
 
         List<ChatMessage> messages = new ArrayList<>();
         systemFactsService.ifPresent(sfs -> {
@@ -424,7 +427,7 @@ public class AgentService {
         }
         workspaceRegistry.githubRepo(request.sandboxId()).ifPresent(repoFullName ->
                 messages.add(ChatMessage.system(Prompts.githubRepoContext(repoFullName))));
-        if (includeWorkspaceTools) {
+        if (workspaceTools) {
             String skillPrompt = Prompts.workspaceSkills(WorkspaceSkills.list(workspace));
             if (!skillPrompt.isBlank()) {
                 messages.add(ChatMessage.system(skillPrompt));
@@ -467,7 +470,7 @@ public class AgentService {
 
             // Rebuild the tool list on every loop iteration so freshly written local manifests
             // become visible without a service restart.
-            List<ToolDefinition> toolDefinitions = collectTools(workspace, includeWorkspaceTools);
+            List<ToolDefinition> toolDefinitions = collectTools(workspace, workspaceTools);
 
             // Keep the growing transcript (prior turns + this turn's accumulating tool results) within
             // the model's context window so the provider does not reject the next call for being too long.

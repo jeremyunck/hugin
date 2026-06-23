@@ -224,7 +224,7 @@ function storeReducer(state: StoreState, action: StoreAction): StoreState {
 
 export type SendMessageInput = {
   content: string;
-  mode: "CHAT" | "SANDBOX" | "GITHUB";
+  mode: "CHAT" | "AGENT" | "GITHUB";
   title: string;
   attachments?: ChatAttachment[];
   model?: string;

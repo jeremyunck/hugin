@@ -56,19 +56,19 @@ describe("FileTree", () => {
     expect(screen.getByText("README.md")).toBeTruthy();
   });
 
-  it("collapses the root folder in sandbox chats as well", async () => {
+  it("collapses the root folder in agent chats as well", async () => {
     const user = userEvent.setup();
     function Wrapper() {
       const [open, setOpen] = useState(true);
       return (
         <FileTree
-          sessionId="sandbox-12345678"
+          sessionId="agent-12345678"
           files={githubFiles}
           wsOpen={open}
           onToggleWs={() => setOpen((current) => !current)}
-          label="~/sandbox/12345678"
-          rootName="sandbox-12345678"
-          badge="sandbox"
+          label="~/"
+          rootName="~"
+          badge="agent"
           defaultOpenDirectories={true}
         />
       );
@@ -76,7 +76,7 @@ describe("FileTree", () => {
 
     render(<Wrapper />);
 
-    await user.click(screen.getByText("sandbox-12345678"));
+    await user.click(screen.getByText("~"));
 
     expect(screen.queryByText("frontend")).toBeNull();
     expect(screen.queryByText("README.md")).toBeNull();

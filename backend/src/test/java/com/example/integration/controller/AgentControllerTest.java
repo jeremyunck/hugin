@@ -65,6 +65,9 @@ class AgentControllerTest {
     @Mock
     AgentRunEventStore eventStore;
 
+    @Mock
+    com.example.agent.tool.HomeWorkspaceService homeWorkspaceService;
+
     ObjectMapper objectMapper = new ObjectMapper();
     AgentRunRegistry runRegistry = new AgentRunRegistry();
     AgentController controller;
@@ -81,6 +84,7 @@ class AgentControllerTest {
                 eventStore,
                 bugReportCatalogService,
                 bugReportService,
+                homeWorkspaceService,
                 Duration.ofMinutes(5)
         );
     }
@@ -138,6 +142,19 @@ class AgentControllerTest {
         ArgumentCaptor<AgentRequest> requestCaptor = ArgumentCaptor.forClass(AgentRequest.class);
         verify(agentService).chat(requestCaptor.capture(), eq("global"));
         assertThat(requestCaptor.getValue().sessionId()).isEqualTo("session-123");
+    }
+
+    @Test
+    void workspaceFilesEndpointReturnsHomeFileTree() {
+        var tree = List.of(
+                com.example.agent.model.FileNode.directory("src", "src", List.of()),
+                com.example.agent.model.FileNode.file("README.md", "README.md", 12L));
+        when(homeWorkspaceService.files()).thenReturn(tree);
+
+        ResponseEntity<List<com.example.agent.model.FileNode>> result = controller.workspaceFiles();
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isEqualTo(tree);
     }
 
     @Test
@@ -432,6 +449,7 @@ class AgentControllerTest {
                 eventStore,
                 bugReportCatalogService,
                 bugReportService,
+                homeWorkspaceService,
                 Duration.ofMinutes(5)
         ) {
             @Override

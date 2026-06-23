@@ -38,6 +38,15 @@ public class WorkspaceRegistry {
     }
 
     /**
+     * Whether an explicit (non-default) workspace is registered for {@code sessionId}. Used to grant
+     * filesystem/shell tools to host-backed agent sessions that have a registered workspace but no
+     * Docker sandbox.
+     */
+    public boolean isRegistered(String sessionId) {
+        return sessionId != null && !sessionId.isBlank() && bySessionId.containsKey(sessionId);
+    }
+
+    /**
      * Records the {@code owner/repo} a GitHub-repo sandbox was cloned from, so requests bound to this
      * session can be given repository-specific system context.
      */

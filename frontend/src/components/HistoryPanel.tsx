@@ -1,5 +1,5 @@
 import {
-  Box,
+  Bot,
   ChevronRight,
   GitBranch,
   MessageSquare,
@@ -73,8 +73,8 @@ export function HistoryPanel(props: {
                   <div key={thread.id} className="history-card-row">
                     <button type="button" className="history-card" onClick={() => onOpen(thread)}>
                       <div className="history-card-icon">
-                        {thread.kind === "sandbox" ? (
-                          <Box size={17} strokeWidth={2} color={COLORS.ink} />
+                        {thread.kind === "agent" ? (
+                          <Bot size={17} strokeWidth={2} color={COLORS.ink} />
                         ) : thread.kind === "github" ? (
                           <GitBranch size={17} strokeWidth={2} color={COLORS.ink} />
                         ) : (

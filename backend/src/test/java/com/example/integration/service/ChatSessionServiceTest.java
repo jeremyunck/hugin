@@ -29,6 +29,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChatSessionServiceTest {
@@ -42,6 +44,8 @@ class ChatSessionServiceTest {
     private ChatSessionService service;
     private ModelContextService modelContextService;
     private TransactionTemplate transactionTemplate;
+    private com.example.agent.tool.WorkspaceRegistry workspaceRegistry;
+    private com.example.agent.tool.HomeWorkspaceService homeWorkspaceService;
     private List<ChatSessionEvent> published;
 
     @BeforeEach
@@ -79,9 +83,31 @@ class ChatSessionServiceTest {
         modelContextService = mock(ModelContextService.class);
         when(modelContextService.contextLimit(any())).thenReturn(java.util.Optional.empty());
 
+        workspaceRegistry = mock(com.example.agent.tool.WorkspaceRegistry.class);
+        homeWorkspaceService = mock(com.example.agent.tool.HomeWorkspaceService.class);
+
         service = new ChatSessionService(
                 repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate,
-                modelContextService, "model-x");
+                modelContextService, workspaceRegistry, homeWorkspaceService, "model-x");
+    }
+
+    @Test
+    void agentModeRegistersHomeWorkspaceForTheSession() {
+        com.example.agent.tool.Workspace homeWorkspace =
+                mock(com.example.agent.tool.Workspace.class);
+        when(homeWorkspaceService.workspace()).thenReturn(homeWorkspace);
+
+        service.createMessage(SESSION_ID, OWNER, agentRequest("List my files"));
+
+        verify(workspaceRegistry).register(SESSION_ID, homeWorkspace);
+    }
+
+    @Test
+    void chatModeDoesNotRegisterAHomeWorkspace() {
+        service.createMessage(SESSION_ID, OWNER, request("Hi"));
+
+        verify(workspaceRegistry, never()).register(any(), any());
+        verify(homeWorkspaceService, never()).workspace();
     }
 
     @Test
@@ -290,5 +316,9 @@ class ChatSessionServiceTest {
 
     private static ChatSessionMessageRequest request(String content) {
         return new ChatSessionMessageRequest(content, "CHAT", "Title", List.of(), "model-x", "low", null);
+    }
+
+    private static ChatSessionMessageRequest agentRequest(String content) {
+        return new ChatSessionMessageRequest(content, "AGENT", "Title", List.of(), "model-x", "low", null);
     }
 }

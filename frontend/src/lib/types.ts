@@ -70,7 +70,7 @@ export type ChatActivity = {
   createdAt: string;
 };
 
-export type ChatKind = "chat" | "sandbox" | "github";
+export type ChatKind = "chat" | "agent" | "github";
 
 export type ConnectionStatus = "idle" | "connecting" | "open" | "reconnecting" | "error";
 
