@@ -97,3 +97,17 @@ create table if not exists chat_events (
 
 create index if not exists idx_chat_events_session_seq on chat_events(session_id, seq);
 create index if not exists idx_chat_events_run_seq on chat_events(run_id, seq);
+
+-- Persistent binding between a GitHub project chat and its cloned-on-disk workspace. The clone lives
+-- under $AGENT_HOME/workspace/<repo>-<short-id>/ and survives restarts; this row lets the agent
+-- rehydrate the workspace (and re-clone it if the directory was removed) when a chat is resumed long
+-- after the in-memory sandbox registration was lost.
+create table if not exists github_workspaces (
+    sandbox_id varchar(36) primary key,
+    repo_full_name varchar(255) not null,
+    branch varchar(255),
+    clone_url text not null,
+    workspace_path text not null,
+    created_at timestamp with time zone not null default current_timestamp,
+    updated_at timestamp with time zone not null default current_timestamp
+);

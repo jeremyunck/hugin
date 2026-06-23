@@ -58,10 +58,11 @@ class DockerSandboxManagerBugReportTest {
                 "token-123",
                 bugReport);
 
-        assertThat(sandbox.containerName()).startsWith("host-fallback-");
-        // The repository is cloned into the workspace root itself (no nested workspace/<repo> dir),
-        // so the workspace directory is named after the repo and the report lives at its root.
-        assertThat(Path.of(sandbox.workspace()).getFileName().toString()).isEqualTo("origin");
+        assertThat(sandbox.containerName()).startsWith("github-workspace-");
+        // The repository is cloned into a persistent workspace directory named "<repo>-<short-id>"
+        // under $AGENT_HOME/workspace/, and the report lives at the clone (workspace) root.
+        assertThat(Path.of(sandbox.workspace()).getParent().getFileName().toString()).isEqualTo("workspace");
+        assertThat(Path.of(sandbox.workspace()).getFileName().toString()).startsWith("origin-");
         Path clonedReport = Path.of(sandbox.workspace())
                 .resolve("bug-reports/2026-06-18/hung-chat.txt");
         assertThat(clonedReport).exists();

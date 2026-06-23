@@ -153,6 +153,12 @@ agent:
   # directory becomes the agent's confined workspace; chat/stream requests target it via "sandboxId"
   # and run_bash is executed inside that container (docker exec). File tools operate on the host-side
   # bind-mount, so file edits and shell commands share one workspace path.
+  #
+  # GitHub project chats (POST /api/sandboxes/github) do NOT use Docker: the selected repository is
+  # cloned into a persistent, host-backed workspace at ${agent.home}/workspace/<repo>-<short-id>/ and
+  # the agent's tools run from inside that clone. The binding is persisted (github_workspaces table)
+  # so a chat resumed after a restart rehydrates to the same directory rather than losing its repo
+  # context, and the settings below (image/docker-bin/network) do not apply to it.
   sandbox:
     # Master switch for the /api/sandboxes endpoints and sandbox-routed shell execution.
     enabled: ${SANDBOX_ENABLED:true}

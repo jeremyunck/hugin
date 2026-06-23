@@ -21,8 +21,20 @@ public class WorkspaceRegistry {
     private final ConcurrentHashMap<String, Workspace> bySessionId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> githubRepoBySessionId = new ConcurrentHashMap<>();
 
+    /**
+     * Optional hook that restores a persisted workspace whose in-memory registration was lost (e.g.
+     * after a restart). Wired in by the integration module after construction to avoid a dependency
+     * cycle; {@code null} when no implementation is present.
+     */
+    private volatile WorkspaceRehydrator rehydrator;
+
     public WorkspaceRegistry(Workspace defaultWorkspace) {
         this.defaultWorkspace = defaultWorkspace;
+    }
+
+    /** Registers the hook used to lazily restore persisted workspaces on a cache miss. */
+    public void setRehydrator(WorkspaceRehydrator rehydrator) {
+        this.rehydrator = rehydrator;
     }
 
     /** Returns the workspace registered for {@code sessionId}, or the default when absent/null. */
@@ -30,7 +42,11 @@ public class WorkspaceRegistry {
         if (sessionId == null || sessionId.isBlank()) {
             return defaultWorkspace;
         }
-        return bySessionId.getOrDefault(sessionId, defaultWorkspace);
+        Workspace workspace = bySessionId.get(sessionId);
+        if (workspace == null && rehydrate(sessionId)) {
+            workspace = bySessionId.get(sessionId);
+        }
+        return workspace == null ? defaultWorkspace : workspace;
     }
 
     public void register(String sessionId, Workspace workspace) {
@@ -43,7 +59,13 @@ public class WorkspaceRegistry {
      * Docker sandbox.
      */
     public boolean isRegistered(String sessionId) {
-        return sessionId != null && !sessionId.isBlank() && bySessionId.containsKey(sessionId);
+        if (sessionId == null || sessionId.isBlank()) {
+            return false;
+        }
+        if (bySessionId.containsKey(sessionId)) {
+            return true;
+        }
+        return rehydrate(sessionId) && bySessionId.containsKey(sessionId);
     }
 
     /**
@@ -62,11 +84,27 @@ public class WorkspaceRegistry {
         if (sessionId == null || sessionId.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(githubRepoBySessionId.get(sessionId));
+        String repo = githubRepoBySessionId.get(sessionId);
+        if (repo == null && rehydrate(sessionId)) {
+            repo = githubRepoBySessionId.get(sessionId);
+        }
+        return Optional.ofNullable(repo);
     }
 
     public void unregister(String sessionId) {
         bySessionId.remove(sessionId);
         githubRepoBySessionId.remove(sessionId);
+    }
+
+    /**
+     * Asks the rehydrator (when present) to restore {@code sessionId}. No-ops to {@code false} when no
+     * rehydrator is wired or an entry already exists, so callers can use it as a cheap miss handler.
+     */
+    private boolean rehydrate(String sessionId) {
+        WorkspaceRehydrator hook = rehydrator;
+        if (hook == null || bySessionId.containsKey(sessionId)) {
+            return bySessionId.containsKey(sessionId);
+        }
+        return hook.rehydrate(sessionId);
     }
 }
