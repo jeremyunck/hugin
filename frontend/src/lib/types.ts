@@ -11,6 +11,8 @@ export type StreamToolEvent = {
   name: string;
   args: string;
   result: string;
+  /** True when the tool call finished with an error rather than a normal result. */
+  error?: boolean;
   startedAt: string;
   finishedAt?: string;
 };
@@ -48,6 +50,13 @@ export type ChatEntry =
       id: string;
       type: "tool";
       tool: StreamToolEvent;
+      createdAt: string;
+    }
+  | {
+      /** An inline system notice in the transcript, e.g. that the conversation was compacted. */
+      id: string;
+      type: "notice";
+      content: string;
       createdAt: string;
     };
 

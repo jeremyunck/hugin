@@ -4,6 +4,7 @@ import com.example.agent.AgentRunRegistry;
 import com.example.agent.AgentService;
 import com.example.agent.AgentStreamListener;
 import com.example.integration.controller.ChatSessionMessageRequest;
+import com.example.integration.modelsettings.ModelContextService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ChatSessionServiceTest {
 
@@ -37,6 +39,8 @@ class ChatSessionServiceTest {
     private ChatSessionRepository repository;
     private AgentService agentService;
     private ChatSessionService service;
+    private ModelContextService modelContextService;
+    private TransactionTemplate transactionTemplate;
     private List<ChatSessionEvent> published;
 
     @BeforeEach
@@ -67,11 +71,16 @@ class ChatSessionServiceTest {
             return null;
         }).when(inlineExecutor).execute(any(Runnable.class));
 
-        TransactionTemplate transactionTemplate =
+        transactionTemplate =
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
+        // No OpenRouter context limit in unit tests, so compaction never triggers by default.
+        modelContextService = mock(ModelContextService.class);
+        when(modelContextService.contextLimit(any())).thenReturn(java.util.Optional.empty());
+
         service = new ChatSessionService(
-                repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate);
+                repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate,
+                modelContextService, "model-x");
     }
 
     @Test
@@ -90,6 +99,8 @@ class ChatSessionServiceTest {
         ChatSessionMessageAcceptance accepted = service.createMessage(SESSION_ID, OWNER, request("Hi"));
 
         List<ChatSessionEvent> events = repository.readEvents(SESSION_ID, 0);
+        // The assistant bubble closes when the tool call starts, so tool cards interleave inline:
+        // the assistant message is completed before the tool-call events, not after them.
         assertThat(events).extracting(ChatSessionEvent::type).containsExactly(
                 "user_message_created",
                 "run_started",
@@ -98,9 +109,9 @@ class ChatSessionServiceTest {
                 "assistant_reasoning",
                 "assistant_token",
                 "assistant_token",
+                "assistant_message_completed",
                 "tool_call_started",
                 "tool_call_completed",
-                "assistant_message_completed",
                 "run_completed");
 
         // Sequence numbers are gap-free and the acceptance points at the user message seq.
@@ -109,9 +120,9 @@ class ChatSessionServiceTest {
         assertThat(accepted.lastSeq()).isEqualTo(1L);
 
         // The completed assistant message holds the concatenated streamed tokens.
-        assertThat(events.get(9).content()).isEqualTo("Hello");
-        assertThat(events.get(7).metadata()).containsEntry("callId", "call-1");
+        assertThat(events.get(7).content()).isEqualTo("Hello");
         assertThat(events.get(8).metadata()).containsEntry("callId", "call-1");
+        assertThat(events.get(9).metadata()).containsEntry("callId", "call-1");
 
         // Every persisted event was published to the broker after commit, in the same order.
         assertThat(published).extracting(ChatSessionEvent::type)
@@ -133,6 +144,47 @@ class ChatSessionServiceTest {
                 "assistant_message_error",
                 "run_error");
         assertThat(events.get(3).metadata()).containsEntry("message", "upstream exploded");
+    }
+
+    @Test
+    void createMessageCompactsConversationWhenContextWindowWouldOverflow() {
+        // A tiny advertised context window so the existing history trips the compaction threshold.
+        when(modelContextService.contextLimit(any())).thenReturn(java.util.Optional.of(100L));
+        // Seed a prior turn so there is something to compact.
+        repository.upsertSession(SESSION_ID, OWNER, "Title", "CHAT", Instant.now());
+        transactionTemplate.executeWithoutResult(status -> {
+            Instant now = Instant.now();
+            long s1 = repository.nextSeq(SESSION_ID, now);
+            repository.insertEvent(SESSION_ID, "run-0", "user-0", s1, "user_message_created", "user",
+                    "an earlier question", java.util.Map.of(), now);
+            long s2 = repository.nextSeq(SESSION_ID, now);
+            repository.insertEvent(SESSION_ID, "run-0", "assistant-0", s2, "assistant_message_completed", "assistant",
+                    "an earlier answer", java.util.Map.of(), now);
+        });
+
+        when(agentService.summarizeForCompaction(any(), any())).thenReturn("Compact briefing of the earlier chat.");
+        doAnswer(invocation -> {
+            AgentStreamListener listener = invocation.getArgument(1);
+            listener.onContent("Sure.");
+            return null;
+        }).when(agentService).chatStream(any(), any(), any());
+
+        service.createMessage(SESSION_ID, OWNER, request("Another question"));
+
+        // A compaction marker was recorded for the UI / future replay.
+        List<ChatSessionEvent> events = repository.readEvents(SESSION_ID, 0);
+        assertThat(events).extracting(ChatSessionEvent::type).contains("conversation_compacted");
+        ChatSessionEvent marker = events.stream()
+                .filter(event -> event.type().equals("conversation_compacted")).findFirst().orElseThrow();
+        assertThat(marker.metadata()).containsEntry("summary", "Compact briefing of the earlier chat.");
+
+        // The agent ran against the compacted prior context (a single system summary), not the full log.
+        org.mockito.ArgumentCaptor<com.example.agent.model.AgentRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.agent.model.AgentRequest.class);
+        org.mockito.Mockito.verify(agentService).chatStream(captor.capture(), any(), any());
+        assertThat(captor.getValue().priorMessages()).hasSize(1);
+        assertThat(captor.getValue().priorMessages().get(0).role()).isEqualTo("system");
+        assertThat(captor.getValue().priorMessages().get(0).content()).contains("Compact briefing of the earlier chat.");
     }
 
     @Test

@@ -44,6 +44,30 @@ public class OpenRouterModelRepository {
                         toInstant(rs.getTimestamp("updated_at"))));
     }
 
+    public java.util.Optional<OpenRouterModelRecord> findById(String id) {
+        if (id == null || id.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return jdbcTemplate.query(
+                """
+                        select id, name, description, context_length, prompt_price, completion_price,
+                               reasoning_options, supported_parameters, updated_at
+                        from openrouter_models
+                        where id = ?
+                        """,
+                (rs, rowNum) -> new OpenRouterModelRecord(
+                        rs.getString("id"),
+                        rs.getString("name"),
+                        rs.getString("description"),
+                        rs.getObject("context_length") == null ? null : rs.getLong("context_length"),
+                        rs.getString("prompt_price"),
+                        rs.getString("completion_price"),
+                        readList(rs.getString("reasoning_options")),
+                        readList(rs.getString("supported_parameters")),
+                        toInstant(rs.getTimestamp("updated_at"))),
+                id).stream().findFirst();
+    }
+
     public Instant latestUpdate() {
         Timestamp timestamp = jdbcTemplate.query(
                 "select max(updated_at) as updated_at from openrouter_models",

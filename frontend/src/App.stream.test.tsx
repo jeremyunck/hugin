@@ -36,7 +36,7 @@ function event(overrides: Partial<ChatEvent> & Pick<ChatEvent, "id" | "seq" | "t
 }
 
 describe("chat session stream replay", () => {
-  it("projects assistant reasoning into chat and tool events into activity", () => {
+  it("projects assistant reasoning into chat and tool calls inline", () => {
     const rebuilt = [
       event({
         id: "evt-1",
@@ -80,20 +80,18 @@ describe("chat session stream replay", () => {
       })
     ].reduce(reduceChatEvent, baseThread());
 
-    // The main chat carries only the assistant message; tool calls live in the activity projection.
-    expect(rebuilt.entries.map((entry) => entry.type)).toEqual(["assistant"]);
+    // The transcript carries the assistant message plus the tool call inline; nothing is diverted to
+    // the separate activity projection.
+    expect(rebuilt.entries.map((entry) => entry.type)).toEqual(["assistant", "tool"]);
     const assistant = rebuilt.entries[0];
     expect(assistant.type === "assistant" ? assistant.reasoning : "").toBe("Thinking...");
-    expect((rebuilt.activities ?? []).map((activity) => activity.type)).toEqual([
-      "tool_call_started",
-      "tool_call_completed"
-    ]);
+    expect((rebuilt.activities ?? []).some((activity) => activity.type.startsWith("tool_call"))).toBe(false);
 
     render(<Messages entries={rebuilt.entries} busy={false} listRef={{ current: null }} />);
     expect(screen.getByText("Thinking...")).toBeTruthy();
     expect(screen.getByText("Updated the file.")).toBeTruthy();
-    // The tool name does not leak into the main chat transcript.
-    expect(screen.queryByText("read_file")).toBeNull();
+    // The tool call now renders inline in the transcript, surfacing the tool name.
+    expect(screen.getByText("read_file")).toBeTruthy();
   });
 
   it("restores the previously active thread from local storage after a reload", () => {

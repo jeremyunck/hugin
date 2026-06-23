@@ -209,6 +209,32 @@ class ChatSessionRepositoryTest {
     }
 
     @Test
+    void buildPriorMessagesRestartsFromCompactionBoundary() {
+        // Pre-compaction turn that should be replaced by the summary.
+        repository.insertEvent(SESSION_ID, "run-1", "user-1", 1, "user_message_created", "user",
+                "old question", Map.of(), Instant.now());
+        repository.insertEvent(SESSION_ID, "run-1", "assistant-1", 2, "assistant_message_completed", "assistant",
+                "old answer", Map.of(), Instant.now());
+        // Compaction marker carrying the summary that seeds the replayed context.
+        repository.insertEvent(SESSION_ID, "run-2", null, 3, "conversation_compacted", null,
+                "Conversation compacted.", Map.of("summary", "User asked an old question; it was answered."),
+                Instant.now());
+        // Post-compaction turn that should still be replayed verbatim.
+        repository.insertEvent(SESSION_ID, "run-2", "user-2", 4, "user_message_created", "user",
+                "new question", Map.of(), Instant.now());
+        repository.insertEvent(SESSION_ID, "run-2", "assistant-2", 5, "assistant_message_completed", "assistant",
+                "new answer", Map.of(), Instant.now());
+
+        List<ChatMessage> transcript = repository.buildPriorMessages(SESSION_ID, 6);
+
+        // The pre-compaction turn is gone; a system summary leads, followed by the post-compaction turn.
+        assertThat(transcript).extracting(ChatMessage::role).containsExactly("system", "user", "assistant");
+        assertThat(transcript.get(0).content()).contains("User asked an old question");
+        assertThat(transcript.get(1).content()).isEqualTo("new question");
+        assertThat(transcript.get(2).content()).isEqualTo("new answer");
+    }
+
+    @Test
     void sessionOwnershipChecksAreScopedToOwner() {
         assertThat(repository.sessionExists(SESSION_ID)).isTrue();
         assertThat(repository.sessionExistsForOwner(SESSION_ID, OWNER)).isTrue();

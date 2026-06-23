@@ -115,6 +115,31 @@ class OpenAiClientStreamTest {
         assertThat(message.content()).isEqualTo("The time is 12:00.");
     }
 
+    @Test
+    void reassemblesReasoningFromOpenRouterReasoningField() throws IOException {
+        // OpenRouter streams chain-of-thought under `reasoning` rather than `reasoning_content`.
+        String sse = """
+                data: {"choices":[{"index":0,"delta":{"reasoning":"Let me think. "},"finish_reason":null}]}
+
+                data: {"choices":[{"index":0,"delta":{"reasoning":"Almost there."},"finish_reason":null}]}
+
+                data: {"choices":[{"index":0,"delta":{"content":"Done."},"finish_reason":"stop"}]}
+
+                data: [DONE]
+
+                """;
+        OpenAiClient client = clientServing(sse);
+
+        List<String> reasoningTokens = new ArrayList<>();
+        ChatResponse response = client.chatStream(
+                "m", List.of(ChatMessage.user("hi")), List.of(), delta -> {}, reasoningTokens::add);
+
+        ChatMessage message = response.choices().get(0).message();
+        assertThat(reasoningTokens).containsExactly("Let me think. ", "Almost there.");
+        assertThat(message.reasoningContent()).isEqualTo("Let me think. Almost there.");
+        assertThat(message.content()).isEqualTo("Done.");
+    }
+
     private OpenAiClient clientServing(String sseBody) throws IOException {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {

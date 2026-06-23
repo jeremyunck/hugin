@@ -173,6 +173,26 @@ public final class Prompts {
             Do not explain your answer.""";
 
     /**
+     * Prompt used to compact a long conversation into a compact briefing that can seed a fresh
+     * conversation thread without exceeding the model's context window. The model is asked to
+     * preserve the durable facts, decisions, and open threads while dropping turn-by-turn chatter.
+     */
+    public static final String COMPACT_CONVERSATION = """
+            You are compacting a long assistant conversation so it can continue within a smaller
+            context window. Produce a faithful, self-contained briefing that lets the assistant pick
+            up exactly where things left off.
+
+            Capture, in concise prose or bullet points:
+            - The user's goals and any standing instructions or preferences.
+            - Key facts, decisions, and conclusions reached so far.
+            - Important results from tools, files, or commands that remain relevant.
+            - Open questions and the next steps that were in progress.
+
+            Omit greetings, acknowledgements, and redundant back-and-forth. Do not invent details that
+            were not in the conversation. Write the summary as context for the assistant, not as a
+            message to the user.""";
+
+    /**
      * Builds the initial system prompt for a user-created agent.
      *
      * <p>The returned prompt is stored with the agent record and injected as a system message on

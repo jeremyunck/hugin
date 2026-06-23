@@ -67,21 +67,33 @@ describe("reduceChatEvent", () => {
 
   it("rebuilds the same messages from a fetched event list", () => {
     const result = reduceChatEvents(baseThread(), FULL_TURN);
-    expect(result.entries.map((entry) => entry.type)).toEqual(["user", "assistant"]);
+    expect(result.entries.map((entry) => entry.type)).toEqual(["user", "assistant", "tool"]);
     const assistant = result.entries[1];
     expect(assistant.type === "assistant" ? assistant.content : "").toBe("Done.");
     expect(assistant.type === "assistant" ? assistant.reasoning : "").toBe("Thinking...");
     expect(assistant.type === "assistant" ? Boolean(assistant.completedAt) : false).toBe(true);
   });
 
-  it("routes tool events to the activity projection, never the main chat", () => {
+  it("projects tool events inline into the chat transcript, merging start and result", () => {
     const result = reduceChatEvents(baseThread(), FULL_TURN);
-    // No tool entries in the chat transcript.
-    expect(result.entries.some((entry) => entry.type === "tool")).toBe(false);
-    // Tool start + completion are present in the activity projection.
-    const toolActivities = (result.activities ?? []).filter((activity) => activity.type.startsWith("tool_call"));
-    expect(toolActivities.map((activity) => activity.type)).toEqual(["tool_call_started", "tool_call_completed"]);
-    expect(toolActivities[1].detail).toBe("# Hugin");
+    const tools = result.entries.filter((entry) => entry.type === "tool");
+    expect(tools).toHaveLength(1);
+    const tool = tools[0];
+    expect(tool.type === "tool" ? tool.tool.name : "").toBe("read_file");
+    expect(tool.type === "tool" ? tool.tool.args : "").toBe("{\"path\":\"README.md\"}");
+    expect(tool.type === "tool" ? tool.tool.result : "").toBe("# Hugin");
+    expect(tool.type === "tool" ? Boolean(tool.tool.finishedAt) : false).toBe(true);
+    // Tool calls no longer leak into the separate activity projection.
+    expect((result.activities ?? []).some((activity) => activity.type.startsWith("tool_call"))).toBe(false);
+  });
+
+  it("projects a conversation_compacted event as an inline notice", () => {
+    const result = reduceChatEvents(baseThread(), [
+      event({ id: "c1", seq: 1, type: "conversation_compacted", content: "Conversation compacted.", metadata: { summary: "earlier" }, createdAt: "2026-06-20T00:00:01.000Z" })
+    ]);
+    const notices = result.entries.filter((entry) => entry.type === "notice");
+    expect(notices).toHaveLength(1);
+    expect(notices[0].type === "notice" ? notices[0].content : "").toBe("Conversation compacted.");
   });
 
   it("updates run state on failure without losing messages", () => {

@@ -2,6 +2,17 @@ import type { ChatActivity, ChatAttachment, ChatEntry, ChatRun, ChatThread } fro
 import type { ChatEvent } from "../services/guildService";
 
 /**
+ * Tool-call events are projected inline into the chat transcript as expandable tool entries, so the
+ * model's tool use reads in chronological order alongside its messages. The compaction marker becomes
+ * an inline notice. Everything else (run lifecycle, misc status) stays in the activity projection.
+ */
+const TOOL_EVENT_TYPES = new Set<string>([
+  "tool_call_started",
+  "tool_call_completed",
+  "tool_call_error"
+]);
+
+/**
  * Pure, idempotent projection of the backend chat event log into a {@link ChatThread}.
  *
  * Invariant: the same ordered event list MUST produce the exact same UI projection whether it
@@ -32,13 +43,16 @@ const CHAT_EVENT_TYPES = new Set<string>([
 /**
  * Classifier for the chat/activity boundary.
  *
- * Today the backend emits tool output exclusively through `tool_call_*` events, so the rule is
- * simply "anything that is not a user/assistant message is activity". If a future (or legacy)
- * backend ever encodes tool output as an `assistant_*` message, extend this classifier to detect
- * and divert those payloads — this is the single documented seam for that workaround.
+ * Chat-stream events — user/assistant messages, tool calls, and the compaction notice — are projected
+ * inline into the transcript. Everything else (run lifecycle, misc status/debug) is activity.
  */
 export function isActivityEvent(type: string): boolean {
-  return !CHAT_EVENT_TYPES.has(type);
+  return !CHAT_EVENT_TYPES.has(type) && !isInlineEntryEvent(type);
+}
+
+/** Whether an event is projected inline into the chat transcript rather than the activity list. */
+export function isInlineEntryEvent(type: string): boolean {
+  return TOOL_EVENT_TYPES.has(type) || type === "conversation_compacted";
 }
 
 function metadataString(event: ChatEvent, key: string): string | undefined {
@@ -117,6 +131,71 @@ function reduceRun(run: ChatRun | null, event: ChatEvent): ChatRun | null {
 
 function asAssistant(entry: ChatEntry | undefined): Extract<ChatEntry, { type: "assistant" }> | null {
   return entry?.type === "assistant" ? entry : null;
+}
+
+/**
+ * Projects a tool-call event into an inline tool entry. `tool_call_started` opens the entry (keyed by
+ * its backend call id so the matching result can find it); `tool_call_completed` / `tool_call_error`
+ * fill in the result and mark it finished. Out-of-order/duplicate delivery is tolerated: a result with
+ * no prior start still materializes an entry, and a re-applied start is a no-op.
+ */
+function reduceToolEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] {
+  const callId = metadataString(event, "callId");
+  const name = metadataString(event, "name") ?? "tool";
+  const next = entries.slice();
+  const index = next.findIndex(
+    (entry) => entry.type === "tool" && (callId ? entry.tool.callId === callId : entry.id === event.id)
+  );
+
+  if (event.type === "tool_call_started") {
+    if (index !== -1) return entries; // idempotent re-delivery
+    next.push({
+      id: event.id,
+      type: "tool",
+      tool: {
+        id: event.id,
+        callId,
+        name,
+        args: metadataString(event, "args") ?? "",
+        result: "",
+        startedAt: event.createdAt
+      },
+      createdAt: event.createdAt
+    });
+    return next;
+  }
+
+  // tool_call_completed / tool_call_error
+  const result = metadataString(event, "result") ?? metadataString(event, "message") ?? event.content ?? "";
+  const isError = event.type === "tool_call_error";
+  if (index === -1) {
+    next.push({
+      id: event.id,
+      type: "tool",
+      tool: { id: event.id, callId, name, args: "", result, error: isError, startedAt: event.createdAt, finishedAt: event.createdAt },
+      createdAt: event.createdAt
+    });
+    return next;
+  }
+  const existing = next[index] as Extract<ChatEntry, { type: "tool" }>;
+  next[index] = { ...existing, tool: { ...existing.tool, result, error: isError, finishedAt: event.createdAt } };
+  return next;
+}
+
+/** Projects a `conversation_compacted` event into an inline notice entry. */
+function reduceNoticeEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] {
+  if (entries.some((entry) => entry.type === "notice" && entry.id === event.id)) {
+    return entries;
+  }
+  return [
+    ...entries,
+    {
+      id: event.id,
+      type: "notice",
+      content: event.content ?? "Conversation compacted to fit the model's context window.",
+      createdAt: event.createdAt
+    }
+  ];
 }
 
 function reduceMessageEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] {
@@ -225,7 +304,11 @@ export function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThrea
   let activities = thread.activities ?? [];
   let run = thread.run ?? null;
 
-  if (isActivityEvent(event.type)) {
+  if (isInlineEntryEvent(event.type)) {
+    entries = event.type === "conversation_compacted"
+      ? reduceNoticeEntry(entries, event)
+      : reduceToolEntry(entries, event);
+  } else if (isActivityEvent(event.type)) {
     activities = [...activities, buildActivity(event)];
     run = reduceRun(run, event);
   } else {

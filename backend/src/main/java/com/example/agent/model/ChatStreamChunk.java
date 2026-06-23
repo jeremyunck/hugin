@@ -25,8 +25,20 @@ public record ChatStreamChunk(List<Choice> choices) {
             String role,
             String content,
             @JsonProperty("reasoning_content") String reasoningContent,
+            // OpenRouter (the default provider) streams chain-of-thought under `reasoning` rather
+            // than the DeepSeek-style `reasoning_content`. Capture both so reasoning models surface
+            // their thinking regardless of which field the upstream provider uses.
+            @JsonProperty("reasoning") String reasoning,
             @JsonProperty("tool_calls") List<ToolCallDelta> toolCalls
-    ) {}
+    ) {
+        /** The reasoning fragment for this delta, preferring the explicit field that is populated. */
+        public String reasoningText() {
+            if (reasoningContent != null && !reasoningContent.isEmpty()) {
+                return reasoningContent;
+            }
+            return reasoning;
+        }
+    }
 
     /**
      * A partial tool call. {@code id}/{@code name} typically arrive in the first chunk for a given

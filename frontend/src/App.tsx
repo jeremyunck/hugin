@@ -1503,7 +1503,6 @@ export default function App() {
               <ChatPanel
                 name={name}
                 entries={thread.entries}
-                activities={thread.activities ?? []}
                 busy={busy}
                 listRef={listRef}
                 draft={draft}

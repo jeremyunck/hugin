@@ -392,6 +392,120 @@ select {
   margin-top: -2px;
 }
 
+.message-row-tool {
+  justify-content: flex-start;
+}
+
+.message-row-notice {
+  justify-content: center;
+}
+
+/* ── Inline tool calls ─────────────────────────────────────────────────────── */
+
+.tool-call {
+  max-width: 88%;
+  min-width: 0;
+  border: 1px solid #e4e5e8;
+  border-radius: 12px;
+  background: #fafafb;
+  overflow: hidden;
+}
+
+.tool-call-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: #30353d;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tool-call-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-call-caret {
+  color: #8b9099;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+.tool-call[open] > .tool-call-summary .tool-call-caret {
+  transform: rotate(90deg);
+}
+
+.tool-call-icon {
+  color: #8b9099;
+  flex: none;
+}
+
+.tool-call-name {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.tool-call-status {
+  margin-left: auto;
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #bfc3ca;
+  flex: none;
+}
+
+.tool-call-status-running {
+  background: #d28b16;
+}
+
+.tool-call-status-completed {
+  background: #20a65a;
+}
+
+.tool-call-status-error {
+  background: #e5484d;
+}
+
+.tool-call-body {
+  border-top: 1px solid #ececef;
+  padding: 8px 12px 10px;
+}
+
+.tool-call-section-label {
+  margin-top: 6px;
+  color: #8b9099;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tool-call-section-label:first-child {
+  margin-top: 0;
+}
+
+.tool-call-pre {
+  margin: 4px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #5c626c;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+.message-notice {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #f1f2f4;
+  color: #8b9099;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .message-bubble {
   max-width: 100%;
   min-width: 0;

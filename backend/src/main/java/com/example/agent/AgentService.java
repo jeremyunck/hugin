@@ -135,6 +135,71 @@ public class AgentService {
     }
 
     /**
+     * Compacts a transcript into a compact briefing the caller can use to seed a fresh, shorter
+     * conversation. Runs a single non-streaming model call with {@link Prompts#COMPACT_CONVERSATION}
+     * and no tools. Returns the summary text, or {@code null} if the model produced nothing usable.
+     *
+     * @param model        the model to summarize with; falls back to the configured default when blank
+     * @param priorMessages the conversation turns to compress (oldest first)
+     */
+    public String summarizeForCompaction(String model, List<ChatMessage> priorMessages) {
+        if (priorMessages == null || priorMessages.isEmpty()) {
+            return null;
+        }
+        String summaryModel = firstNonBlank(model, defaultModel);
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(ChatMessage.system(Prompts.COMPACT_CONVERSATION));
+        messages.add(ChatMessage.system("Conversation to compact:\n" + renderTranscript(priorMessages)));
+        messages.add(ChatMessage.user("Produce the compacted briefing now."));
+        ChatResponse response = llmClient.chat(summaryModel, messages, List.of());
+        ChatResponse.Choice choice = firstChoice(response);
+        if (choice == null || choice.message() == null) {
+            return null;
+        }
+        String content = choice.message().content();
+        return content == null || content.isBlank() ? null : content.trim();
+    }
+
+    /** Renders a transcript as plain role-tagged text for summarization input. */
+    private static String renderTranscript(List<ChatMessage> messages) {
+        StringBuilder sb = new StringBuilder();
+        for (ChatMessage message : messages) {
+            if (message == null || message.content() == null || message.content().isBlank()) {
+                continue;
+            }
+            String role = message.role() == null ? "assistant" : message.role();
+            sb.append(role.toUpperCase(Locale.ROOT)).append(": ").append(message.content().trim()).append("\n\n");
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Rough token estimate for a list of messages. Uses the common ~4-characters-per-token heuristic
+     * plus a small per-message overhead for role framing, which is accurate enough to drive a
+     * conservative compaction threshold without pulling in a model-specific tokenizer.
+     */
+    public static int estimateTokens(List<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        long chars = 0;
+        int overhead = 0;
+        for (ChatMessage message : messages) {
+            if (message == null) {
+                continue;
+            }
+            overhead += 4;
+            if (message.content() != null) {
+                chars += message.content().length();
+            }
+            if (message.reasoningContent() != null) {
+                chars += message.reasoningContent().length();
+            }
+        }
+        return (int) (chars / 4) + overhead;
+    }
+
+    /**
      * Streaming variant of {@link #chat}: assistant text is delivered token-by-token via
      * {@code listener} as it arrives from the model, and tool calls are reported as the loop runs
      * them. Returns the same {@link AgentResponse} (final answer plus full conversation history)

@@ -298,9 +298,10 @@ public class OpenAiClient {
                     content.append(delta.content());
                     onContentDelta.accept(delta.content());
                 }
-                if (delta.reasoningContent() != null && !delta.reasoningContent().isEmpty()) {
-                    reasoningContent.append(delta.reasoningContent());
-                    onReasoningDelta.accept(delta.reasoningContent());
+                String reasoningDelta = delta.reasoningText();
+                if (reasoningDelta != null && !reasoningDelta.isEmpty()) {
+                    reasoningContent.append(reasoningDelta);
+                    onReasoningDelta.accept(reasoningDelta);
                 }
                 if (delta.toolCalls() != null) {
                     for (ChatStreamChunk.ToolCallDelta tc : delta.toolCalls()) {

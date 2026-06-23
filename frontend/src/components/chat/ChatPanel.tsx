@@ -1,8 +1,7 @@
 import { type RefObject } from "react";
 
-import type { ChatActivity, ChatAttachment, ChatEntry, ModelOption } from "../../lib/types";
+import type { ChatAttachment, ChatEntry, ModelOption } from "../../lib/types";
 import { MessageList } from "./MessageList";
-import { ActivityPanel } from "./ActivityPanel";
 import { Composer } from "./Composer";
 
 const CHIPS = [
@@ -36,7 +35,6 @@ function Greeting({ name, onChip }: { name: string; onChip: (prompt: string) => 
 export function ChatPanel(props: {
   name: string;
   entries: ChatEntry[];
-  activities: ChatActivity[];
   busy: boolean;
   listRef: RefObject<HTMLDivElement>;
   draft: string;
@@ -61,7 +59,6 @@ export function ChatPanel(props: {
       ) : (
         <div className="chat-stack">
           <MessageList entries={props.entries} busy={props.busy} listRef={props.listRef} />
-          <ActivityPanel activities={props.activities} />
         </div>
       )}
       <Composer

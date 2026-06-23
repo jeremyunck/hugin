@@ -174,9 +174,24 @@ public class ChatSessionRepository {
                 order by seq asc
                 """, chatEventRowMapper(), sessionId, beforeSeq);
 
+        // A compaction marker replaces everything before it with a single summary message. Honor the
+        // most recent one so replayed context starts from the compaction boundary, not the full log.
+        long compactionSeq = -1;
+        String compactionSummary = null;
+        for (ChatSessionEvent event : events) {
+            if ("conversation_compacted".equals(event.type())) {
+                compactionSeq = event.seq();
+                Object summary = event.metadata().get("summary");
+                compactionSummary = summary == null ? null : summary.toString();
+            }
+        }
+
         Map<String, ReplayMessage> messagesById = new LinkedHashMap<>();
         List<String> order = new ArrayList<>();
         for (ChatSessionEvent event : events) {
+            if (event.seq() <= compactionSeq) {
+                continue; // superseded by the compaction summary
+            }
             String messageId = event.messageId();
             if (messageId == null || messageId.isBlank()) {
                 continue;
@@ -225,6 +240,10 @@ public class ChatSessionRepository {
         }
 
         List<ChatMessage> transcript = new ArrayList<>();
+        if (compactionSummary != null && !compactionSummary.isBlank()) {
+            transcript.add(ChatMessage.system(
+                    "Summary of the earlier conversation, compacted to fit the context window:\n" + compactionSummary));
+        }
         for (String messageId : order) {
             ReplayMessage message = messagesById.get(messageId);
             if (message == null) {

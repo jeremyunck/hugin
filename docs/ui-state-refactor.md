@@ -202,10 +202,19 @@ and the top-level panels. All chat-engine logic moved into the store.
 
 ## Chat vs. activity boundary
 
-`isActivityEvent(type)` in `chatEventReducer.ts` is the single documented classifier seam. Today the
-backend emits tool output only via `tool_call_*` events, so the rule is "anything that is not a
-user/assistant message is activity." If a backend ever encodes tool output as an `assistant_*`
-message, extend this classifier — it is the one place that workaround belongs.
+Events are projected into one of three buckets by `chatEventReducer.ts`:
+
+- **Inline transcript entries** (`isInlineEntryEvent(type)`): user/assistant messages, tool calls
+  (`tool_call_*`), and the `conversation_compacted` notice. Tool calls render inline as expandable
+  cards (collapsed to the tool name; expanded to input + output) so the model's tool use reads in
+  chronological order alongside its messages. The backend closes the current assistant bubble when a
+  tool call starts, so assistant text and tool cards interleave in true event order.
+- **Activity projection** (`isActivityEvent(type)`): run lifecycle and other low-level status. Kept on
+  `thread.activities` for derivation but no longer surfaced in its own panel.
+
+`isActivityEvent` / `isInlineEntryEvent` are the documented classifier seams. If a backend ever
+encodes tool output as an `assistant_*` message, extend these classifiers — it is the one place that
+workaround belongs.
 
 ## SSE / reconnect / refresh
 
