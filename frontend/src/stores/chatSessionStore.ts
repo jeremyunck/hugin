@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import type { ChatAttachment, ChatRun, ChatThread, ConnectionStatus } from "../lib/types";
 import {
+  cancelChatRun as defaultCancelRun,
   fetchChatSessionEvents as defaultFetchEvents,
   openChatEventStream as defaultOpenStream,
   sendChatMessage as defaultSendMessage,
@@ -21,12 +22,14 @@ export type ChatSessionDeps = {
   sendChatMessage: typeof defaultSendMessage;
   fetchChatSessionEvents: typeof defaultFetchEvents;
   openChatEventStream: typeof defaultOpenStream;
+  cancelChatRun: typeof defaultCancelRun;
 };
 
 const DEFAULT_DEPS: ChatSessionDeps = {
   sendChatMessage: defaultSendMessage,
   fetchChatSessionEvents: defaultFetchEvents,
-  openChatEventStream: defaultOpenStream
+  openChatEventStream: defaultOpenStream,
+  cancelChatRun: defaultCancelRun
 };
 
 const THREAD_INDEX_KEY = "hugin-ui-thread-index-v1";
@@ -247,6 +250,7 @@ export type ChatSessionStore = {
   refreshThread: (threadId: string) => Promise<void>;
   sendMessage: (threadId: string, input: SendMessageInput) => Promise<void>;
   markRunCancelling: (threadId: string) => void;
+  cancelRun: (threadId: string) => Promise<void>;
   clearAll: () => void;
 };
 
@@ -393,6 +397,27 @@ export function useChatSessionStore(
     dispatch({ type: "setRun", id: threadId, run: { ...thread.run, status: "cancelling" } });
   }, []);
 
+  /**
+   * Stops the active run for a thread. Optimistically flips the run to "cancelling" so the composer
+   * shows progress, asks the backend to terminate it, then re-syncs from the event log so the
+   * authoritative run_error lands even if the live stream missed it. Tolerant of an already-finished
+   * or orphaned run: the backend no-ops the former and force-terminates the latter.
+   */
+  const cancelRun = useCallback(async (threadId: string) => {
+    const activeToken = tokenRef.current;
+    if (!activeToken) return;
+    markRunCancelling(threadId);
+    try {
+      await depsRef.current.cancelChatRun(activeToken, threadId);
+    } catch (error) {
+      console.warn("Failed to cancel chat run", error);
+    } finally {
+      // Re-hydrate and reconnect regardless: the terminal event is the source of truth for re-enabling
+      // the composer, and a failed cancel still needs the projection refreshed to recover.
+      await refreshThread(threadId);
+    }
+  }, [markRunCancelling, refreshThread]);
+
   const sendMessage = useCallback(async (threadId: string, input: SendMessageInput) => {
     const activeToken = tokenRef.current;
     if (!activeToken) throw new Error("Not authenticated.");
@@ -510,6 +535,7 @@ export function useChatSessionStore(
       refreshThread,
       sendMessage,
       markRunCancelling,
+      cancelRun,
       clearAll
     }),
     [
@@ -530,6 +556,7 @@ export function useChatSessionStore(
       refreshThread,
       sendMessage,
       markRunCancelling,
+      cancelRun,
       clearAll
     ]
   );

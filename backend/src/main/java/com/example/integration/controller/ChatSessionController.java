@@ -66,6 +66,15 @@ public class ChatSessionController {
                 accepted.lastSeq()));
     }
 
+    @PostMapping("/{sessionId}/cancel")
+    public ResponseEntity<Void> cancel(@PathVariable String sessionId,
+                                       @AuthenticationPrincipal Jwt jwt) {
+        boolean cancelled = chatSessionService.cancelRun(sessionId, owner(jwt));
+        // 202 when a run was stopped, 204 when there was nothing in flight. Either way the client can
+        // safely re-enable the composer once the terminal event lands.
+        return cancelled ? ResponseEntity.accepted().build() : ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{sessionId}/events")
     public ResponseEntity<ChatSessionEventsResponse> readEvents(@PathVariable String sessionId,
                                                                 @RequestParam(defaultValue = "0") long afterSeq,

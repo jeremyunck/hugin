@@ -27,6 +27,7 @@ function makeDeps() {
   const deps: ChatSessionDeps = {
     sendChatMessage: vi.fn().mockResolvedValue({ sessionId: "thread-1", messageId: "user-1", runId: "run-1", lastSeq: 1 }),
     fetchChatSessionEvents: vi.fn().mockResolvedValue([]),
+    cancelChatRun: vi.fn().mockResolvedValue(undefined),
     openChatEventStream: vi.fn((_token, sessionId, afterSeq, handlers) => {
       const record = { sessionId, afterSeq, handlers, closed: false };
       streams.push(record);
@@ -151,5 +152,36 @@ describe("useChatSessionStore", () => {
       await sendPromise;
     });
     expect(deps.sendChatMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the active run, marking it cancelling and re-syncing from the event log", async () => {
+    const { deps } = makeDeps();
+    // The cancel triggers a re-hydrate; return the terminal run_error so the composer re-enables.
+    (deps.fetchChatSessionEvents as ReturnType<typeof vi.fn>).mockResolvedValue([
+      event(1, { type: "user_message_created", messageId: "user-1", content: "Hi" }),
+      event(2, { type: "run_started" }),
+      event(3, { type: "run_error", metadata: { message: "Run stopped." } })
+    ]);
+    const { result } = renderHook(() => useChatSessionStore("token", deps));
+    act(() => result.current.switchThread({
+      id: "thread-1",
+      title: "T",
+      kind: "chat",
+      createdAt: "2026-06-20T00:00:00.000Z",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+      entries: [],
+      activities: [],
+      lastSeq: 0,
+      run: { id: "run-1", status: "running", startedAt: "2026-06-20T00:00:00.000Z" }
+    }));
+
+    await act(async () => {
+      await result.current.cancelRun("thread-1");
+    });
+
+    expect(deps.cancelChatRun).toHaveBeenCalledWith("token", "thread-1");
+    // After the terminal event is folded in, the run is failed and the thread is no longer busy.
+    expect(result.current.activeThread?.run?.status).toBe("failed");
+    expect(result.current.activeBusy).toBe(false);
   });
 });

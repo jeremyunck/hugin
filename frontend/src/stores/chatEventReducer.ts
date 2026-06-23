@@ -348,11 +348,35 @@ export function reduceChatEvents(
   return events.reduce(reduceChatEvent, start);
 }
 
-/** Whether the thread currently has an in-flight run; drives send/stop/loading affordances. */
-export function isThreadBusy(thread: ChatThread): boolean {
+/**
+ * A run that has shown no activity for this long is treated as dead even though it never produced a
+ * terminal event. This is a client-side safety net for runs the backend failed to reconcile (e.g. a
+ * hard crash with no restart yet): without it the composer would stay disabled indefinitely. The
+ * window is generous so a legitimately long-running tool call is never cut off prematurely.
+ */
+export const STALE_RUN_MS = 15 * 60 * 1000;
+
+/**
+ * Whether the thread currently has an in-flight run; drives send/stop/loading affordances. `now` is
+ * injectable for deterministic tests. A `running`/`queued` run whose last event is older than
+ * {@link STALE_RUN_MS} is considered stale and not busy, so a stuck run eventually frees the composer
+ * on the next render even without an explicit stop.
+ */
+export function isThreadBusy(thread: ChatThread, now: number = Date.now()): boolean {
   const status = thread.run?.status;
   if (status === "completed" || status === "failed") return false;
-  if (status === "queued" || status === "running" || status === "cancelling") return true;
+  if (status === "running") {
+    // A "running" run is always anchored to a server run_started event, so updatedAt is meaningful:
+    // it tracks the last streamed event. If that is older than the window the run is wedged (orphaned
+    // with no terminal event) and should stop blocking the composer.
+    const lastActivity = Date.parse(thread.updatedAt);
+    if (Number.isFinite(lastActivity) && now - lastActivity > STALE_RUN_MS) return false;
+    return true;
+  }
+  // "queued" is the optimistic local state before the server's run_started lands (it never bumps
+  // updatedAt, and a thread hydrated from the server never carries it), and "cancelling" is set the
+  // instant the user hits stop. Both stay busy until a real terminal event resolves them.
+  if (status === "queued" || status === "cancelling") return true;
   // Legacy fallback for threads without run events: an assistant bubble still streaming.
   return thread.entries.some((entry) => entry.type === "assistant" && !entry.completedAt);
 }

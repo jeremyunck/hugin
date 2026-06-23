@@ -210,6 +210,19 @@ export async function sendChatMessage(
   );
 }
 
+export async function cancelChatRun(token: string, sessionId: string): Promise<void> {
+  // The cancel endpoint returns 202/204 with no body, so use a raw fetch rather than apiFetch
+  // (which parses JSON). Any active run is terminated server-side; the resulting run_error arrives
+  // over the event stream and re-enables the composer.
+  const response = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+}
+
 export async function fetchChatSessionEvents(token: string, sessionId: string, afterSeq = 0): Promise<ChatEvent[]> {
   const query = afterSeq > 0 ? `?afterSeq=${afterSeq}` : "";
   const response = await apiFetch<ChatEventsResponse>(

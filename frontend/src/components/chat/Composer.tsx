@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Send, X } from "lucide-react";
+import { Image as ImageIcon, Send, Square, X } from "lucide-react";
 
 import type { ChatAttachment, ModelOption } from "../../lib/types";
 import { defaultReasoningFor, formatBytes, labelReasoning } from "../../lib/format";
@@ -8,11 +8,14 @@ const INK = "#1C1F23";
 /**
  * The message composer: text input, image attachment, model/reasoning selectors, and send. Its
  * disabled state is driven by the active thread's run state (passed in via `disabled`), so a
- * failed/completed/cancelled run immediately re-enables sending.
+ * failed/completed/cancelled run immediately re-enables sending. While a run is in flight (`busy`)
+ * the send button is replaced by a stop button (`onStop`) so the user can always interrupt a run
+ * rather than being locked out of the thread.
  */
 export function Composer(props: {
   value: string;
   disabled: boolean;
+  busy: boolean;
   attachment: ChatAttachment | null;
   models: ModelOption[];
   selectedModelId?: string;
@@ -23,10 +26,12 @@ export function Composer(props: {
   onPickImage: () => void;
   onClearImage: () => void;
   onSend: () => void;
+  onStop: () => void;
 }) {
   const {
     value,
     disabled,
+    busy,
     attachment,
     models,
     selectedModelId,
@@ -36,7 +41,8 @@ export function Composer(props: {
     onReasoningChange,
     onPickImage,
     onClearImage,
-    onSend
+    onSend,
+    onStop
   } = props;
   const activeModel = models.find((model) => model.id === selectedModelId) ?? models[0];
   const reasoningOptions = activeModel?.reasoningOptions ?? [];
@@ -75,14 +81,20 @@ export function Composer(props: {
           spellCheck
           placeholder={attachment ? "Ask about this image..." : "Message Hugin…"}
         />
-        <button
-          type="button"
-          onClick={onSend}
-          disabled={disabled || (!value.trim() && !attachment)}
-          aria-label="Send message"
-        >
-          <Send size={19} strokeWidth={2} color={INK} />
-        </button>
+        {busy ? (
+          <button type="button" onClick={onStop} aria-label="Stop run">
+            <Square size={17} strokeWidth={2.4} color={INK} fill={INK} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={disabled || (!value.trim() && !attachment)}
+            aria-label="Send message"
+          >
+            <Send size={19} strokeWidth={2} color={INK} />
+          </button>
+        )}
       </div>
       <div className="composer-controls">
         <label className="composer-select">

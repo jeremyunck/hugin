@@ -38,6 +38,7 @@ class ChatSessionServiceTest {
 
     private ChatSessionRepository repository;
     private AgentService agentService;
+    private AgentRunRegistry runRegistry;
     private ChatSessionService service;
     private ModelContextService modelContextService;
     private TransactionTemplate transactionTemplate;
@@ -62,7 +63,7 @@ class ChatSessionServiceTest {
         broker.subscribe(SESSION_ID, published::add);
 
         agentService = mock(AgentService.class);
-        AgentRunRegistry runRegistry = mock(AgentRunRegistry.class);
+        runRegistry = mock(AgentRunRegistry.class);
 
         // Run the agent task inline so createMessage drives the whole run synchronously.
         ExecutorService inlineExecutor = mock(ExecutorService.class);
@@ -198,6 +199,93 @@ class ChatSessionServiceTest {
 
         // The rejected request must not write any events for the foreign session.
         assertThat(repository.readEvents(SESSION_ID, 0)).isEmpty();
+    }
+
+    @Test
+    void cancelRunTerminatesAnOrphanedRunWhenNoLiveWorkerRemains() {
+        String runId = "run-orphan";
+        String assistantId = "assistant-orphan";
+        seedRunningRun(runId, assistantId);
+        // Default mock: no live worker registered, so the run is treated as orphaned.
+
+        boolean cancelled = service.cancelRun(SESSION_ID, OWNER);
+
+        assertThat(cancelled).isTrue();
+        List<ChatSessionEvent> events = repository.readEvents(SESSION_ID, 0);
+        assertThat(events).extracting(ChatSessionEvent::type)
+                .containsSubsequence("run_started", "assistant_message_error", "run_error");
+        // The forced failure attaches its error to the still-open assistant bubble, not a new one.
+        ChatSessionEvent error = events.stream()
+                .filter(event -> event.type().equals("assistant_message_error")).findFirst().orElseThrow();
+        assertThat(error.messageId()).isEqualTo(assistantId);
+        assertThat(repository.runStatus(runId)).contains("error");
+    }
+
+    @Test
+    void cancelRunInterruptsLiveWorkerWithoutForcingTerminalEvents() {
+        String runId = "run-live";
+        seedRunningRun(runId, "assistant-live");
+        // A live worker is still on this run; interrupting it lets it emit its own terminal events.
+        when(runRegistry.cancel(OWNER, runId)).thenReturn(true);
+
+        boolean cancelled = service.cancelRun(SESSION_ID, OWNER);
+
+        assertThat(cancelled).isTrue();
+        // The service must not race the worker by writing a duplicate terminal event itself.
+        assertThat(repository.readEvents(SESSION_ID, 0)).extracting(ChatSessionEvent::type)
+                .doesNotContain("run_error");
+        assertThat(repository.runStatus(runId)).contains("running");
+    }
+
+    @Test
+    void cancelRunReturnsFalseWhenNothingIsInFlight() {
+        repository.upsertSession(SESSION_ID, OWNER, "Title", "CHAT", Instant.now());
+
+        assertThat(service.cancelRun(SESSION_ID, OWNER)).isFalse();
+        assertThat(repository.readEvents(SESSION_ID, 0)).isEmpty();
+    }
+
+    @Test
+    void cancelRunRejectsSessionOwnedByAnotherUser() {
+        repository.upsertSession(SESSION_ID, "intruder", "theirs", "CHAT", Instant.now());
+
+        assertThatThrownBy(() -> service.cancelRun(SESSION_ID, OWNER))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(thrown -> assertThat(
+                        ((ResponseStatusException) thrown).getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    void reconcileOrphanedRunsTerminatesEveryUnfinishedRunOnStartup() {
+        String runId = "run-stuck";
+        seedRunningRun(runId, "assistant-stuck");
+
+        service.reconcileOrphanedRuns();
+
+        assertThat(repository.runStatus(runId)).contains("error");
+        ChatSessionEvent runError = repository.readEvents(SESSION_ID, 0).stream()
+                .filter(event -> event.type().equals("run_error")).findFirst().orElseThrow();
+        assertThat(runError.metadata()).containsEntry("message", "Run interrupted by a server restart.");
+        // A second pass is a no-op: the run already reached a terminal state.
+        service.reconcileOrphanedRuns();
+        assertThat(repository.readEvents(SESSION_ID, 0)).filteredOn(event -> event.type().equals("run_error"))
+                .hasSize(1);
+    }
+
+    /** Seeds a session whose run is mid-flight (status running, run_started + open assistant bubble). */
+    private void seedRunningRun(String runId, String assistantMessageId) {
+        repository.upsertSession(SESSION_ID, OWNER, "Title", "CHAT", Instant.now());
+        transactionTemplate.executeWithoutResult(status -> {
+            Instant now = Instant.now();
+            repository.insertRun(runId, SESSION_ID, "CHAT", "queued", now);
+            repository.updateRunStatus(runId, "running", null, null);
+            long s1 = repository.nextSeq(SESSION_ID, now);
+            repository.insertEvent(SESSION_ID, runId, null, s1, "run_started", null, null, java.util.Map.of(), now);
+            repository.insertMessage(assistantMessageId, SESSION_ID, runId, "assistant", "partial", "streaming", now);
+            long s2 = repository.nextSeq(SESSION_ID, now);
+            repository.insertEvent(SESSION_ID, runId, assistantMessageId, s2, "assistant_message_started",
+                    "assistant", "", java.util.Map.of(), now);
+        });
     }
 
     private static ChatSessionMessageRequest request(String content) {

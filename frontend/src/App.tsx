@@ -1504,6 +1504,7 @@ export default function App() {
                 name={name}
                 entries={thread.entries}
                 busy={busy}
+                running={store.activeBusy}
                 listRef={listRef}
                 draft={draft}
                 attachment={draftAttachment}
@@ -1519,6 +1520,7 @@ export default function App() {
                 onPickImage={pickImage}
                 onClearImage={clearImage}
                 onSend={send}
+                onStop={() => void store.cancelRun(thread.id)}
               />
             ) : null}
           </>

@@ -36,6 +36,7 @@ export function ChatPanel(props: {
   name: string;
   entries: ChatEntry[];
   busy: boolean;
+  running: boolean;
   listRef: RefObject<HTMLDivElement>;
   draft: string;
   attachment: ChatAttachment | null;
@@ -48,6 +49,7 @@ export function ChatPanel(props: {
   onPickImage: () => void;
   onClearImage: () => void;
   onSend: (prompt?: string) => void;
+  onStop: () => void;
 }) {
   const fresh = props.entries.length === 0;
   return (
@@ -64,6 +66,7 @@ export function ChatPanel(props: {
       <Composer
         value={props.draft}
         disabled={props.busy || props.models.length === 0}
+        busy={props.running}
         attachment={props.attachment}
         models={props.models}
         selectedModelId={props.selectedModelId}
@@ -74,6 +77,7 @@ export function ChatPanel(props: {
         onPickImage={props.onPickImage}
         onClearImage={props.onClearImage}
         onSend={() => props.onSend()}
+        onStop={props.onStop}
       />
     </>
   );

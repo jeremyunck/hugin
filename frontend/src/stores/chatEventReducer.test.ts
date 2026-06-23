@@ -112,6 +112,28 @@ describe("reduceChatEvent", () => {
     expect(isThreadBusy(failed)).toBe(false);
   });
 
+  it("treats a fresh running run as busy but ages out a stale one", () => {
+    const running: ChatThread = {
+      ...baseThread(),
+      run: { id: "run-1", status: "running", startedAt: "2026-06-20T00:00:00.000Z" },
+      updatedAt: "2026-06-20T00:10:00.000Z"
+    };
+    const lastActivity = Date.parse(running.updatedAt);
+    // Within the staleness window the run is still considered in-flight.
+    expect(isThreadBusy(running, lastActivity + 60_000)).toBe(true);
+    // Past the window a run that never terminated stops blocking the composer.
+    expect(isThreadBusy(running, lastActivity + 16 * 60 * 1000)).toBe(false);
+  });
+
+  it("keeps a cancelling run busy regardless of staleness", () => {
+    const cancelling: ChatThread = {
+      ...baseThread(),
+      run: { id: "run-1", status: "cancelling", startedAt: "2026-06-20T00:00:00.000Z" },
+      updatedAt: "2026-06-20T00:00:00.000Z"
+    };
+    expect(isThreadBusy(cancelling, Date.parse(cancelling.updatedAt) + 60 * 60 * 1000)).toBe(true);
+  });
+
   it("produces an equivalent projection from live SSE events and a fetched list", () => {
     const fromList = reduceChatEvents(baseThread(), FULL_TURN);
     // Simulate live delivery one event at a time, with a duplicate redelivery in the middle.

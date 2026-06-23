@@ -12,6 +12,8 @@ import com.example.integration.modelsettings.ModelContextService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
@@ -186,9 +189,102 @@ public class ChatSessionService {
             log.warn("Chat session run failed: {}", runId, e);
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             failRun(sessionId, runId, openAssistantId.get(), message);
+        } catch (Throwable t) {
+            // Errors (OutOfMemoryError, StackOverflowError, thread death, ...) bypass the Exception
+            // handler above. Without terminating the run here the event log would be left with a
+            // dangling run_started and the composer would stay disabled forever. Emit the terminal
+            // events best-effort, then rethrow to preserve normal JVM error semantics.
+            log.error("Chat session run terminated abnormally: {}", runId, t);
+            String message = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
+            try {
+                failRun(sessionId, runId, openAssistantId.get(), message);
+            } catch (Throwable ignored) {
+                // The environment may be too degraded (e.g. OOM) to persist; don't mask the original.
+            }
+            throw t;
         } finally {
             runRegistry.unregister(runId);
         }
+    }
+
+    /**
+     * Reconciles runs orphaned by a crash or restart. A run's terminal event is only written by the
+     * worker thread that owns it; if the process dies mid-run that thread is gone, leaving the run
+     * {@code running}/{@code queued} in the log with no {@code run_completed}/{@code run_error}. The UI
+     * projects such a run as perpetually busy and disables the composer. On startup every worker is by
+     * definition gone, so any unfinished run is an orphan: terminate each so its thread unsticks.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void reconcileOrphanedRuns() {
+        List<ChatSessionRepository.UnfinishedRun> orphans;
+        try {
+            orphans = repository.findUnfinishedRuns();
+        } catch (Exception e) {
+            log.warn("Could not scan for orphaned chat runs on startup: {}", e.getMessage());
+            return;
+        }
+        if (orphans.isEmpty()) {
+            return;
+        }
+        log.info("Reconciling {} orphaned chat run(s) left unfinished by a previous process", orphans.size());
+        for (ChatSessionRepository.UnfinishedRun orphan : orphans) {
+            try {
+                terminateUnfinishedRun(orphan.sessionId(), orphan.runId(), "Run interrupted by a server restart.");
+            } catch (Exception e) {
+                log.warn("Failed to reconcile orphaned run {}: {}", orphan.runId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Stops the active run for a session at the user's request. If the run's worker is still live in
+     * this process it is interrupted (and emits {@code run_error} itself as it unwinds). If no live
+     * worker is found the run is an orphan (e.g. survived a restart), so it is terminated directly so
+     * the composer unsticks. Returns whether anything was stopped.
+     */
+    public boolean cancelRun(String sessionId, String owner) {
+        if (repository.sessionExists(sessionId) && !repository.sessionExistsForOwner(sessionId, owner)) {
+            throw new ResponseStatusException(NOT_FOUND, "Chat session not found");
+        }
+        Optional<String> runId = repository.findActiveRunId(sessionId);
+        if (runId.isEmpty()) {
+            return false;
+        }
+        String id = runId.get();
+        if (runRegistry.cancel(owner, id)) {
+            return true;
+        }
+        // No live worker: the run finished racing this call, or it was orphaned by a restart. Only the
+        // latter still needs a terminal event; terminateUnfinishedRun no-ops if it already finished.
+        return terminateUnfinishedRun(sessionId, id, "Run stopped.");
+    }
+
+    /**
+     * Forcibly writes the terminal events for a run that no live worker will finish, guarded against a
+     * race with a worker that completes concurrently: it re-checks the persisted status inside the
+     * transaction and no-ops if the run already reached a terminal state. Mirrors {@link #failRun} but
+     * looks up the open assistant bubble itself since there is no in-memory run context to pass one in.
+     */
+    protected boolean terminateUnfinishedRun(String sessionId, String runId, String message) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            String current = repository.runStatus(runId).orElse(null);
+            if (current == null || "completed".equals(current) || "error".equals(current)) {
+                return false;
+            }
+            Instant now = Instant.now();
+            String assistantMessageId = repository.findOpenAssistantMessageId(runId).orElse(null);
+            if (assistantMessageId == null) {
+                assistantMessageId = UUID.randomUUID().toString();
+                repository.insertMessage(assistantMessageId, sessionId, runId, "assistant", "", "streaming", now);
+                appendEvent(sessionId, runId, assistantMessageId, "assistant_message_started", "assistant", "", Map.of());
+            } else {
+                repository.updateMessageStatus(assistantMessageId, "error", now);
+            }
+            appendEvent(sessionId, runId, assistantMessageId, "assistant_message_error", "assistant", message, Map.of("message", message));
+            repository.updateRunStatus(runId, "error", message, now);
+            appendEvent(sessionId, runId, null, "run_error", null, null, Map.of("message", message));
+            return true;
+        }));
     }
 
     /**

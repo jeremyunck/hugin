@@ -130,6 +130,50 @@ public class ChatSessionRepository {
                 """, status, errorMessage, completedAt == null ? null : Timestamp.from(completedAt), runId);
     }
 
+    /** A run that the event log never terminated (no {@code run_completed} / {@code run_error}). */
+    public record UnfinishedRun(String runId, String sessionId) {}
+
+    /**
+     * Every run still in a non-terminal state across all sessions. Used on startup to reconcile runs
+     * orphaned by a crash/restart: their worker thread is gone, so without this they would stay
+     * {@code running}/{@code queued} forever and keep the composer disabled.
+     */
+    public List<UnfinishedRun> findUnfinishedRuns() {
+        return jdbcTemplate.query("""
+                select id, session_id
+                from agent_runs
+                where status in ('queued', 'running')
+                """, (rs, rowNum) -> new UnfinishedRun(rs.getString("id"), rs.getString("session_id")));
+    }
+
+    /** The latest non-terminal run for a session, if any — the one a "stop" action should target. */
+    public Optional<String> findActiveRunId(String sessionId) {
+        return jdbcTemplate.query("""
+                select id
+                from agent_runs
+                where session_id = ? and status in ('queued', 'running')
+                order by started_at desc
+                limit 1
+                """, (rs, rowNum) -> rs.getString("id"), sessionId).stream().findFirst();
+    }
+
+    /** Current persisted status of a run, used to avoid double-terminating one that already finished. */
+    public Optional<String> runStatus(String runId) {
+        return jdbcTemplate.query("select status from agent_runs where id = ?",
+                (rs, rowNum) -> rs.getString("status"), runId).stream().findFirst();
+    }
+
+    /** The still-streaming assistant message for a run, so a forced failure can attach its error there. */
+    public Optional<String> findOpenAssistantMessageId(String runId) {
+        return jdbcTemplate.query("""
+                select id
+                from chat_messages
+                where run_id = ? and role = 'assistant' and status = 'streaming'
+                order by created_at desc
+                limit 1
+                """, (rs, rowNum) -> rs.getString("id"), runId).stream().findFirst();
+    }
+
     public ChatSessionEvent insertEvent(String sessionId,
                                         String runId,
                                         String messageId,
