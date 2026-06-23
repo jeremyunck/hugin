@@ -450,7 +450,7 @@ class AgentServiceTest {
         verify(llmClient).chat(eq(MODEL), captor.capture(), anyList());
         assertThat(captor.getValue()).anySatisfy(message -> {
             assertThat(message.role()).isEqualTo("system");
-            assertThat(message.content()).contains("software engineer working in the GitHub repository octocat/hello-world");
+            assertThat(message.content()).contains("GitHub repository octocat/hello-world");
         });
     }
 

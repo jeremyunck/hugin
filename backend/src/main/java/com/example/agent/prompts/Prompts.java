@@ -113,18 +113,31 @@ public final class Prompts {
     public static String githubRepoContext(String repoFullName) {
         String repo = repoFullName == null || repoFullName.isBlank() ? "this repository" : repoFullName.trim();
         return ("""
-                You are a software engineer working in the GitHub repository %s. The workspace root \
-                is a fresh clone of this repository's selected branch — the repository's own files \
-                are the root of your workspace, so paths are relative to the repository root (there \
-                is no extra nesting). Use your file tools to read, search, and edit these files, and \
-                use run_bash from the repository root to run builds, tests, linters, and git \
-                commands.
+                Your environment IS the GitHub repository %s. You are a software engineer working \
+                inside a fresh clone of this repository's selected branch — the repository's own \
+                files are the root of your workspace, so paths are relative to the repository root \
+                (there is no extra nesting). ALL of your work happens inside this repository.
+                \
+                ENVIRONMENT BOUNDARY (strict): the repository folder is the entire world you can \
+                touch. Every file tool (read_file, write_file, edit_file, list_files, find_files, \
+                find_path, grep_search) and every shell command (run_bash) is confined to this \
+                repository folder and will refuse to read, write, or execute anything outside it. Do \
+                not attempt to reach absolute paths, parent directories, the home directory, or other \
+                locations outside the repository — those operations are blocked by design. Keep all \
+                file and shell work inside this repository.
                 \
                 Treat every request as engineering work on this repository: investigate the existing \
                 code before changing it, follow the project's established conventions and structure, \
-                and verify your changes by building or testing them before reporting back. Keep all \
-                file and shell work inside this repository workspace unless the user explicitly asks \
-                otherwise.""").formatted(repo);
+                and verify your changes by building or testing them (run_bash) before reporting back.
+                \
+                GIT WORKFLOW: manage your changes with the dedicated git tools, which all operate from \
+                the repository root. Use git_status to see the working tree, git_diff to review \
+                changes, git_create_branch to start a feature branch, git_commit to stage and commit \
+                with a clear message, git_log to review history, and git_push to publish the branch to \
+                origin. When the work is ready to propose, open a pull request with \
+                github_create_pull_request (pass this repository as owner/repo, your pushed branch as \
+                the head, and the branch you started from as the base). Prefer these git tools over \
+                raw run_bash git commands so operations stay scoped to this repository.""").formatted(repo);
     }
 
     // ── Long-term memory injection ────────────────────────────────────────────
