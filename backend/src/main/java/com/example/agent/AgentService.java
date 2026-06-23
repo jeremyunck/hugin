@@ -39,6 +39,17 @@ public class AgentService {
     /** How long a routing decision is reused for an identical prompt + context. */
     private static final Duration ROUTING_CACHE_TTL = Duration.ofSeconds(30);
     private static final int ROUTING_CACHE_MAX_ENTRIES = 256;
+
+    /** Token headroom reserved for the model's reasoning + answer when capping the live transcript. */
+    private static final int IN_LOOP_RESPONSE_RESERVE_TOKENS = 8192;
+    /** Fraction of the context window the live transcript may fill before it is compacted in-loop. */
+    private static final double IN_LOOP_BUDGET_FRACTION = 0.90;
+    /** A message needs at least this many characters of content/reasoning to be worth truncating. */
+    private static final int TRUNCATABLE_MIN_CHARS = 1200;
+    /** Lower bound on the characters kept from the head of an oversized message when truncating it. */
+    private static final int TRUNCATED_HEAD_CHARS = 800;
+    private static final String TRUNCATION_MARKER = "\n\n…[truncated to fit the model's context window]";
+
     private final int maxIterations;
 
     private final OpenAiClient llmClient;
@@ -131,7 +142,7 @@ public class AgentService {
     }
 
     public AgentResponse chat(AgentRequest request) {
-        return runLoop(request, NO_OP_LISTENER, false, "global", true);
+        return runLoop(request, NO_OP_LISTENER, false, "global", true, null);
     }
 
     /**
@@ -200,21 +211,162 @@ public class AgentService {
     }
 
     /**
+     * Caps the live transcript so the next provider call stays inside the model's context window. Only
+     * the largest messages' content (and bulky prior reasoning) are shortened — messages are never
+     * removed — so {@code tool_calls}/{@code tool} pairing and ordering stay intact. No-op when the
+     * context window is unknown ({@code budgetTokens <= 0}) or the transcript already fits.
+     */
+    private void compactToFitContext(List<ChatMessage> messages, List<ToolDefinition> toolDefinitions,
+                                     int budgetTokens) {
+        if (budgetTokens <= 0 || messages.isEmpty()) {
+            return;
+        }
+        int target = (int) (budgetTokens * IN_LOOP_BUDGET_FRACTION)
+                - IN_LOOP_RESPONSE_RESERVE_TOKENS
+                - estimateToolTokens(toolDefinitions);
+        if (target <= 0 || estimateTokens(messages) <= target) {
+            return;
+        }
+        int before = estimateTokens(messages);
+        int guard = 0;
+        while (estimateTokens(messages) > target && guard++ < 2000) {
+            int idx = indexOfLargestTruncatable(messages);
+            if (idx < 0) {
+                break; // nothing left large enough to shorten without touching the current question
+            }
+            ChatMessage original = messages.get(idx);
+            ChatMessage truncated = truncateMessage(original);
+            if (sameBody(original, truncated)) {
+                break;
+            }
+            messages.set(idx, truncated);
+        }
+        log.info("Compacted in-loop transcript from ~{} to ~{} tokens (context budget {}, target {})",
+                before, estimateTokens(messages), budgetTokens, target);
+    }
+
+    /**
+     * Index of the largest message whose body can still be meaningfully shortened, chosen by role
+     * priority: bulky tool output first, then assistant turns, then earlier user turns, and only system
+     * prompts as a last resort. The current (most recent) user message is never truncated.
+     */
+    private static int indexOfLargestTruncatable(List<ChatMessage> messages) {
+        int lastUserIndex = -1;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if ("user".equals(messages.get(i).role())) {
+                lastUserIndex = i;
+                break;
+            }
+        }
+        for (String role : new String[] {"tool", "assistant", "user", "system"}) {
+            int best = -1;
+            int bestLen = TRUNCATABLE_MIN_CHARS;
+            for (int i = 0; i < messages.size(); i++) {
+                ChatMessage m = messages.get(i);
+                if (i == lastUserIndex || !role.equals(m.role())) {
+                    continue;
+                }
+                int len = bodyLength(m);
+                if (len > bestLen) {
+                    best = i;
+                    bestLen = len;
+                }
+            }
+            if (best >= 0) {
+                return best;
+            }
+        }
+        return -1;
+    }
+
+    /** Shortens a message: drops bulky prior reasoning first, then truncates the content head. */
+    private static ChatMessage truncateMessage(ChatMessage message) {
+        String reasoning = message.reasoningContent();
+        String content = message.content();
+        if (reasoning != null && reasoning.length() > TRUNCATED_HEAD_CHARS) {
+            // Prior chain-of-thought is the least useful to retain verbatim — drop it outright. If that
+            // alone makes a meaningful dent, leave the content untouched this pass.
+            reasoning = null;
+            if (content == null || content.length() <= TRUNCATABLE_MIN_CHARS) {
+                return withBody(message, content, null);
+            }
+        }
+        return withBody(message, truncateContent(content), reasoning);
+    }
+
+    private static String truncateContent(String content) {
+        if (content == null) {
+            return null;
+        }
+        int keep = Math.max(TRUNCATED_HEAD_CHARS, content.length() / 2);
+        if (keep >= content.length()) {
+            return content;
+        }
+        return content.substring(0, keep) + TRUNCATION_MARKER;
+    }
+
+    private static ChatMessage withBody(ChatMessage message, String content, String reasoning) {
+        return new ChatMessage(message.role(), content, message.attachments(), reasoning,
+                message.toolCalls(), message.toolCallId());
+    }
+
+    private static int bodyLength(ChatMessage message) {
+        int len = 0;
+        if (message.content() != null) {
+            len += message.content().length();
+        }
+        if (message.reasoningContent() != null) {
+            len += message.reasoningContent().length();
+        }
+        return len;
+    }
+
+    private static boolean sameBody(ChatMessage a, ChatMessage b) {
+        return Objects.equals(a.content(), b.content())
+                && Objects.equals(a.reasoningContent(), b.reasoningContent());
+    }
+
+    /** Rough token cost of the advertised tool schemas, which also count against the context window. */
+    private int estimateToolTokens(List<ToolDefinition> toolDefinitions) {
+        if (toolDefinitions == null || toolDefinitions.isEmpty()) {
+            return 0;
+        }
+        try {
+            return objectMapper.writeValueAsString(toolDefinitions).length() / 4;
+        } catch (Exception e) {
+            return toolDefinitions.size() * 120;
+        }
+    }
+
+    /**
      * Streaming variant of {@link #chat}: assistant text is delivered token-by-token via
      * {@code listener} as it arrives from the model, and tool calls are reported as the loop runs
      * them. Returns the same {@link AgentResponse} (final answer plus full conversation history)
      * once the loop completes.
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener) {
-        return runLoop(request, listener, true, "global", true);
+        return runLoop(request, listener, true, "global", true, null);
     }
 
     public AgentResponse chat(AgentRequest request, String owner) {
-        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request));
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null);
     }
 
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request));
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), null);
+    }
+
+    /**
+     * Streaming variant that also caps the live transcript to {@code contextLimit} tokens. As the loop
+     * runs tool calls, their results accumulate in the message list and are re-sent on every iteration;
+     * left unchecked a few large tool outputs can push a single turn past the model's context window and
+     * the provider rejects the request (HTTP 400). When {@code contextLimit} is known, the oldest/largest
+     * messages are truncated in place before each call so the run stays within budget. A {@code null}
+     * limit disables the in-loop cap (preserving the previous behaviour for callers without a window).
+     */
+    public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
+                                    Long contextLimit) {
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit);
     }
 
     public List<ChatMessage> history(String owner, String agentId, String sessionId) {
@@ -241,8 +393,9 @@ public class AgentService {
     }
 
     private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream,
-                                  String owner, boolean includeWorkspaceTools) {
+                                  String owner, boolean includeWorkspaceTools, Long contextLimit) {
         Instant deadline = Instant.now().plus(requestTimeout);
+        int contextBudget = contextLimit == null ? 0 : (int) Math.min(Integer.MAX_VALUE, Math.max(0, contextLimit));
         RoutingSelection routing = resolveModel(request);
         String model = routing.model();
         // A sandbox-scoped request resolves its workspace (and tool execution context) from the
@@ -315,6 +468,10 @@ public class AgentService {
             // Rebuild the tool list on every loop iteration so freshly written local manifests
             // become visible without a service restart.
             List<ToolDefinition> toolDefinitions = collectTools(workspace, includeWorkspaceTools);
+
+            // Keep the growing transcript (prior turns + this turn's accumulating tool results) within
+            // the model's context window so the provider does not reject the next call for being too long.
+            compactToFitContext(messages, toolDefinitions, contextBudget);
 
             ChatResponse response;
             try {

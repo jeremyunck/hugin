@@ -133,6 +133,11 @@ public class ChatSessionService {
         try {
             markRunStarted(sessionId, runId);
             AgentRequest effectiveRequest = maybeCompact(sessionId, runId, agentRequest, priorMessages, request);
+            // The model's context window (when known) lets the agent loop cap its growing transcript so
+            // a turn with large tool results does not overflow and get rejected by the provider.
+            Long contextLimit = modelContextService
+                    .contextLimit(firstNonBlank(request.model(), defaultModel))
+                    .orElse(null);
             AgentResponse response = agentService.chatStream(effectiveRequest, new AgentStreamListener() {
                 @Override
                 public void onContent(String delta) {
@@ -170,7 +175,7 @@ public class ChatSessionService {
                             "name", toolName == null ? "tool" : toolName,
                             "result", result == null ? "" : result));
                 }
-            }, owner);
+            }, owner, contextLimit);
             String fallback = response == null ? null : response.response();
             String open = openAssistantId.getAndSet(null);
             if (open == null && fallback != null && !fallback.isBlank()) {
