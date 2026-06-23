@@ -95,7 +95,7 @@ class ChatSessionServiceTest {
             listener.onToolCall("call-1", "read_file", "{}");
             listener.onToolResult("call-1", "read_file", "ok");
             return null;
-        }).when(agentService).chatStream(any(), any(), any());
+        }).when(agentService).chatStream(any(), any(), any(), any());
 
         ChatSessionMessageAcceptance accepted = service.createMessage(SESSION_ID, OWNER, request("Hi"));
 
@@ -133,7 +133,7 @@ class ChatSessionServiceTest {
     @Test
     void createMessageRecordsErrorEventsWhenAgentFails() {
         doThrow(new RuntimeException("upstream exploded"))
-                .when(agentService).chatStream(any(), any(), any());
+                .when(agentService).chatStream(any(), any(), any(), any());
 
         service.createMessage(SESSION_ID, OWNER, request("Hi"));
 
@@ -168,7 +168,7 @@ class ChatSessionServiceTest {
             AgentStreamListener listener = invocation.getArgument(1);
             listener.onContent("Sure.");
             return null;
-        }).when(agentService).chatStream(any(), any(), any());
+        }).when(agentService).chatStream(any(), any(), any(), any());
 
         service.createMessage(SESSION_ID, OWNER, request("Another question"));
 
@@ -182,7 +182,7 @@ class ChatSessionServiceTest {
         // The agent ran against the compacted prior context (a single system summary), not the full log.
         org.mockito.ArgumentCaptor<com.example.agent.model.AgentRequest> captor =
                 org.mockito.ArgumentCaptor.forClass(com.example.agent.model.AgentRequest.class);
-        org.mockito.Mockito.verify(agentService).chatStream(captor.capture(), any(), any());
+        org.mockito.Mockito.verify(agentService).chatStream(captor.capture(), any(), any(), any());
         assertThat(captor.getValue().priorMessages()).hasSize(1);
         assertThat(captor.getValue().priorMessages().get(0).role()).isEqualTo("system");
         assertThat(captor.getValue().priorMessages().get(0).content()).contains("Compact briefing of the earlier chat.");

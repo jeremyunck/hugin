@@ -838,6 +838,59 @@ class AgentServiceTest {
         assertThat(calls.get(1)).noneMatch(msg -> msg.content() != null && msg.content().contains("version 2.0"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void capsTranscriptToContextWindowWhenToolResultsBalloon() {
+        // A tool whose single result dwarfs the model's context window (~100k tokens of text).
+        String huge = "x".repeat(400_000);
+        var tool = new RecordingLocalTool("big_tool", huge);
+        var service = serviceWithTools(tool);
+
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
+                .thenReturn(responseWithToolCall("call_1", "big_tool", "{}"))
+                .thenReturn(responseWithContent("Done."));
+
+        long contextLimit = 60_000L;
+        AgentResponse result = service.chatStream(
+                new AgentRequest(PROMPT, MODEL), new AgentStreamListener() {}, "global", contextLimit);
+
+        assertThat(result.response()).contains("Done.");
+
+        // The ballooning tool result is truncated in place before the next provider call, so the
+        // transcript stays within the context budget instead of overflowing it (which the provider
+        // would reject with HTTP 400).
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient, times(2)).chatStream(eq(MODEL), captor.capture(), anyList(), any(), any());
+        List<ChatMessage> secondCall = captor.getAllValues().get(1);
+        ChatMessage toolMessage = secondCall.stream()
+                .filter(m -> "tool".equals(m.role())).findFirst().orElseThrow();
+        assertThat(toolMessage.content().length()).isLessThan(huge.length());
+        assertThat(toolMessage.content()).contains("truncated to fit");
+        assertThat(AgentService.estimateTokens(secondCall)).isLessThan((int) contextLimit);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void leavesTranscriptIntactWhenContextWindowUnknown() {
+        // A null context limit (e.g. a model the catalog has no window for) disables the in-loop cap,
+        // preserving the previous behaviour rather than guessing a budget.
+        String big = "y".repeat(400_000);
+        var tool = new RecordingLocalTool("big_tool", big);
+        var service = serviceWithTools(tool);
+
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
+                .thenReturn(responseWithToolCall("call_1", "big_tool", "{}"))
+                .thenReturn(responseWithContent("Done."));
+
+        service.chatStream(new AgentRequest(PROMPT, MODEL), new AgentStreamListener() {}, "global", null);
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient, times(2)).chatStream(eq(MODEL), captor.capture(), anyList(), any(), any());
+        ChatMessage toolMessage = captor.getAllValues().get(1).stream()
+                .filter(m -> "tool".equals(m.role())).findFirst().orElseThrow();
+        assertThat(toolMessage.content()).isEqualTo(big);
+    }
+
     private AgentService serviceWithTools(LocalTool... tools) {
         return new AgentService(
                 llmClient,
