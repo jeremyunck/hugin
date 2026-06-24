@@ -1753,6 +1753,7 @@ export default function App() {
                 onClearImage={clearImage}
                 onSend={send}
                 onStop={() => void store.cancelRun(thread.id)}
+                onApproval={(approvalId, decision) => void store.resolveApproval(thread.id, approvalId, decision)}
               />
             ) : null}
           </>

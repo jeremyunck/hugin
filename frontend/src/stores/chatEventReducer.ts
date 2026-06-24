@@ -1,4 +1,4 @@
-import type { ChatActivity, ChatAttachment, ChatEntry, ChatRun, ChatThread } from "../lib/types";
+import type { ApprovalItem, ChatActivity, ChatAttachment, ChatEntry, ChatRun, ChatThread } from "../lib/types";
 import type { ChatEvent } from "../services/guildService";
 
 /**
@@ -50,9 +50,12 @@ export function isActivityEvent(type: string): boolean {
   return !CHAT_EVENT_TYPES.has(type) && !isInlineEntryEvent(type);
 }
 
+/** Approval-flow events are projected inline (an approve/decline card) and also drive run state. */
+const APPROVAL_EVENT_TYPES = new Set<string>(["approval_required", "approval_resolved"]);
+
 /** Whether an event is projected inline into the chat transcript rather than the activity list. */
 export function isInlineEntryEvent(type: string): boolean {
-  return TOOL_EVENT_TYPES.has(type) || type === "conversation_compacted";
+  return TOOL_EVENT_TYPES.has(type) || type === "conversation_compacted" || APPROVAL_EVENT_TYPES.has(type);
 }
 
 function metadataString(event: ChatEvent, key: string): string | undefined {
@@ -124,6 +127,11 @@ function reduceRun(run: ChatRun | null, event: ChatEvent): ChatRun | null {
         completedAt: event.createdAt,
         error: metadataString(event, "message") ?? event.content ?? "The run failed."
       };
+    case "approval_required":
+      // The run is parked waiting for the user; not busy, but not finished either.
+      return { ...(run ?? { id: runId }), id: runId, status: "awaiting_approval" };
+    case "approval_resolved":
+      return { ...(run ?? { id: runId }), id: runId, status: "completed", completedAt: event.createdAt };
     default:
       return run;
   }
@@ -196,6 +204,47 @@ function reduceNoticeEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] 
       createdAt: event.createdAt
     }
   ];
+}
+
+/**
+ * Projects the approval flow into an inline approve/decline card. `approval_required` opens the card
+ * (keyed by its `approvalId` so a replay can't duplicate it); `approval_resolved` flips the matching
+ * card to its decided state and records the outcome text.
+ */
+function reduceApprovalEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] {
+  const approvalId = metadataString(event, "approvalId");
+  const next = entries.slice();
+
+  if (event.type === "approval_required") {
+    if (approvalId && next.some((entry) => entry.type === "approval" && entry.approvalId === approvalId)) {
+      return entries; // idempotent re-delivery
+    }
+    const rawItems = event.metadata?.items;
+    const items = Array.isArray(rawItems) ? (rawItems as ApprovalItem[]) : [];
+    next.push({
+      id: event.id,
+      type: "approval",
+      approvalId: approvalId ?? event.id,
+      kind: metadataString(event, "kind") ?? "approval",
+      summary: event.content ?? "This action needs your approval.",
+      items,
+      status: "pending",
+      createdAt: event.createdAt
+    });
+    return next;
+  }
+
+  // approval_resolved
+  const index = next.findIndex((entry) => entry.type === "approval" && entry.approvalId === approvalId);
+  if (index === -1) return entries;
+  const existing = next[index] as Extract<ChatEntry, { type: "approval" }>;
+  const decision = metadataString(event, "decision");
+  next[index] = {
+    ...existing,
+    status: decision === "approved" ? "approved" : "declined",
+    resultText: event.content ?? existing.resultText
+  };
+  return next;
 }
 
 function reduceMessageEntry(entries: ChatEntry[], event: ChatEvent): ChatEntry[] {
@@ -305,9 +354,15 @@ export function reduceChatEvent(thread: ChatThread, event: ChatEvent): ChatThrea
   let run = thread.run ?? null;
 
   if (isInlineEntryEvent(event.type)) {
-    entries = event.type === "conversation_compacted"
-      ? reduceNoticeEntry(entries, event)
-      : reduceToolEntry(entries, event);
+    if (event.type === "conversation_compacted") {
+      entries = reduceNoticeEntry(entries, event);
+    } else if (APPROVAL_EVENT_TYPES.has(event.type)) {
+      entries = reduceApprovalEntry(entries, event);
+      // Approval events are inline cards but also move the run between awaiting_approval/completed.
+      run = reduceRun(run, event);
+    } else {
+      entries = reduceToolEntry(entries, event);
+    }
   } else if (isActivityEvent(event.type)) {
     activities = [...activities, buildActivity(event)];
     run = reduceRun(run, event);
@@ -365,6 +420,9 @@ export const STALE_RUN_MS = 15 * 60 * 1000;
 export function isThreadBusy(thread: ChatThread, now: number = Date.now()): boolean {
   const status = thread.run?.status;
   if (status === "completed" || status === "failed") return false;
+  // A run parked on an approval prompt is stopped, not busy: the composer (and the approve/decline
+  // buttons) must stay interactive while the user decides.
+  if (status === "awaiting_approval") return false;
   if (status === "running") {
     // A "running" run is always anchored to a server run_started event, so updatedAt is meaningful:
     // it tracks the last streamed event. If that is older than the window the run is wedged (orphaned

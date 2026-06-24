@@ -58,7 +58,34 @@ export type ChatEntry =
       type: "notice";
       content: string;
       createdAt: string;
+    }
+  | {
+      /**
+       * A pending action that needs the user's explicit approval (e.g. deleting emails). Rendered as
+       * an approve/decline card; the backend only performs the action once the user approves. Rebuilt
+       * verbatim from the replayed `approval_required` event so a reconnecting client shows the prompt.
+       */
+      id: string;
+      type: "approval";
+      approvalId: string;
+      kind: string;
+      summary: string;
+      items: ApprovalItem[];
+      status: "pending" | "approved" | "declined";
+      /** Outcome text once resolved, e.g. "Moved 2 emails to Trash." */
+      resultText?: string;
+      createdAt: string;
     };
+
+/** One row of an approval prompt. For email deletion this is a message preview. */
+export type ApprovalItem = {
+  id?: string;
+  from?: string;
+  subject?: string;
+  snippet?: string;
+};
+
+export type ApprovalDecision = "approve" | "decline";
 
 export type ChatActivity = {
   id: string;
@@ -74,7 +101,13 @@ export type ChatKind = "chat" | "agent" | "github";
 
 export type ConnectionStatus = "idle" | "connecting" | "open" | "reconnecting" | "error";
 
-export type RunStatus = "queued" | "running" | "cancelling" | "completed" | "failed";
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "cancelling"
+  | "awaiting_approval"
+  | "completed"
+  | "failed";
 
 /** Per-thread run state, derived entirely from backend run_* events plus optimistic send. */
 export type ChatRun = {

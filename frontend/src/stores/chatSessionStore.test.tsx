@@ -28,6 +28,7 @@ function makeDeps() {
     sendChatMessage: vi.fn().mockResolvedValue({ sessionId: "thread-1", messageId: "user-1", runId: "run-1", lastSeq: 1 }),
     fetchChatSessionEvents: vi.fn().mockResolvedValue([]),
     cancelChatRun: vi.fn().mockResolvedValue(undefined),
+    resolveChatApproval: vi.fn().mockResolvedValue(undefined),
     openChatEventStream: vi.fn((_token, sessionId, afterSeq, handlers) => {
       const record = { sessionId, afterSeq, handlers, closed: false };
       streams.push(record);

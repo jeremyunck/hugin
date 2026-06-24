@@ -26,10 +26,12 @@ import java.util.concurrent.ExecutorService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +48,7 @@ class ChatSessionServiceTest {
     private TransactionTemplate transactionTemplate;
     private com.example.agent.tool.WorkspaceRegistry workspaceRegistry;
     private com.example.agent.tool.HomeWorkspaceService homeWorkspaceService;
+    private com.example.integration.google.GmailDeletionService gmailDeletionService;
     private List<ChatSessionEvent> published;
 
     @BeforeEach
@@ -85,10 +88,11 @@ class ChatSessionServiceTest {
 
         workspaceRegistry = mock(com.example.agent.tool.WorkspaceRegistry.class);
         homeWorkspaceService = mock(com.example.agent.tool.HomeWorkspaceService.class);
+        gmailDeletionService = mock(com.example.integration.google.GmailDeletionService.class);
 
         service = new ChatSessionService(
                 repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate,
-                modelContextService, workspaceRegistry, homeWorkspaceService, "model-x");
+                modelContextService, workspaceRegistry, homeWorkspaceService, gmailDeletionService, "model-x");
     }
 
     @Test
@@ -296,6 +300,94 @@ class ChatSessionServiceTest {
         service.reconcileOrphanedRuns();
         assertThat(repository.readEvents(SESSION_ID, 0)).filteredOn(event -> event.type().equals("run_error"))
                 .hasSize(1);
+    }
+
+    @Test
+    void toolApprovalPausesTheRunAndApprovingDeletesTheEmails() {
+        when(gmailDeletionService.trash(anyList()))
+                .thenReturn(new com.example.integration.google.GmailDeletionService.Result(2, List.of()));
+        doAnswer(invocation -> {
+            com.example.agent.tool.ToolApprovalRequiredException approval =
+                    new com.example.agent.tool.ToolApprovalRequiredException(
+                            "email_delete",
+                            "Approval required to move 2 emails to Trash.",
+                            List.of(
+                                    java.util.Map.of("id", "m1", "from", "a@x.com", "subject", "Hi"),
+                                    java.util.Map.of("id", "m2", "from", "b@y.com", "subject", "Yo")));
+            approval.attachToolCall("call-9", "google_gmail_delete");
+            throw approval;
+        }).when(agentService).chatStream(any(), any(), any(), any(), any(), any());
+
+        service.createMessage(SESSION_ID, OWNER, request("delete those emails"));
+
+        List<ChatSessionEvent> events = repository.readEvents(SESSION_ID, 0);
+        // The tool card is closed with a waiting note and an approval prompt is recorded; the run parks
+        // in awaiting_approval with no terminal event yet.
+        assertThat(events).extracting(ChatSessionEvent::type)
+                .containsSubsequence("tool_call_completed", "approval_required")
+                .doesNotContain("run_completed", "run_error");
+        ChatSessionEvent approval = events.stream()
+                .filter(event -> event.type().equals("approval_required")).findFirst().orElseThrow();
+        String approvalId = String.valueOf(approval.metadata().get("approvalId"));
+        assertThat(approvalId).isNotBlank();
+        assertThat(approval.metadata()).containsEntry("kind", "email_delete");
+        assertThat(approval.content()).isEqualTo("Approval required to move 2 emails to Trash.");
+        assertThat(repository.runStatus(approval.runId())).contains("awaiting_approval");
+
+        // Approving carries out the deletion against the listed ids and completes the run.
+        service.resolveApproval(SESSION_ID, OWNER, approvalId, "approve");
+        verify(gmailDeletionService).trash(List.of("m1", "m2"));
+        List<ChatSessionEvent> after = repository.readEvents(SESSION_ID, 0);
+        assertThat(after).extracting(ChatSessionEvent::type)
+                .containsSubsequence("approval_required", "approval_resolved", "run_completed");
+        ChatSessionEvent resolved = after.stream()
+                .filter(event -> event.type().equals("approval_resolved")).findFirst().orElseThrow();
+        assertThat(resolved.metadata()).containsEntry("decision", "approved");
+        assertThat(resolved.metadata()).containsEntry("deletedCount", 2);
+        assertThat(repository.runStatus(approval.runId())).contains("completed");
+
+        // A second decision is a no-op: nothing is deleted twice.
+        service.resolveApproval(SESSION_ID, OWNER, approvalId, "approve");
+        verify(gmailDeletionService, times(1)).trash(anyList());
+    }
+
+    @Test
+    void decliningAnApprovalDeletesNothingAndCompletesTheRun() {
+        doAnswer(invocation -> {
+            throw new com.example.agent.tool.ToolApprovalRequiredException(
+                    "email_delete",
+                    "Approval required to move 1 email to Trash.",
+                    List.of(java.util.Map.of("id", "m1", "from", "a@x.com", "subject", "Hi")));
+        }).when(agentService).chatStream(any(), any(), any(), any(), any(), any());
+
+        service.createMessage(SESSION_ID, OWNER, request("delete it"));
+        String approvalId = String.valueOf(repository.readEvents(SESSION_ID, 0).stream()
+                .filter(event -> event.type().equals("approval_required")).findFirst().orElseThrow()
+                .metadata().get("approvalId"));
+
+        service.resolveApproval(SESSION_ID, OWNER, approvalId, "decline");
+
+        verify(gmailDeletionService, never()).trash(anyList());
+        ChatSessionEvent resolved = repository.readEvents(SESSION_ID, 0).stream()
+                .filter(event -> event.type().equals("approval_resolved")).findFirst().orElseThrow();
+        assertThat(resolved.metadata()).containsEntry("decision", "declined");
+        assertThat(resolved.content()).contains("No emails were removed");
+    }
+
+    @Test
+    void resolveApprovalRejectsUnknownApprovalAndForeignOwner() {
+        repository.upsertSession(SESSION_ID, OWNER, "Title", "CHAT", Instant.now());
+
+        assertThatThrownBy(() -> service.resolveApproval(SESSION_ID, OWNER, "missing", "approve"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(thrown -> assertThat(
+                        ((ResponseStatusException) thrown).getStatusCode().value()).isEqualTo(404));
+
+        repository.upsertSession("other", "intruder", "theirs", "CHAT", Instant.now());
+        assertThatThrownBy(() -> service.resolveApproval("other", OWNER, "x", "approve"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(thrown -> assertThat(
+                        ((ResponseStatusException) thrown).getStatusCode().value()).isEqualTo(404));
     }
 
     /** Seeds a session whose run is mid-flight (status running, run_started + open assistant bubble). */

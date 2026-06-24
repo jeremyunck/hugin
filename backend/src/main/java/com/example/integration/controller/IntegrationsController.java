@@ -30,7 +30,7 @@ public class IntegrationsController {
             "google_drive_search", "google_drive_read_file",
             "google_docs_create", "google_docs_read", "google_docs_edit",
             "google_sheets_create", "google_sheets_read", "google_sheets_write", "google_sheets_append",
-            "google_gmail_search", "google_gmail_read", "google_gmail_send",
+            "google_gmail_search", "google_gmail_read", "google_gmail_send", "google_gmail_delete",
             "google_calendar_create");
 
     private static final List<String> GITHUB_TOOLS = List.of(

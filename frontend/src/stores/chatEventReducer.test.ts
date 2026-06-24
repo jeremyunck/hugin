@@ -148,6 +148,68 @@ describe("reduceChatEvent", () => {
     expect(live.lastSeq).toBe(fromList.lastSeq);
   });
 
+  it("projects an approval_required event into a pending approval card and parks the run", () => {
+    const result = reduceChatEvents(baseThread(), [
+      event({ id: "e1", seq: 1, type: "user_message_created", messageId: "user-1", content: "delete these", createdAt: "2026-06-20T00:00:01.000Z" }),
+      event({ id: "e2", seq: 2, type: "run_started", createdAt: "2026-06-20T00:00:02.000Z" }),
+      event({
+        id: "e3",
+        seq: 3,
+        type: "approval_required",
+        content: "Approval required to move 2 emails to Trash.",
+        metadata: {
+          kind: "email_delete",
+          approvalId: "ap-1",
+          items: [
+            { id: "m1", from: "a@x.com", subject: "Hi", snippet: "hello there" },
+            { id: "m2", from: "b@y.com", subject: "Yo" }
+          ]
+        },
+        createdAt: "2026-06-20T00:00:03.000Z"
+      })
+    ]);
+    const approvals = result.entries.filter((entry) => entry.type === "approval");
+    expect(approvals).toHaveLength(1);
+    const approval = approvals[0];
+    expect(approval.type === "approval" ? approval.status : "").toBe("pending");
+    expect(approval.type === "approval" ? approval.approvalId : "").toBe("ap-1");
+    expect(approval.type === "approval" ? approval.items.length : 0).toBe(2);
+    // The run is parked (stopped) but not finished, so the composer is free.
+    expect(result.run?.status).toBe("awaiting_approval");
+    expect(isThreadBusy(result)).toBe(false);
+    // The approval event drives an inline card, not the separate activity projection.
+    expect((result.activities ?? []).some((activity) => activity.type === "approval_required")).toBe(false);
+  });
+
+  it("resolves an approval card and completes the run, idempotent under redelivery", () => {
+    const required = event({
+      id: "e1",
+      seq: 1,
+      type: "approval_required",
+      content: "Approval required to move 1 email to Trash.",
+      metadata: { kind: "email_delete", approvalId: "ap-9", items: [{ id: "m1", from: "a@x.com", subject: "Hi" }] },
+      createdAt: "2026-06-20T00:00:01.000Z"
+    });
+    const resolved = event({
+      id: "e2",
+      seq: 2,
+      type: "approval_resolved",
+      content: "Moved 1 email to Trash.",
+      metadata: { approvalId: "ap-9", decision: "approved", deletedCount: 1 },
+      createdAt: "2026-06-20T00:00:02.000Z"
+    });
+    let thread = reduceChatEvent(reduceChatEvent(baseThread(), required), resolved);
+    // Re-applying the resolved event must not create a second card.
+    thread = reduceChatEvent(thread, resolved);
+    const approvals = thread.entries.filter((entry) => entry.type === "approval");
+    expect(approvals).toHaveLength(1);
+    const approval = approvals[0];
+    expect(approval.type === "approval" ? approval.status : "").toBe("approved");
+    expect(approval.type === "approval" ? approval.resultText : "").toBe("Moved 1 email to Trash.");
+    expect(thread.run?.status).toBe("completed");
+    expect(isThreadBusy(thread)).toBe(false);
+  });
+
   it("reconciles an optimistic pending user draft into the confirmed backend message", () => {
     const withPending: ChatThread = {
       ...baseThread(),

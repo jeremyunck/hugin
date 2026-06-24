@@ -1,6 +1,6 @@
 import { type RefObject } from "react";
 
-import type { ChatAttachment, ChatEntry, ModelOption } from "../../lib/types";
+import type { ApprovalDecision, ChatAttachment, ChatEntry, ModelOption } from "../../lib/types";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 
@@ -35,6 +35,7 @@ export function ChatPanel(props: {
   onClearImage: () => void;
   onSend: (prompt?: string) => void;
   onStop: () => void;
+  onApproval: (approvalId: string, decision: ApprovalDecision) => void;
 }) {
   const fresh = props.entries.length === 0;
   return (
@@ -45,7 +46,12 @@ export function ChatPanel(props: {
         </div>
       ) : (
         <div className="chat-stack">
-          <MessageList entries={props.entries} busy={props.busy} listRef={props.listRef} />
+          <MessageList
+            entries={props.entries}
+            busy={props.busy}
+            listRef={props.listRef}
+            onApproval={props.onApproval}
+          />
         </div>
       )}
       <Composer

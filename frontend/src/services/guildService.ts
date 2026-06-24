@@ -227,6 +227,27 @@ export async function cancelChatRun(token: string, sessionId: string): Promise<v
   }
 }
 
+export async function resolveChatApproval(
+  token: string,
+  sessionId: string,
+  approvalId: string,
+  decision: "approve" | "decline"
+): Promise<void> {
+  // The approval endpoint returns 202 with no body; the resulting approval_resolved/run_completed
+  // events arrive over the event stream (and on the next hydrate) to update the card and composer.
+  const response = await fetch(
+    `/api/chat/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(approvalId)}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ decision })
+    }
+  );
+  if (!response.ok) {
+    throw await errorFromResponse(response);
+  }
+}
+
 export async function fetchChatSessionEvents(token: string, sessionId: string, afterSeq = 0): Promise<ChatEvent[]> {
   const query = afterSeq > 0 ? `?afterSeq=${afterSeq}` : "";
   const response = await apiFetch<ChatEventsResponse>(

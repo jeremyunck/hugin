@@ -5,6 +5,7 @@ import {
   cancelChatRun as defaultCancelRun,
   fetchChatSessionEvents as defaultFetchEvents,
   openChatEventStream as defaultOpenStream,
+  resolveChatApproval as defaultResolveApproval,
   sendChatMessage as defaultSendMessage,
   type ChatEvent
 } from "../services/guildService";
@@ -23,13 +24,15 @@ export type ChatSessionDeps = {
   fetchChatSessionEvents: typeof defaultFetchEvents;
   openChatEventStream: typeof defaultOpenStream;
   cancelChatRun: typeof defaultCancelRun;
+  resolveChatApproval: typeof defaultResolveApproval;
 };
 
 const DEFAULT_DEPS: ChatSessionDeps = {
   sendChatMessage: defaultSendMessage,
   fetchChatSessionEvents: defaultFetchEvents,
   openChatEventStream: defaultOpenStream,
-  cancelChatRun: defaultCancelRun
+  cancelChatRun: defaultCancelRun,
+  resolveChatApproval: defaultResolveApproval
 };
 
 const THREAD_INDEX_KEY = "hugin-ui-thread-index-v1";
@@ -253,6 +256,7 @@ export type ChatSessionStore = {
   sendMessage: (threadId: string, input: SendMessageInput) => Promise<void>;
   markRunCancelling: (threadId: string) => void;
   cancelRun: (threadId: string) => Promise<void>;
+  resolveApproval: (threadId: string, approvalId: string, decision: "approve" | "decline") => Promise<void>;
   clearAll: () => void;
 };
 
@@ -477,6 +481,26 @@ export function useChatSessionStore(
     }
   }, [hydrateSession, connectStream]);
 
+  /**
+   * Sends the user's approve/decline decision for a parked run, then re-syncs from the event log so
+   * the authoritative approval_resolved + run_completed land (re-enabling the composer and updating the
+   * card) even if the live stream missed them.
+   */
+  const resolveApproval = useCallback(
+    async (threadId: string, approvalId: string, decision: "approve" | "decline") => {
+      const activeToken = tokenRef.current;
+      if (!activeToken) return;
+      try {
+        await depsRef.current.resolveChatApproval(activeToken, threadId, approvalId, decision);
+      } catch (error) {
+        console.warn("Failed to resolve chat approval", error);
+      } finally {
+        await refreshThread(threadId);
+      }
+    },
+    [refreshThread]
+  );
+
   const clearAll = useCallback(() => {
     for (const handle of streamsRef.current.values()) handle.close();
     streamsRef.current.clear();
@@ -540,6 +564,7 @@ export function useChatSessionStore(
       sendMessage,
       markRunCancelling,
       cancelRun,
+      resolveApproval,
       clearAll
     }),
     [
@@ -561,6 +586,7 @@ export function useChatSessionStore(
       sendMessage,
       markRunCancelling,
       cancelRun,
+      resolveApproval,
       clearAll
     ]
   );

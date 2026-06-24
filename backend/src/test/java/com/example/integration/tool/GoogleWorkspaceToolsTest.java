@@ -67,7 +67,8 @@ class GoogleWorkspaceToolsTest {
                 new GoogleSheetsAppendTool(f),
                 new GoogleGmailSearchTool(f),
                 new GoogleGmailReadTool(f),
-                new GoogleGmailSendTool(f));
+                new GoogleGmailSendTool(f),
+                new GoogleGmailDeleteTool(f));
 
         for (var tool : tools) {
             // document_id/spreadsheet_id are required by some tools but the unavailable check runs first.
@@ -80,8 +81,32 @@ class GoogleWorkspaceToolsTest {
     }
 
     @Test
+    void gmailDeleteRequiresApprovalInsteadOfDeletingImmediately(@TempDir Path tmp) throws Exception {
+        // A present (if dummy) credentials file makes isConfigured() true so the tool builds a preview.
+        Path creds = Files.writeString(tmp.resolve("creds.json"), "{}");
+        GoogleWorkspaceClientFactory f = new GoogleWorkspaceClientFactory(
+                new GoogleWorkspaceProperties(creds.toString(), "", "", 8765, "", "Hugin", "", ""));
+        GoogleGmailDeleteTool tool = new GoogleGmailDeleteTool(f);
+
+        // It never deletes on its own: instead it raises an approval request listing the targeted ids.
+        assertThatThrownBy(() -> tool.execute(Map.of("message_ids", List.of("m1", "m2"))))
+                .isInstanceOf(com.example.agent.tool.ToolApprovalRequiredException.class)
+                .satisfies(thrown -> {
+                    var approval = (com.example.agent.tool.ToolApprovalRequiredException) thrown;
+                    assertThat(approval.kind()).isEqualTo("email_delete");
+                    assertThat(approval.items()).hasSize(2);
+                    assertThat(approval.items()).extracting(item -> item.get("id")).containsExactly("m1", "m2");
+                });
+
+        // With no ids there is nothing to approve, so it returns guidance rather than throwing.
+        assertThat(tool.execute(Map.of("message_ids", List.of())))
+                .contains("Provide at least one Gmail message id");
+    }
+
+    @Test
     void toolNamesAndSchemasAreCorrect() {
         GoogleWorkspaceClientFactory f = unconfiguredFactory();
+        assertThat(new GoogleGmailDeleteTool(f).name()).isEqualTo("google_gmail_delete");
         assertThat(new GoogleDriveSearchTool(f).name()).isEqualTo("google_drive_search");
         assertThat(new GoogleDriveReadFileTool(f).name()).isEqualTo("google_drive_read_file");
         assertThat(new GoogleDocsCreateTool(f).name()).isEqualTo("google_docs_create");

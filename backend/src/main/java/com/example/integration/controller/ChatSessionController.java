@@ -75,6 +75,16 @@ public class ChatSessionController {
         return cancelled ? ResponseEntity.accepted().build() : ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{sessionId}/approvals/{approvalId}")
+    public ResponseEntity<Void> resolveApproval(@PathVariable String sessionId,
+                                                 @PathVariable String approvalId,
+                                                 @RequestBody ChatApprovalDecisionRequest request,
+                                                 @AuthenticationPrincipal Jwt jwt) {
+        chatSessionService.resolveApproval(sessionId, owner(jwt), approvalId,
+                request == null ? null : request.decision());
+        return ResponseEntity.accepted().build();
+    }
+
     @GetMapping("/{sessionId}/events")
     public ResponseEntity<ChatSessionEventsResponse> readEvents(@PathVariable String sessionId,
                                                                 @RequestParam(defaultValue = "0") long afterSeq,

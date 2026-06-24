@@ -74,6 +74,8 @@ public class GoogleWorkspaceClientFactory {
             DocsScopes.DOCUMENTS,
             GmailScopes.GMAIL_READONLY,
             GmailScopes.GMAIL_SEND,
+            // gmail.modify is needed to move messages to Trash for the user-approved delete tool.
+            GmailScopes.GMAIL_MODIFY,
             SheetsScopes.SPREADSHEETS,
             DriveScopes.DRIVE);
 

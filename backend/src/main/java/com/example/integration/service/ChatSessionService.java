@@ -8,8 +8,10 @@ import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.tool.HomeWorkspaceService;
+import com.example.agent.tool.ToolApprovalRequiredException;
 import com.example.agent.tool.WorkspaceRegistry;
 import com.example.integration.controller.ChatSessionMessageRequest;
+import com.example.integration.google.GmailDeletionService;
 import com.example.integration.modelsettings.ModelContextService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @Service
@@ -57,6 +61,7 @@ public class ChatSessionService {
     private final ModelContextService modelContextService;
     private final WorkspaceRegistry workspaceRegistry;
     private final HomeWorkspaceService homeWorkspaceService;
+    private final GmailDeletionService gmailDeletionService;
     private final String defaultModel;
 
     public ChatSessionService(ChatSessionRepository repository,
@@ -68,6 +73,7 @@ public class ChatSessionService {
                               ModelContextService modelContextService,
                               WorkspaceRegistry workspaceRegistry,
                               HomeWorkspaceService homeWorkspaceService,
+                              GmailDeletionService gmailDeletionService,
                               @Value("${llm.model:}") String defaultModel) {
         this.repository = repository;
         this.broker = broker;
@@ -78,6 +84,7 @@ public class ChatSessionService {
         this.modelContextService = modelContextService;
         this.workspaceRegistry = workspaceRegistry;
         this.homeWorkspaceService = homeWorkspaceService;
+        this.gmailDeletionService = gmailDeletionService;
         this.defaultModel = defaultModel;
     }
 
@@ -205,6 +212,15 @@ public class ChatSessionService {
                 completeAssistantMessage(sessionId, runId, open, fallback);
             }
             completeRun(sessionId, runId);
+        } catch (ToolApprovalRequiredException approval) {
+            // A tool needs the user to verify a consequential action. Pause the run in an
+            // awaiting_approval state and record what the user is being asked to approve; the action is
+            // carried out later (if approved) by resolveApproval, not here.
+            String open = openAssistantId.getAndSet(null);
+            if (open != null) {
+                completeAssistantMessage(sessionId, runId, open, null);
+            }
+            pauseForApproval(sessionId, runId, approval);
         } catch (AgentRunCancelledException e) {
             failRun(sessionId, runId, openAssistantId.get(), e.getMessage() == null ? "Request cancelled." : e.getMessage());
         } catch (Exception e) {
@@ -436,6 +452,113 @@ public class ChatSessionService {
             repository.updateRunStatus(runId, "completed", null, now);
             appendEvent(sessionId, runId, null, "run_completed", null, null, Map.of());
         });
+    }
+
+    /**
+     * Pauses a run that hit a tool needing user verification. Closes the tool's card with a "waiting"
+     * note, records an {@code approval_required} event the UI projects into an approve/decline prompt
+     * (and that a reconnecting client replays to rebuild that prompt), and parks the run in the
+     * {@code awaiting_approval} state. No terminal {@code run_completed}/{@code run_error} is written:
+     * the run is finished only once {@link #resolveApproval} lands the user's decision.
+     */
+    protected void pauseForApproval(String sessionId, String runId, ToolApprovalRequiredException approval) {
+        String approvalId = UUID.randomUUID().toString();
+        transactionTemplate.executeWithoutResult(status -> {
+            if (approval.toolCallId() != null) {
+                appendEvent(sessionId, runId, null, "tool_call_completed", null, null, Map.of(
+                        "callId", approval.toolCallId(),
+                        "name", approval.toolName() == null ? "tool" : approval.toolName(),
+                        "result", "Waiting for your approval."));
+            }
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("kind", approval.kind());
+            metadata.put("approvalId", approvalId);
+            metadata.put("items", approval.items());
+            appendEvent(sessionId, runId, null, "approval_required", null, approval.summary(), metadata);
+            repository.updateRunStatus(runId, "awaiting_approval", null, null);
+        });
+    }
+
+    /**
+     * Lands the user's approve/decline decision for a parked run. Looks up the originating
+     * {@code approval_required} event (the source of truth for what was being approved, so it survives
+     * reconnects), carries out the action when approved — currently moving the listed Gmail messages to
+     * Trash — then records an {@code approval_resolved} event and completes the run. Idempotent: a
+     * decision that has already been resolved is a no-op so a double-click can't delete twice.
+     */
+    public void resolveApproval(String sessionId, String owner, String approvalId, String decision) {
+        if (repository.sessionExists(sessionId) && !repository.sessionExistsForOwner(sessionId, owner)) {
+            throw new ResponseStatusException(NOT_FOUND, "Chat session not found");
+        }
+        boolean approve = "approve".equalsIgnoreCase(decision) || "approved".equalsIgnoreCase(decision);
+        boolean decline = "decline".equalsIgnoreCase(decision) || "declined".equalsIgnoreCase(decision);
+        if (!approve && !decline) {
+            throw new ResponseStatusException(BAD_REQUEST, "decision must be 'approve' or 'decline'");
+        }
+
+        List<ChatSessionEvent> events = repository.readEvents(sessionId, 0);
+        ChatSessionEvent request = null;
+        for (ChatSessionEvent event : events) {
+            if ("approval_required".equals(event.type())
+                    && approvalId.equals(String.valueOf(event.metadata().get("approvalId")))) {
+                request = event;
+            }
+            if ("approval_resolved".equals(event.type())
+                    && approvalId.equals(String.valueOf(event.metadata().get("approvalId")))) {
+                // Already decided — stay idempotent so a retried click neither errors nor re-deletes.
+                return;
+            }
+        }
+        if (request == null) {
+            throw new ResponseStatusException(NOT_FOUND, "Approval request not found");
+        }
+        String runId = request.runId();
+
+        String resultText;
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("approvalId", approvalId);
+        if (approve) {
+            List<String> ids = messageIdsFromApproval(request);
+            GmailDeletionService.Result result = gmailDeletionService.trash(ids);
+            metadata.put("decision", "approved");
+            metadata.put("deletedCount", result.deleted());
+            metadata.put("failedCount", result.failures().size());
+            if (result.failures().isEmpty()) {
+                resultText = result.deleted() == 1
+                        ? "Moved 1 email to Trash."
+                        : "Moved " + result.deleted() + " emails to Trash.";
+            } else {
+                resultText = "Moved " + result.deleted() + " email(s) to Trash; "
+                        + result.failures().size() + " could not be deleted.";
+            }
+        } else {
+            metadata.put("decision", "declined");
+            resultText = "Deletion declined. No emails were removed.";
+        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            appendEvent(sessionId, runId, null, "approval_resolved", null, resultText, metadata);
+            Instant now = Instant.now();
+            repository.updateRunStatus(runId, "completed", null, now);
+            appendEvent(sessionId, runId, null, "run_completed", null, null, Map.of());
+        });
+    }
+
+    /** Pulls the Gmail message ids out of an {@code approval_required} event's stored items. */
+    private static List<String> messageIdsFromApproval(ChatSessionEvent request) {
+        Object rawItems = request.metadata().get("items");
+        List<String> ids = new ArrayList<>();
+        if (rawItems instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Object id = map.get("id");
+                    if (id != null && !id.toString().isBlank()) {
+                        ids.add(id.toString());
+                    }
+                }
+            }
+        }
+        return ids;
     }
 
     /**

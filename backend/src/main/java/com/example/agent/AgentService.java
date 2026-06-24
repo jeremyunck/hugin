@@ -5,6 +5,7 @@ import com.example.agent.prompts.Prompts;
 import com.example.agent.tool.LocalTool;
 import com.example.agent.tool.LocalToolRegistry;
 import com.example.agent.tool.JustInTimeToolRegistry;
+import com.example.agent.tool.ToolApprovalRequiredException;
 import com.example.agent.tool.ToolContext;
 import com.example.agent.tool.Workspace;
 import com.example.agent.tool.WorkspaceRegistry;
@@ -567,9 +568,18 @@ public class AgentService {
                 for (ToolCall toolCall : assistantMsg.toolCalls()) {
                     ensureNotCancelled();
                     listener.onToolCall(toolCall.id(), toolCall.function().name(), toolCall.function().arguments());
-                    String toolResult = executeToolCall(toolCall,
-                            workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
-                            request.sandboxId(), request.attachments());
+                    String toolResult;
+                    try {
+                        toolResult = executeToolCall(toolCall,
+                                workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
+                                request.sandboxId(), request.attachments());
+                    } catch (ToolApprovalRequiredException approval) {
+                        // The tool needs user verification before it can act. Tag the call so the chat
+                        // layer can resolve its tool card, then unwind the loop: the run pauses here and
+                        // resumes (or not) once the user approves or declines.
+                        approval.attachToolCall(toolCall.id(), toolCall.function().name());
+                        throw approval;
+                    }
                     listener.onToolResult(toolCall.id(), toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -920,6 +930,9 @@ public class AgentService {
                     workspace, sessionId, owner, agentId, channelMessages, sandboxId, attachments);
             try {
                 return localTool.execute(args, ctx);
+            } catch (ToolApprovalRequiredException e) {
+                // Propagate: this is a control signal (pause for user approval), not a tool failure.
+                throw e;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new AgentRunCancelledException("Request cancelled.", e);
