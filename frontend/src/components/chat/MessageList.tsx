@@ -184,7 +184,20 @@ export function MessageList({
                 <>
                   {entry.reasoning ? <div className="assistant-reasoning">{entry.reasoning}</div> : null}
                   {entry.content ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeAssistantMarkdown(entry.content)}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table({ children }) {
+                          return (
+                            <div className="markdown-table-wrapper">
+                              <table>{children}</table>
+                            </div>
+                          );
+                        }
+                      }}
+                    >
+                      {normalizeAssistantMarkdown(entry.content)}
+                    </ReactMarkdown>
                   ) : null}
                 </>
               )}

@@ -751,12 +751,23 @@ select {
 }
 
 .assistant-response table {
-  width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
   overflow: hidden;
   border: 1px solid #eaebed;
   border-radius: 12px;
+}
+
+.markdown-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-table-wrapper table {
+  margin-bottom: 0;
 }
 
 .assistant-response th,
