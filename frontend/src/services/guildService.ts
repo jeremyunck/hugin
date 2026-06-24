@@ -320,7 +320,10 @@ export function createThread(kind: ChatKind = "chat", options: CreateThreadOptio
 export function getThreadTitle(prompt: string) {
   const normalized = prompt.trim().replace(/\s+/g, " ");
   if (!normalized) return "New chat";
-  return normalized.length > 42 ? `${normalized.slice(0, 42).trimEnd()}...` : normalized;
+  const words = normalized.split(/\s+/);
+  const MAX_WORDS = 10;
+  if (words.length <= MAX_WORDS) return normalized;
+  return words.slice(0, MAX_WORDS).join(" ") + "…";
 }
 
 export function addThread(state: AppState, thread: ChatThread): AppState {
