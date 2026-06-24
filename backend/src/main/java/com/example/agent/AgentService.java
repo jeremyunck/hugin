@@ -470,6 +470,10 @@ public class AgentService {
         if (!initialToolDefinitions.isEmpty()) {
             messages.add(ChatMessage.system(Prompts.TOOL_USE));
         }
+        int imageAttachmentCount = imageAttachmentCount(request.attachments());
+        if (imageAttachmentCount > 0 && advertisesTool(initialToolDefinitions, "describe_image")) {
+            messages.add(ChatMessage.system(Prompts.imageAttachmentNotice(imageAttachmentCount)));
+        }
         workspaceRegistry.githubRepo(request.sandboxId()).ifPresent(repoFullName ->
                 messages.add(ChatMessage.system(Prompts.githubRepoContext(repoFullName))));
         if (workspaceTools) {
@@ -565,7 +569,7 @@ public class AgentService {
                     listener.onToolCall(toolCall.id(), toolCall.function().name(), toolCall.function().arguments());
                     String toolResult = executeToolCall(toolCall,
                             workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
-                            request.sandboxId());
+                            request.sandboxId(), request.attachments());
                     listener.onToolResult(toolCall.id(), toolCall.function().name(), toolResult);
                     messages.add(ChatMessage.tool(toolCall.id(), toolResult));
                 }
@@ -694,6 +698,37 @@ public class AgentService {
             }
         }
         return toolDefinitions;
+    }
+
+    /** Number of image attachments (mime type {@code image/*}) carried by a request. */
+    private static int imageAttachmentCount(List<ChatAttachment> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (ChatAttachment attachment : attachments) {
+            if (attachment != null
+                    && attachment.dataUrl() != null
+                    && !attachment.dataUrl().isBlank()
+                    && (attachment.mimeType() == null
+                        || attachment.mimeType().toLowerCase(Locale.ROOT).startsWith("image/"))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Whether the advertised tool set includes a tool with the given name. */
+    private static boolean advertisesTool(List<ToolDefinition> toolDefinitions, String name) {
+        if (toolDefinitions == null) {
+            return false;
+        }
+        for (ToolDefinition definition : toolDefinitions) {
+            if (definition.function() != null && name.equals(definition.function().name())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** First choice of a chat response, or {@code null} if the response carries none. */
@@ -871,7 +906,7 @@ public class AgentService {
     private String executeToolCall(ToolCall toolCall,
                                    Workspace workspace,
                                    String sessionId, String owner, String agentId, List<String> channelMessages,
-                                   String sandboxId) {
+                                   String sandboxId, List<ChatAttachment> attachments) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
@@ -882,7 +917,7 @@ public class AgentService {
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
             ToolContext ctx = new ToolContext(
-                    workspace, sessionId, owner, agentId, channelMessages, sandboxId);
+                    workspace, sessionId, owner, agentId, channelMessages, sandboxId, attachments);
             try {
                 return localTool.execute(args, ctx);
             } catch (InterruptedException e) {

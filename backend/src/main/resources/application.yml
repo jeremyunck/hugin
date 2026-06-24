@@ -81,6 +81,18 @@ bug-reports:
     ttl: ${BUG_REPORTS_REDIS_TTL:1d}
     key-prefix: ${BUG_REPORTS_REDIS_KEY_PREFIX:bug-reports}
 
+image:
+  # The describe_image tool: the default chat model is text-only, so when a user attaches an image
+  # the agent calls this tool, which forwards the attachment to a vision-capable model over the
+  # OpenRouter chat-completions endpoint (authenticated with OPEN_ROUTER_API_KEY) and returns a
+  # textual description. The tool is only advertised when OPEN_ROUTER_API_KEY is set.
+  describe:
+    endpoint: ${IMAGE_DESCRIBE_ENDPOINT:https://openrouter.ai/api/v1/chat/completions}
+    # Vision-capable model used to describe attached images (independent of the chat llm.model).
+    model: ${IMAGE_DESCRIBE_MODEL:openai/gpt-4o-mini}
+    # Cap on the length of the description returned by the vision model.
+    max-tokens: ${IMAGE_DESCRIBE_MAX_TOKENS:1024}
+
 embedding:
   # OpenAI-schema embeddings endpoint (POST <base-url>/embeddings) used to vectorise memory text.
   # Defaults to OpenRouter; authenticates with Authorization: Bearer <api-key> when a key is set.

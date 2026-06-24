@@ -1,5 +1,7 @@
 package com.example.agent.tool;
 
+import com.example.agent.model.ChatAttachment;
+
 import java.util.List;
 
 /**
@@ -26,6 +28,11 @@ import java.util.List;
  * <p>{@code sandboxId} identifies the per-session sandbox (e.g. a Docker container) the request is
  * bound to. Tools that execute shell commands ({@code run_bash}) route them into this sandbox when it
  * is present; it may be {@code null} for requests that run against the default host workspace.
+ *
+ * <p>{@code attachments} carries any images the user attached to the message that triggered this
+ * run. The default chat model is text-only and cannot view images, so the {@code describe_image}
+ * tool reads them from here and forwards them to a vision-capable model. It may be {@code null} or
+ * empty for requests with no attachments.
  */
 public record ToolContext(
         Workspace workspace,
@@ -33,7 +40,19 @@ public record ToolContext(
         String username,
         String agentId,
         List<String> channelMessages,
-        String sandboxId) {
+        String sandboxId,
+        List<ChatAttachment> attachments) {
+
+    /** Context without attachments (defaults {@code attachments} to {@code null}). */
+    public ToolContext(
+            Workspace workspace,
+            String sessionId,
+            String username,
+            String agentId,
+            List<String> channelMessages,
+            String sandboxId) {
+        this(workspace, sessionId, username, agentId, channelMessages, sandboxId, null);
+    }
 
     /** Backwards-compatible context without a sandbox (defaults {@code sandboxId} to {@code null}). */
     public ToolContext(
@@ -42,7 +61,7 @@ public record ToolContext(
             String username,
             String agentId,
             List<String> channelMessages) {
-        this(workspace, sessionId, username, agentId, channelMessages, null);
+        this(workspace, sessionId, username, agentId, channelMessages, null, null);
     }
 
     /** Context with no session origin (stateless request). */
