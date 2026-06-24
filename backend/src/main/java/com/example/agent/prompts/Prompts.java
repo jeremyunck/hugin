@@ -101,6 +101,28 @@ public final class Prompts {
             If no tool is relevant, simply answer normally.""";
 
 
+    // ── Image-attachment context ──────────────────────────────────────────────
+
+    /**
+     * Injected as a system message on a request that carries one or more image attachments while the
+     * {@code describe_image} tool is available. The default chat model is text-only and cannot view
+     * images, so this tells it to call {@code describe_image} (which forwards the attachment to a
+     * vision-capable model) instead of guessing or claiming it cannot see the picture.
+     *
+     * @param count number of images attached to the current user message
+     */
+    public static String imageAttachmentNotice(int count) {
+        String noun = count == 1 ? "an image" : count + " images";
+        return ("""
+                The user attached %s to their latest message. You cannot view images directly, so do \
+                NOT guess at the contents or tell the user you are unable to see it. Instead call the \
+                describe_image tool, which forwards the attached image to a vision-capable model and \
+                returns a description. Pass a focused `question` argument when the user asks something \
+                specific about the image (otherwise omit it for a general description), and when more \
+                than one image is attached use the `image_index` argument to choose which one \
+                (0 for the first). Use the tool's result to answer the user.""").formatted(noun);
+    }
+
     // ── GitHub-repo chat context ──────────────────────────────────────────────
 
     /**

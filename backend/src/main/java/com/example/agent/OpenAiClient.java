@@ -1,5 +1,6 @@
 package com.example.agent;
 
+import com.example.agent.model.ChatAttachment;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ChatRequest;
 import com.example.agent.model.ChatResponse;
@@ -34,7 +35,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -475,20 +475,34 @@ public class OpenAiClient {
         if (!"user".equals(message.role()) || message.attachments() == null || message.attachments().isEmpty()) {
             return message.content();
         }
-        List<Map<String, Object>> parts = new ArrayList<>();
-        if (message.content() != null && !message.content().isBlank()) {
-            parts.add(Map.of("type", "text", "text", message.content()));
-        }
-        message.attachments().stream()
+        // The agent's chat model is typically text-only (e.g. openai/gpt-oss-120b), and OpenAI-schema
+        // providers reject image input for such models. Image understanding is routed through the
+        // describe_image tool — which reads the attachment from the per-request context and forwards
+        // it to a vision-capable model — so we never send raw image bytes to the chat model here.
+        // Instead we note that an image is attached so the model knows to call the tool.
+        List<ChatAttachment> images = message.attachments().stream()
                 .filter(attachment -> attachment != null
                         && attachment.dataUrl() != null
-                        && !attachment.dataUrl().isBlank())
-                .forEach(attachment -> {
-                    Map<String, Object> imageUrl = new HashMap<>();
-                    imageUrl.put("url", attachment.dataUrl());
-                    parts.add(Map.of("type", "image_url", "image_url", imageUrl));
-                });
-        return parts;
+                        && !attachment.dataUrl().isBlank()
+                        && (attachment.mimeType() == null
+                            || attachment.mimeType().toLowerCase(java.util.Locale.ROOT).startsWith("image/")))
+                .toList();
+        if (images.isEmpty()) {
+            return message.content();
+        }
+        StringBuilder content = new StringBuilder();
+        if (message.content() != null && !message.content().isBlank()) {
+            content.append(message.content());
+        }
+        for (ChatAttachment image : images) {
+            if (content.length() > 0) {
+                content.append('\n');
+            }
+            String name = image.name() == null || image.name().isBlank() ? "image" : image.name();
+            content.append("[Attached image: ").append(name)
+                    .append(" — not shown here; call the describe_image tool to view it.]");
+        }
+        return content.toString();
     }
 
     /** Accumulates streamed fragments of a single tool call into a complete {@link ToolCall}. */

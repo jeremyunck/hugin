@@ -200,7 +200,7 @@ class OpenAiClientTest {
     }
 
     @Test
-    void chatSerializesImageAttachmentsAsOpenAiContentParts() throws IOException {
+    void chatDoesNotSendRawImageBytesToChatModel() throws IOException {
         String[] capturedBody = new String[1];
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
@@ -222,11 +222,14 @@ class OpenAiClientTest {
                 "Describe this image",
                 List.of(new ChatAttachment("bird.png", "image/png", "data:image/png;base64,abc123", 123L)))), List.of());
 
-        assertThat(capturedBody[0]).contains("\"content\":[");
-        assertThat(capturedBody[0]).contains("\"type\":\"text\"");
-        assertThat(capturedBody[0]).contains("\"Describe this image\"");
-        assertThat(capturedBody[0]).contains("\"type\":\"image_url\"");
-        assertThat(capturedBody[0]).contains("\"url\":\"data:image/png;base64,abc123\"");
+        // The chat model may be text-only and providers reject image input for such models, so raw
+        // image bytes are never sent here — image understanding is routed through describe_image.
+        assertThat(capturedBody[0]).doesNotContain("image_url");
+        assertThat(capturedBody[0]).doesNotContain("data:image/png;base64,abc123");
+        // The user's text is preserved and a note tells the model to use the tool.
+        assertThat(capturedBody[0]).contains("Describe this image");
+        assertThat(capturedBody[0]).contains("describe_image");
+        assertThat(capturedBody[0]).contains("bird.png");
     }
 
     @Test
