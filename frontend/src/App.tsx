@@ -577,12 +577,13 @@ function PreferencesScreen(props: {
         </button>
       </div>
 
-      <div className="screen-pad">
-        <h1 className="screen-title integration-title">Settings</h1>
-        <p className="integration-subtitle">Personalize how Hugin looks and how the agent runs. Changes apply when you press Save.</p>
-      </div>
+      <div className="settings-scroll">
+        <div className="screen-pad">
+          <h1 className="screen-title integration-title">Settings</h1>
+          <p className="integration-subtitle">Personalize how Hugin looks and how the agent runs. Changes apply when you press Save.</p>
+        </div>
 
-      <div className="settings-section">
+        <div className="settings-section">
         <div className="history-group-label">FONT SIZE</div>
         <p className="settings-hint">Adjusts the text size across the entire app.</p>
         <div className="font-size-options" role="group" aria-label="Font size">
@@ -673,9 +674,10 @@ function PreferencesScreen(props: {
             className="settings-number-input"
           />
         </label>
+        </div>
       </div>
 
-      <div className="settings-section settings-actions">
+      <div className="screen-pad history-footer settings-actions">
         <button type="button" className="primary-button" onClick={handleSave} disabled={!dirty}>
           {justSaved ? "Saved" : "Save settings"}
         </button>

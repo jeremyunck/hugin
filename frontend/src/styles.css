@@ -1364,6 +1364,12 @@ select {
   font-weight: 600;
 }
 
+.settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .settings-actions {
   padding-bottom: 24px;
 }
