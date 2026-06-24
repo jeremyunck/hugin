@@ -53,6 +53,11 @@ public class AgentService {
     /** Absolute ceiling on a client-requested tool-call cap, regardless of the configured default. */
     private static final int MAX_TOOL_CALL_CEILING = 200;
 
+    /** Floor on a client-requested per-run timeout, so a request cannot starve itself. */
+    private static final Duration MIN_REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    /** Absolute ceiling on a client-requested per-run timeout, regardless of the configured default. */
+    private static final Duration MAX_REQUEST_TIMEOUT = Duration.ofMinutes(30);
+
     private final int maxIterations;
 
     private final OpenAiClient llmClient;
@@ -145,7 +150,7 @@ public class AgentService {
     }
 
     public AgentResponse chat(AgentRequest request) {
-        return runLoop(request, NO_OP_LISTENER, false, "global", true, null, null);
+        return runLoop(request, NO_OP_LISTENER, false, "global", true, null, null, null);
     }
 
     /**
@@ -348,11 +353,11 @@ public class AgentService {
      * once the loop completes.
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener) {
-        return runLoop(request, listener, true, "global", true, null, null);
+        return runLoop(request, listener, true, "global", true, null, null, null);
     }
 
     public AgentResponse chat(AgentRequest request, String owner) {
-        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, null);
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, null, null);
     }
 
     /**
@@ -361,11 +366,11 @@ public class AgentService {
      * is resolved against the configured default and ceiling.
      */
     public AgentResponse chat(AgentRequest request, String owner, Integer maxToolCalls) {
-        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, maxToolCalls);
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, maxToolCalls, null);
     }
 
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), null, null);
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), null, null, null);
     }
 
     /**
@@ -378,7 +383,7 @@ public class AgentService {
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
                                     Long contextLimit) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit, null);
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit, null, null);
     }
 
     /**
@@ -389,7 +394,21 @@ public class AgentService {
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
                                     Long contextLimit, Integer maxToolCalls) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit, maxToolCalls);
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit,
+                maxToolCalls, null);
+    }
+
+    /**
+     * Streaming variant that also overrides this run's wall-clock timeout with
+     * {@code requestTimeoutSeconds}. A {@code null}, zero, or negative value falls back to the server
+     * default ({@code agent.request-timeout}); other values are bounded to
+     * [{@link #MIN_REQUEST_TIMEOUT}, {@link #MAX_REQUEST_TIMEOUT}] so a client cannot disable the
+     * deadline or starve its own run.
+     */
+    public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
+                                    Long contextLimit, Integer maxToolCalls, Integer requestTimeoutSeconds) {
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit,
+                maxToolCalls, requestTimeoutSeconds);
     }
 
     public List<ChatMessage> history(String owner, String agentId, String sessionId) {
@@ -417,8 +436,9 @@ public class AgentService {
 
     private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream,
                                   String owner, boolean includeWorkspaceTools, Long contextLimit,
-                                  Integer maxToolCalls) {
-        Instant deadline = Instant.now().plus(requestTimeout);
+                                  Integer maxToolCalls, Integer requestTimeoutSeconds) {
+        Duration timeout = resolveTimeout(requestTimeoutSeconds);
+        Instant deadline = Instant.now().plus(timeout);
         int iterationCap = resolveIterationCap(maxToolCalls);
         int contextBudget = contextLimit == null ? 0 : (int) Math.min(Integer.MAX_VALUE, Math.max(0, contextLimit));
         RoutingSelection routing = resolveModel(request);
@@ -487,9 +507,9 @@ public class AgentService {
         for (int i = 0; i < iterationCap; i++) {
             ensureNotCancelled();
             if (Instant.now().isAfter(deadline)) {
-                log.warn("Agent request timed out after {}", requestTimeout);
+                log.warn("Agent request timed out after {}", timeout);
                 return new AgentResponse(
-                        "Request timed out after " + requestTimeout.toSeconds() + "s.",
+                        "Request timed out after " + timeout.toSeconds() + "s.",
                         Collections.unmodifiableList(messages));
             }
 
@@ -610,6 +630,26 @@ public class AgentService {
             return maxIterations;
         }
         return Math.min(maxToolCalls, MAX_TOOL_CALL_CEILING);
+    }
+
+    /**
+     * Resolves the per-run wall-clock timeout. A blank/non-positive request value uses the configured
+     * server default ({@code agent.request-timeout}); otherwise the requested value (in seconds) is used,
+     * bounded to [{@link #MIN_REQUEST_TIMEOUT}, {@link #MAX_REQUEST_TIMEOUT}] so a client cannot disable
+     * the deadline or starve its own run.
+     */
+    private Duration resolveTimeout(Integer requestTimeoutSeconds) {
+        if (requestTimeoutSeconds == null || requestTimeoutSeconds <= 0) {
+            return requestTimeout;
+        }
+        Duration requested = Duration.ofSeconds(requestTimeoutSeconds);
+        if (requested.compareTo(MIN_REQUEST_TIMEOUT) < 0) {
+            return MIN_REQUEST_TIMEOUT;
+        }
+        if (requested.compareTo(MAX_REQUEST_TIMEOUT) > 0) {
+            return MAX_REQUEST_TIMEOUT;
+        }
+        return requested;
     }
 
     /**

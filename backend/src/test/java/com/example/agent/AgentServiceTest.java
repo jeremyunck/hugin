@@ -253,6 +253,34 @@ class AgentServiceTest {
     }
 
     @Test
+    void perRequestTimeoutOverrideExtendsShortServerDefault() {
+        // A 1ms server default would time out before the first model call; a generous per-request
+        // override (clamped up to the 30s floor) gives the run room to finish normally.
+        var shortDefaultService = new AgentService(
+                llmClient,
+                registry(),
+                jitRegistry(Path.of(".")),
+                objectMapper,
+                SHORT_TIMEOUT,
+                DEFAULT_MODEL,
+                MAX_ITERATIONS,
+                defaultRegistry(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+
+        when(llmClient.chatStream(eq(MODEL), anyList(), anyList(), any(), any()))
+                .thenReturn(responseWithContent("Final answer."));
+
+        AgentResponse result = shortDefaultService.chatStream(
+                new AgentRequest(PROMPT, MODEL), new AgentStreamListener() {}, "owner", null, null, 60);
+
+        assertThat(result.response()).contains("Final answer.");
+        assertThat(result.response()).doesNotContain("timed out");
+    }
+
+    @Test
     void handlesEmptyChoicesGracefully() {
         when(llmClient.chat(eq(MODEL), anyList(), anyList()))
                 .thenReturn(new ChatResponse("id", List.of()));

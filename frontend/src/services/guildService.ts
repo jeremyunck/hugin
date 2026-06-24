@@ -64,6 +64,7 @@ type SendChatMessageOptions = {
   reasoningEffort?: string;
   sandboxId?: string;
   maxToolCalls?: number | null;
+  requestTimeoutSeconds?: number | null;
 };
 
 type SendChatMessageResponse = {
@@ -205,7 +206,8 @@ export async function sendChatMessage(
         ...(options.model ? { model: options.model } : {}),
         ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
         ...(options.sandboxId ? { sandboxId: options.sandboxId } : {}),
-        ...(options.maxToolCalls != null ? { maxToolCalls: options.maxToolCalls } : {})
+        ...(options.maxToolCalls != null ? { maxToolCalls: options.maxToolCalls } : {}),
+        ...(options.requestTimeoutSeconds != null ? { requestTimeoutSeconds: options.requestTimeoutSeconds } : {})
       })
     },
     token

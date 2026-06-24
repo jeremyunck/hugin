@@ -25,6 +25,12 @@ export const DEFAULT_FONT_SIZE: FontSizeId = "medium";
 export const MAX_TOOL_CALLS_MIN = 1;
 export const MAX_TOOL_CALLS_MAX = 200;
 
+/** Bounds (in seconds) for the user-configurable agent request timeout; mirror the server's range. */
+export const REQUEST_TIMEOUT_MIN = 30;
+export const REQUEST_TIMEOUT_MAX = 1800;
+/** The server's default agent request timeout (`agent.request-timeout: 5m`), shown when unset. */
+export const DEFAULT_REQUEST_TIMEOUT_SECONDS = 300;
+
 export type AppPreferences = {
   fontSize: FontSizeId;
   /** Preferred model for new chats; falls back to the first enabled model when unset/disabled. */
@@ -34,10 +40,15 @@ export type AppPreferences = {
    * a number overrides it (bounded by the server to a safe range).
    */
   maxToolCalls: number | null;
+  /**
+   * How long (in seconds) the agent may work on a single message before timing out. `null` keeps the
+   * server default; a number overrides it (bounded by the server to a safe range).
+   */
+  requestTimeoutSeconds: number | null;
 };
 
 export function defaultPreferences(): AppPreferences {
-  return { fontSize: DEFAULT_FONT_SIZE, defaultModelId: null, maxToolCalls: null };
+  return { fontSize: DEFAULT_FONT_SIZE, defaultModelId: null, maxToolCalls: null, requestTimeoutSeconds: null };
 }
 
 /** Coerces arbitrary input into a valid tool-call cap, or null to use the server default. */
@@ -46,6 +57,14 @@ export function normalizeMaxToolCalls(value: unknown): number | null {
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
   const rounded = Math.round(numeric);
   return Math.min(MAX_TOOL_CALLS_MAX, Math.max(MAX_TOOL_CALLS_MIN, rounded));
+}
+
+/** Coerces arbitrary input into a valid request timeout (seconds), or null to use the server default. */
+export function normalizeRequestTimeout(value: unknown): number | null {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  const rounded = Math.round(numeric);
+  return Math.min(REQUEST_TIMEOUT_MAX, Math.max(REQUEST_TIMEOUT_MIN, rounded));
 }
 
 function isFontSizeId(value: unknown): value is FontSizeId {
@@ -61,7 +80,8 @@ export function loadPreferences(): AppPreferences {
     return {
       fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : DEFAULT_FONT_SIZE,
       defaultModelId: typeof parsed.defaultModelId === "string" ? parsed.defaultModelId : null,
-      maxToolCalls: normalizeMaxToolCalls(parsed.maxToolCalls)
+      maxToolCalls: normalizeMaxToolCalls(parsed.maxToolCalls),
+      requestTimeoutSeconds: normalizeRequestTimeout(parsed.requestTimeoutSeconds)
     };
   } catch {
     return defaultPreferences();

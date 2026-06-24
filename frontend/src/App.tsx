@@ -60,12 +60,16 @@ import type {
 import { COLORS } from "./lib/theme";
 import { defaultReasoningFor } from "./lib/format";
 import {
+  DEFAULT_REQUEST_TIMEOUT_SECONDS,
   FONT_SIZE_OPTIONS,
   MAX_TOOL_CALLS_MAX,
   MAX_TOOL_CALLS_MIN,
+  REQUEST_TIMEOUT_MAX,
+  REQUEST_TIMEOUT_MIN,
   applyFontSize,
   loadPreferences,
   normalizeMaxToolCalls,
+  normalizeRequestTimeout,
   resolveDefaultModelId,
   savePreferences,
   type AppPreferences,
@@ -508,23 +512,62 @@ function AgentThreadsScreen(props: {
 }
 
 function PreferencesScreen(props: {
-  fontSize: FontSizeId;
-  defaultModelId: string | null;
-  maxToolCalls: number | null;
+  preferences: AppPreferences;
   enabledModels: ModelOption[];
   onBack: () => void;
-  onFontSizeChange: (fontSize: FontSizeId) => void;
-  onDefaultModelChange: (modelId: string) => void;
-  onMaxToolCallsChange: (value: number | null) => void;
+  onSave: (next: AppPreferences) => void;
   onOpenModelSettings: () => void;
 }) {
-  const { fontSize, defaultModelId, maxToolCalls, enabledModels, onBack, onFontSizeChange, onDefaultModelChange, onMaxToolCallsChange, onOpenModelSettings } = props;
-  const resolvedDefault = enabledModels.find((model) => model.id === defaultModelId)?.id ?? enabledModels[0]?.id ?? "";
-  const [maxToolCallsDraft, setMaxToolCallsDraft] = useState(maxToolCalls == null ? "" : String(maxToolCalls));
+  const { preferences, enabledModels, onBack, onSave, onOpenModelSettings } = props;
 
+  // The screen edits a local draft so nothing persists until the user presses Save.
+  const [fontSize, setFontSize] = useState<FontSizeId>(preferences.fontSize);
+  const [defaultModelId, setDefaultModelId] = useState<string | null>(preferences.defaultModelId);
+  const [maxToolCallsDraft, setMaxToolCallsDraft] = useState(
+    preferences.maxToolCalls == null ? "" : String(preferences.maxToolCalls)
+  );
+  const [requestTimeoutDraft, setRequestTimeoutDraft] = useState(
+    preferences.requestTimeoutSeconds == null ? "" : String(preferences.requestTimeoutSeconds)
+  );
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Re-seed the draft whenever the saved preferences change (e.g. after a save or an external update).
   useEffect(() => {
-    setMaxToolCallsDraft(maxToolCalls == null ? "" : String(maxToolCalls));
-  }, [maxToolCalls]);
+    setFontSize(preferences.fontSize);
+    setDefaultModelId(preferences.defaultModelId);
+    setMaxToolCallsDraft(preferences.maxToolCalls == null ? "" : String(preferences.maxToolCalls));
+    setRequestTimeoutDraft(
+      preferences.requestTimeoutSeconds == null ? "" : String(preferences.requestTimeoutSeconds)
+    );
+  }, [preferences]);
+
+  const resolvedDefault = enabledModels.find((model) => model.id === defaultModelId)?.id ?? enabledModels[0]?.id ?? "";
+  const normalizedMaxToolCalls = maxToolCallsDraft.trim() === "" ? null : normalizeMaxToolCalls(maxToolCallsDraft);
+  const normalizedRequestTimeout = requestTimeoutDraft.trim() === "" ? null : normalizeRequestTimeout(requestTimeoutDraft);
+
+  const dirty =
+    fontSize !== preferences.fontSize
+    || (resolvedDefault || null) !== preferences.defaultModelId
+    || normalizedMaxToolCalls !== preferences.maxToolCalls
+    || normalizedRequestTimeout !== preferences.requestTimeoutSeconds;
+
+  const handleSave = () => {
+    onSave({
+      fontSize,
+      defaultModelId: resolvedDefault || null,
+      maxToolCalls: normalizedMaxToolCalls,
+      requestTimeoutSeconds: normalizedRequestTimeout
+    });
+    setJustSaved(true);
+    window.setTimeout(() => setJustSaved(false), 2000);
+  };
+
+  const maxToolCallsCurrent =
+    preferences.maxToolCalls == null ? "Server default" : `${preferences.maxToolCalls} per message`;
+  const requestTimeoutCurrent =
+    preferences.requestTimeoutSeconds == null
+      ? `Server default (${DEFAULT_REQUEST_TIMEOUT_SECONDS}s)`
+      : `${preferences.requestTimeoutSeconds}s`;
 
   return (
     <>
@@ -536,7 +579,7 @@ function PreferencesScreen(props: {
 
       <div className="screen-pad">
         <h1 className="screen-title integration-title">Settings</h1>
-        <p className="integration-subtitle">Personalize how Hugin looks and which model new chats start with.</p>
+        <p className="integration-subtitle">Personalize how Hugin looks and how the agent runs. Changes apply when you press Save.</p>
       </div>
 
       <div className="settings-section">
@@ -549,7 +592,7 @@ function PreferencesScreen(props: {
               type="button"
               className={`font-size-option ${fontSize === option.id ? "font-size-option-active" : ""}`}
               aria-pressed={fontSize === option.id}
-              onClick={() => onFontSizeChange(option.id)}
+              onClick={() => setFontSize(option.id)}
             >
               <span className="font-size-preview" style={{ fontSize: `${option.scale}rem` }}>
                 Aa
@@ -574,7 +617,7 @@ function PreferencesScreen(props: {
         ) : (
           <label className="composer-select settings-select">
             <span>Model</span>
-            <select value={resolvedDefault} onChange={(event) => onDefaultModelChange(event.target.value)}>
+            <select value={resolvedDefault} onChange={(event) => setDefaultModelId(event.target.value)}>
               {enabledModels.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
@@ -594,6 +637,7 @@ function PreferencesScreen(props: {
           Caps how many tool-call steps the agent may take to answer a single message. Leave blank to
           use the server default.
         </p>
+        <p className="settings-current">Current: {maxToolCallsCurrent}</p>
         <label className="composer-select settings-select">
           <span>Limit per message</span>
           <input
@@ -604,16 +648,37 @@ function PreferencesScreen(props: {
             value={maxToolCallsDraft}
             placeholder="Server default"
             onChange={(event) => setMaxToolCallsDraft(event.target.value)}
-            onBlur={() => {
-              const normalized = maxToolCallsDraft.trim() === "" ? null : normalizeMaxToolCalls(maxToolCallsDraft);
-              onMaxToolCallsChange(normalized);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
             className="settings-number-input"
           />
         </label>
+      </div>
+
+      <div className="settings-section">
+        <div className="history-group-label">REQUEST TIMEOUT</div>
+        <p className="settings-hint">
+          How long (in seconds) the agent may work on a single message before timing out. Leave blank to
+          use the server default. Allowed range: {REQUEST_TIMEOUT_MIN}–{REQUEST_TIMEOUT_MAX}s.
+        </p>
+        <p className="settings-current">Current: {requestTimeoutCurrent}</p>
+        <label className="composer-select settings-select">
+          <span>Seconds per message</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={REQUEST_TIMEOUT_MIN}
+            max={REQUEST_TIMEOUT_MAX}
+            value={requestTimeoutDraft}
+            placeholder="Server default"
+            onChange={(event) => setRequestTimeoutDraft(event.target.value)}
+            className="settings-number-input"
+          />
+        </label>
+      </div>
+
+      <div className="settings-section settings-actions">
+        <button type="button" className="primary-button" onClick={handleSave} disabled={!dirty}>
+          {justSaved ? "Saved" : "Save settings"}
+        </button>
       </div>
     </>
   );
@@ -1383,7 +1448,8 @@ export default function App() {
           model: selectedModel.id,
           reasoningEffort: selectedReasoning,
           sandboxId,
-          maxToolCalls: preferences.maxToolCalls
+          maxToolCalls: preferences.maxToolCalls,
+          requestTimeoutSeconds: preferences.requestTimeoutSeconds
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : "The agent request failed.");
@@ -1395,7 +1461,7 @@ export default function App() {
         }
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store, preferences.defaultModelId, preferences.maxToolCalls]
+    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store, preferences.defaultModelId, preferences.maxToolCalls, preferences.requestTimeoutSeconds]
   );
 
   useEffect(() => {
@@ -1729,14 +1795,10 @@ export default function App() {
           />
         ) : screen === "preferences" ? (
           <PreferencesScreen
-            fontSize={preferences.fontSize}
-            defaultModelId={preferences.defaultModelId}
-            maxToolCalls={preferences.maxToolCalls}
+            preferences={preferences}
             enabledModels={enabledModels}
             onBack={() => setScreen(returnScreen)}
-            onFontSizeChange={(fontSize) => updatePreferences({ fontSize })}
-            onDefaultModelChange={(modelId) => updatePreferences({ defaultModelId: modelId })}
-            onMaxToolCallsChange={(maxToolCalls) => updatePreferences({ maxToolCalls })}
+            onSave={(next) => updatePreferences(next)}
             onOpenModelSettings={openSettings}
           />
         ) : screen === "agent-threads" ? (

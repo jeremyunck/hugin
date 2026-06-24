@@ -231,6 +231,7 @@ export type SendMessageInput = {
   reasoningEffort?: string;
   sandboxId?: string;
   maxToolCalls?: number | null;
+  requestTimeoutSeconds?: number | null;
 };
 
 export type ChatSessionStore = {
@@ -451,7 +452,8 @@ export function useChatSessionStore(
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         sandboxId: input.sandboxId,
-        maxToolCalls: input.maxToolCalls
+        maxToolCalls: input.maxToolCalls,
+        requestTimeoutSeconds: input.requestTimeoutSeconds
       });
       const seq = await hydrateSession(threadId, { afterSeq });
       // If a stream is already attached for this thread it keeps running; otherwise open one from the

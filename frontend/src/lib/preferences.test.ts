@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_TOOL_CALLS_MAX, MAX_TOOL_CALLS_MIN, normalizeMaxToolCalls, resolveDefaultModelId } from "./preferences";
+import {
+  MAX_TOOL_CALLS_MAX,
+  MAX_TOOL_CALLS_MIN,
+  REQUEST_TIMEOUT_MAX,
+  REQUEST_TIMEOUT_MIN,
+  normalizeMaxToolCalls,
+  normalizeRequestTimeout,
+  resolveDefaultModelId
+} from "./preferences";
 import type { ModelOption } from "./types";
 
 function model(id: string, enabled: boolean): ModelOption {
@@ -60,5 +68,29 @@ describe("normalizeMaxToolCalls", () => {
   it("clamps values to the supported range", () => {
     expect(normalizeMaxToolCalls(5000)).toBe(MAX_TOOL_CALLS_MAX);
     expect(normalizeMaxToolCalls(MAX_TOOL_CALLS_MIN)).toBe(MAX_TOOL_CALLS_MIN);
+  });
+});
+
+describe("normalizeRequestTimeout", () => {
+  it("keeps a valid in-range value", () => {
+    expect(normalizeRequestTimeout(120)).toBe(120);
+  });
+
+  it("parses numeric strings and rounds to whole seconds", () => {
+    expect(normalizeRequestTimeout("90")).toBe(90);
+    expect(normalizeRequestTimeout("90.4")).toBe(90);
+  });
+
+  it("treats blank, zero, negative, and non-numeric input as the server default (null)", () => {
+    expect(normalizeRequestTimeout("")).toBeNull();
+    expect(normalizeRequestTimeout(0)).toBeNull();
+    expect(normalizeRequestTimeout(-5)).toBeNull();
+    expect(normalizeRequestTimeout("abc")).toBeNull();
+    expect(normalizeRequestTimeout(null)).toBeNull();
+  });
+
+  it("clamps values to the supported range", () => {
+    expect(normalizeRequestTimeout(99999)).toBe(REQUEST_TIMEOUT_MAX);
+    expect(normalizeRequestTimeout(1)).toBe(REQUEST_TIMEOUT_MIN);
   });
 });
