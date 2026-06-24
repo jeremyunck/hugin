@@ -577,7 +577,7 @@ function PreferencesScreen(props: {
       : `${preferences.requestTimeoutSeconds}s`;
 
   return (
-    <>
+    <div className="settings-body">
       <div className="back-row">
         <button type="button" className="icon-button back-button" onClick={onBack} aria-label="Back">
           <ArrowLeft size={22} strokeWidth={2} />
@@ -719,7 +719,7 @@ function PreferencesScreen(props: {
           {justSaved ? "Saved" : "Save settings"}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 

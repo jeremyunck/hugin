@@ -1579,6 +1579,11 @@ select {
   gap: 8px;
 }
 
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
 .settings-number-input {
   width: 100%;
   border: 1px solid #e4e5e8;
