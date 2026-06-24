@@ -39,7 +39,7 @@ class WebSearchToolTest {
 
     @BeforeEach
     void setUp() {
-        tool = new WebSearchTool(API_KEY, ENDPOINT, MODEL, objectMapper, httpClient);
+        tool = new WebSearchTool(new OpenRouterSearchClient(API_KEY, ENDPOINT, objectMapper, httpClient), MODEL);
     }
 
     @SuppressWarnings("unchecked")
@@ -106,7 +106,7 @@ class WebSearchToolTest {
 
     @Test
     void returnsUnavailableWhenApiKeyBlank() throws Exception {
-        var noKeyTool = new WebSearchTool("", ENDPOINT, MODEL, objectMapper, httpClient);
+        var noKeyTool = new WebSearchTool(new OpenRouterSearchClient("", ENDPOINT, objectMapper, httpClient), MODEL);
 
         assertThat(noKeyTool.execute(Map.of("query", "test")))
                 .contains("OPEN_ROUTER_API_KEY is not set");

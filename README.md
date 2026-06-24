@@ -154,6 +154,9 @@ The updater only deploys when `origin/main` has moved. It skips if the checkout 
 - Read, write, and edit files inside the configured workspace
 - Run shell commands in the workspace
 - Search the web with the built-in `web_search` tool
+- Research a topic in depth with `deep_research` — it fans out several focused web searches across
+  different angles, de-duplicates the sources they cite, and returns a curated, source-backed brief
+  for the model to digest and write a report from
 - Turn a task it just solved into a reusable tool with `create_agent_tool` — when you ask it to
   "make that a tool", it saves the working solution as a self-contained script plus a manifest in the
   workspace's untracked `.hugin/jit-tools/` folder, loaded on the fly (no restart) for future requests
