@@ -1,7 +1,7 @@
-import { type RefObject } from "react";
+import { type RefObject, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, ChevronRight, Image as ImageIcon, Mail, ShieldAlert, Wrench, X } from "lucide-react";
+import { Check, ChevronRight, Image as ImageIcon, Loader2, Mail, ShieldAlert, Wrench, X } from "lucide-react";
 
 import type { ApprovalDecision, ApprovalItem, ChatEntry, StreamToolEvent } from "../../lib/types";
 
@@ -58,11 +58,17 @@ function ApprovalEntry({
   approval: Extract<ChatEntry, { type: "approval" }>;
   onApproval?: (approvalId: string, decision: ApprovalDecision) => void;
 }) {
-  const pending = approval.status === "pending";
-  const decide = (decision: ApprovalDecision) => onApproval?.(approval.approvalId, decision);
+  const [resolving, setResolving] = useState(false);
+  const pending = approval.status === "pending" && !resolving;
+  const loading = approval.status === "pending" && resolving;
+  const decide = (decision: ApprovalDecision) => {
+    if (resolving) return;
+    setResolving(true);
+    onApproval?.(approval.approvalId, decision);
+  };
   return (
     <div className="message-row message-row-approval fade-in">
-      <div className={`approval-card approval-card-${approval.status}`}>
+      <div className={`approval-card approval-card-${approval.status}${loading ? " approval-card-loading" : ""}`}>
         <div className="approval-header">
           <ShieldAlert size={15} strokeWidth={2} className="approval-icon" />
           <span className="approval-title">{approval.summary}</span>
@@ -81,7 +87,16 @@ function ApprovalEntry({
             </li>
           ))}
         </ul>
-        {pending ? (
+        {loading ? (
+          <div className="approval-actions">
+            <button type="button" className="approval-btn approval-btn-approve approval-btn-loading" disabled>
+              <Loader2 size={14} strokeWidth={2.5} className="spinner" /> Moving to Trash…
+            </button>
+            <button type="button" className="approval-btn approval-btn-decline" disabled>
+              Decline
+            </button>
+          </div>
+        ) : pending ? (
           <div className="approval-actions">
             <button type="button" className="approval-btn approval-btn-approve" onClick={() => decide("approve")}>
               <Check size={14} strokeWidth={2.5} /> Approve

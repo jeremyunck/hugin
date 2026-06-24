@@ -632,6 +632,27 @@ select {
   background: #f6f7f8;
 }
 
+.approval-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.approval-btn-loading {
+  pointer-events: none;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.approval-card-loading {
+  opacity: 0.85;
+}
+
 .approval-result {
   margin-top: 10px;
   font-size: calc(12.5px * var(--font-scale));
