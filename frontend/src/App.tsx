@@ -10,6 +10,7 @@ import {
   Network,
   Puzzle,
   Search,
+  Settings,
   Settings2,
   User,
   X
@@ -58,6 +59,15 @@ import type {
 } from "./lib/types";
 import { COLORS } from "./lib/theme";
 import { defaultReasoningFor } from "./lib/format";
+import {
+  FONT_SIZE_OPTIONS,
+  applyFontSize,
+  loadPreferences,
+  resolveDefaultModelId,
+  savePreferences,
+  type AppPreferences,
+  type FontSizeId
+} from "./lib/preferences";
 import { useChatSessionStore } from "./stores/chatSessionStore";
 import { AppHeader } from "./components/AppHeader";
 import { WorkspacePanel } from "./components/WorkspacePanel";
@@ -73,7 +83,16 @@ export { HistoryPanel as HistoryScreen } from "./components/HistoryPanel";
 
 const LOGO = "/hugin-bird.jpg";
 
-type Screen = "login" | "chat" | "purechat" | "history" | "integrations" | "settings" | "github-repo" | "agent-threads";
+type Screen =
+  | "login"
+  | "chat"
+  | "purechat"
+  | "history"
+  | "integrations"
+  | "settings"
+  | "preferences"
+  | "github-repo"
+  | "agent-threads";
 
 function nowIso() {
   return new Date().toISOString();
@@ -351,8 +370,9 @@ function MenuOverlay(props: {
   onAgentThreads: () => void;
   onIntegrations: () => void;
   onSettings: () => void;
+  onPreferences: () => void;
 }) {
-  const { username, roles, githubConnected, onClose, onAgent, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings } = props;
+  const { username, roles, githubConnected, onClose, onAgent, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings, onPreferences } = props;
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
@@ -395,6 +415,10 @@ function MenuOverlay(props: {
           <button type="button" className="menu-item" onClick={onSettings}>
             <Settings2 size={18} strokeWidth={2} color={COLORS.ink} />
             <span>Model settings</span>
+          </button>
+          <button type="button" className="menu-item" onClick={onPreferences}>
+            <Settings size={18} strokeWidth={2} color={COLORS.ink} />
+            <span>Settings</span>
           </button>
         </nav>
 
@@ -475,6 +499,83 @@ function AgentThreadsScreen(props: {
             </div>
           ))
         )}
+      </div>
+    </>
+  );
+}
+
+function PreferencesScreen(props: {
+  fontSize: FontSizeId;
+  defaultModelId: string | null;
+  enabledModels: ModelOption[];
+  onBack: () => void;
+  onFontSizeChange: (fontSize: FontSizeId) => void;
+  onDefaultModelChange: (modelId: string) => void;
+  onOpenModelSettings: () => void;
+}) {
+  const { fontSize, defaultModelId, enabledModels, onBack, onFontSizeChange, onDefaultModelChange, onOpenModelSettings } = props;
+  const resolvedDefault = enabledModels.find((model) => model.id === defaultModelId)?.id ?? enabledModels[0]?.id ?? "";
+
+  return (
+    <>
+      <div className="back-row">
+        <button type="button" className="icon-button back-button" onClick={onBack} aria-label="Back">
+          <ArrowLeft size={22} strokeWidth={2} />
+        </button>
+      </div>
+
+      <div className="screen-pad">
+        <h1 className="screen-title integration-title">Settings</h1>
+        <p className="integration-subtitle">Personalize how Hugin looks and which model new chats start with.</p>
+      </div>
+
+      <div className="settings-section">
+        <div className="history-group-label">FONT SIZE</div>
+        <p className="settings-hint">Adjusts the text size across the entire app.</p>
+        <div className="font-size-options" role="group" aria-label="Font size">
+          {FONT_SIZE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`font-size-option ${fontSize === option.id ? "font-size-option-active" : ""}`}
+              aria-pressed={fontSize === option.id}
+              onClick={() => onFontSizeChange(option.id)}
+            >
+              <span className="font-size-preview" style={{ fontSize: `${option.scale}rem` }}>
+                Aa
+              </span>
+              <span className="font-size-label">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="history-group-label">DEFAULT MODEL</div>
+        <p className="settings-hint">New chats start with this model. Choose from the models you have enabled.</p>
+        {enabledModels.length === 0 ? (
+          <p className="history-empty">
+            No models are enabled yet.{" "}
+            <button type="button" className="link-button" onClick={onOpenModelSettings}>
+              Enable a model
+            </button>{" "}
+            to set a default.
+          </p>
+        ) : (
+          <label className="composer-select settings-select">
+            <span>Model</span>
+            <select value={resolvedDefault} onChange={(event) => onDefaultModelChange(event.target.value)}>
+              {enabledModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button type="button" className="secondary-button settings-manage-button" onClick={onOpenModelSettings}>
+          Manage models
+        </button>
       </div>
     </>
   );
@@ -688,6 +789,7 @@ export default function App() {
   const [agentRunBusyId, setAgentRunBusyId] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [savingModels, setSavingModels] = useState(false);
+  const [preferences, setPreferences] = useState<AppPreferences>(() => loadPreferences());
 
   const [historyQuery, setHistoryQuery] = useState("");
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
@@ -822,6 +924,29 @@ export default function App() {
       .catch(() => setGitHubStatus(null));
   }, [session]);
 
+  const updatePreferences = useCallback((partial: Partial<AppPreferences>) => {
+    setPreferences((current) => {
+      const next = { ...current, ...partial };
+      savePreferences(next);
+      return next;
+    });
+  }, []);
+
+  // Apply the saved font size to the document root so the whole app scales with the preference.
+  useEffect(() => {
+    applyFontSize(preferences.fontSize);
+  }, [preferences.fontSize]);
+
+  // Keep the default model pointing at an enabled model: when it gets disabled in Model settings,
+  // fall through to the next enabled model in the list (and seed a default once models first load).
+  useEffect(() => {
+    if (!models.length) return;
+    const resolved = resolveDefaultModelId(models, preferences.defaultModelId);
+    if (resolved !== preferences.defaultModelId) {
+      updatePreferences({ defaultModelId: resolved });
+    }
+  }, [models, preferences.defaultModelId, updatePreferences]);
+
   // Keep scrolled to the latest message as the transcript grows.
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -832,13 +957,14 @@ export default function App() {
     if (!thread) return;
     const enabled = models.filter((model) => model.enabled);
     if (!enabled.length) return;
-    const selected = enabled.find((model) => model.id === thread.modelId) ?? enabled[0];
+    const preferredDefault = enabled.find((model) => model.id === preferences.defaultModelId) ?? enabled[0];
+    const selected = enabled.find((model) => model.id === thread.modelId) ?? preferredDefault;
     const nextReasoning = thread.reasoningEffort && selected.reasoningOptions.includes(thread.reasoningEffort)
       ? thread.reasoningEffort
       : defaultReasoningFor(selected);
     if (thread.modelId === selected.id && thread.reasoningEffort === nextReasoning) return;
     store.patchThread(thread.id, { modelId: selected.id, reasoningEffort: nextReasoning });
-  }, [models, thread, store]);
+  }, [models, thread, store, preferences.defaultModelId]);
 
   const refreshFiles = useCallback(
     async (sandboxId?: string) => {
@@ -1037,6 +1163,13 @@ export default function App() {
     }
   }, [screen, returnScreen, session]);
 
+  const openPreferences = useCallback(() => {
+    setReturnScreen(screen === "preferences" || screen === "settings" ? returnScreen : screen);
+    setScreen("preferences");
+    setMenuOpen(false);
+    setBugReportNotice(null);
+  }, [screen, returnScreen]);
+
   const loadAgentRuns = useCallback(async () => {
     if (!session) return;
     setAgentRunsLoading(true);
@@ -1173,7 +1306,8 @@ export default function App() {
       const current = store.activeThread;
       if ((!text && !attachment) || busy || !session || !current) return;
       const enabledModels = models.filter((model) => model.enabled);
-      const selectedModel = enabledModels.find((model) => model.id === current.modelId) ?? enabledModels[0];
+      const preferredDefault = enabledModels.find((model) => model.id === preferences.defaultModelId) ?? enabledModels[0];
+      const selectedModel = enabledModels.find((model) => model.id === current.modelId) ?? preferredDefault;
       if (!selectedModel) {
         setError("Enable at least one model in Model settings before sending a message.");
         return;
@@ -1222,7 +1356,7 @@ export default function App() {
         }
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store]
+    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store, preferences.defaultModelId]
   );
 
   useEffect(() => {
@@ -1422,7 +1556,8 @@ export default function App() {
   }, [session, selectedRepo, selectedBranch, selectedBugReportId, repoOptions, bugReports, refreshFiles, store]);
 
   const enabledModels = models.filter((model) => model.enabled);
-  const activeModel = enabledModels.find((model) => model.id === thread?.modelId) ?? enabledModels[0];
+  const preferredDefaultModel = enabledModels.find((model) => model.id === preferences.defaultModelId) ?? enabledModels[0];
+  const activeModel = enabledModels.find((model) => model.id === thread?.modelId) ?? preferredDefaultModel;
   const activeReasoning = activeModel?.reasoningOptions.includes(thread?.reasoningEffort ?? "")
     ? thread?.reasoningEffort
     : defaultReasoningFor(activeModel);
@@ -1553,6 +1688,16 @@ export default function App() {
             onToggle={toggleModelEnabled}
             onSave={saveModelPreferences}
           />
+        ) : screen === "preferences" ? (
+          <PreferencesScreen
+            fontSize={preferences.fontSize}
+            defaultModelId={preferences.defaultModelId}
+            enabledModels={enabledModels}
+            onBack={() => setScreen(returnScreen)}
+            onFontSizeChange={(fontSize) => updatePreferences({ fontSize })}
+            onDefaultModelChange={(modelId) => updatePreferences({ defaultModelId: modelId })}
+            onOpenModelSettings={openSettings}
+          />
         ) : screen === "agent-threads" ? (
           <AgentThreadsScreen
             runs={agentRuns}
@@ -1592,6 +1737,7 @@ export default function App() {
             onAgentThreads={openAgentThreads}
             onIntegrations={openIntegrations}
             onSettings={openSettings}
+            onPreferences={openPreferences}
           />
         ) : null}
       </div>

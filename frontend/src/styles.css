@@ -7,6 +7,8 @@
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #ebecee;
   color: #1c1f23;
+  /* Multiplier applied to every font-size in the app; controlled from the Settings page. */
+  --font-scale: 1;
 }
 
 html,
@@ -128,7 +130,7 @@ select {
 
 .brand-text {
   color: #1c1f23;
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale));
   font-weight: 800;
   letter-spacing: 0.16em;
 }
@@ -151,7 +153,7 @@ select {
   padding: 8px 12px;
   background: #fafafb;
   color: #3c414a;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -185,7 +187,7 @@ select {
   gap: 6px;
   padding: 3px 0;
   color: #1c1f23;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
 }
 
 .tree-row-clickable {
@@ -198,14 +200,14 @@ select {
   background: #f1f2f4;
   padding: 2px 8px;
   color: #8b9099;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale));
   font-weight: 500;
 }
 
 .tree-size {
   margin-left: auto;
   color: #adb2ba;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .mono {
@@ -240,7 +242,7 @@ select {
 .screen-title {
   margin: 0;
   color: #1c1f23;
-  font-size: 23px;
+  font-size: calc(23px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -249,7 +251,7 @@ select {
 .login-brand p {
   margin: 4px 0 0;
   color: #8b9099;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 
@@ -271,7 +273,7 @@ select {
   align-items: center;
   margin-bottom: 8px;
   color: #8b9099;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -287,7 +289,7 @@ select {
   content: "›";
   margin-left: auto;
   color: #8b9099;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1;
   transition: transform 0.15s ease;
 }
@@ -321,7 +323,7 @@ select {
   align-items: center;
   gap: 8px;
   color: #30353d;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -350,7 +352,7 @@ select {
   white-space: pre-wrap;
   word-break: break-word;
   color: #5c626c;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.45;
 }
 
@@ -396,7 +398,7 @@ select {
   gap: 8px;
   padding: 8px 12px;
   color: #30353d;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   list-style: none;
@@ -423,7 +425,7 @@ select {
 
 .tool-call-name {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
 }
 
 .tool-call-status {
@@ -455,7 +457,7 @@ select {
 .tool-call-section-label {
   margin-top: 6px;
   color: #8b9099;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -472,7 +474,7 @@ select {
   white-space: pre-wrap;
   word-break: break-word;
   color: #5c626c;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
@@ -481,7 +483,7 @@ select {
   border-radius: 999px;
   background: #f1f2f4;
   color: #8b9099;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -499,7 +501,7 @@ select {
   background: #efeff1;
   padding: 10px 14px;
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .message-image {
@@ -516,7 +518,7 @@ select {
   gap: 6px;
   margin-bottom: 8px;
   color: #5c626c;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
 }
 
 .assistant-response {
@@ -524,13 +526,13 @@ select {
   min-width: 0;
   padding: 2px 2px 2px 0;
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .assistant-reasoning {
   margin-bottom: 10px;
   color: #98a0ab;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -648,7 +650,7 @@ select {
 
 .assistant-bullets li {
   margin-top: 4px;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--font-scale));
 }
 
 .assistant-ref,
@@ -657,7 +659,7 @@ select {
 }
 
 .assistant-ref .mono {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .assistant-event {
@@ -666,7 +668,7 @@ select {
   background: transparent;
   padding: 0;
   list-style: none;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -683,7 +685,7 @@ select {
   content: "›";
   margin-left: 6px;
   color: #8b9099;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1;
   display: inline-block;
   transition: transform 0.15s ease;
@@ -707,7 +709,7 @@ select {
   display: inline-block;
   margin-bottom: 4px;
   color: #8b9099;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -723,7 +725,7 @@ select {
   background: #f7f7f8;
   padding: 10px 12px;
   color: #3c414a;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.45;
 }
 
@@ -791,12 +793,12 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #1c1f23;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .composer-attachment-copy span:last-child {
   color: #8b9099;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--font-scale));
 }
 
 .composer-attachment-remove {
@@ -840,7 +842,7 @@ select {
 
 .input-bar input {
   color: #1c1f23;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
 }
 
 .input-bar input::placeholder,
@@ -867,7 +869,7 @@ select {
   margin: 8px 0 0;
   text-align: center;
   color: #bfc3ca;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale));
 }
 
 .composer-controls {
@@ -886,7 +888,7 @@ select {
 
 .composer-select span {
   color: #8b9099;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -899,7 +901,7 @@ select {
   background: #fff;
   padding: 10px 12px;
   color: #1c1f23;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -954,7 +956,7 @@ select {
   border-radius: 8px;
   padding: 10px 12px;
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   text-align: left;
   cursor: pointer;
   transition:
@@ -992,7 +994,7 @@ select {
   border-radius: 999px;
   background: #1c1f23;
   color: #fff;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -1002,13 +1004,13 @@ select {
 
 .profile-name {
   color: #1c1f23;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--font-scale));
   font-weight: 500;
 }
 
 .profile-email {
   color: #8b9099;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .screen-title {
@@ -1027,7 +1029,7 @@ select {
 
 .search-bar input {
   color: #1c1f23;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--font-scale));
 }
 
 .history-list {
@@ -1041,7 +1043,7 @@ select {
 .history-group-label {
   padding: 0 4px 8px;
   color: #adb2ba;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   letter-spacing: 0.13em;
 }
@@ -1134,7 +1136,7 @@ select {
 .history-card-title,
 .integration-name {
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -1142,14 +1144,14 @@ select {
 .integration-meta {
   margin-top: 2px;
   color: #8b9099;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .history-empty {
   padding: 32px 4px 0;
   text-align: center;
   color: #8b9099;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .history-footer {
@@ -1183,7 +1185,7 @@ select {
   align-items: center;
   gap: 8px;
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -1199,13 +1201,13 @@ select {
   background: #fff;
   padding: 5px 9px;
   color: #5c626c;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--font-scale));
 }
 
 .repo-summary p {
   margin: 10px 0 0;
   color: #5c626c;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   line-height: 1.45;
 }
 
@@ -1224,7 +1226,7 @@ select {
   background: #1c1f23;
   padding: 14px;
   color: #fff;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -1233,14 +1235,14 @@ select {
 .login-error {
   margin: 0 20px 4px;
   color: #d14343;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.4;
 }
 
 .screen-note {
   margin: 0 20px 4px;
   color: #2f6f49;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
 }
 
 .primary-button:active,
@@ -1316,7 +1318,7 @@ select {
 .model-description {
   margin-top: 8px;
   color: #5c626c;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   line-height: 1.45;
 }
 
@@ -1332,7 +1334,82 @@ select {
   background: #f4f4f6;
   padding: 5px 9px;
   color: #444b55;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--font-scale));
+}
+
+.settings-section {
+  padding: 24px 20px 0;
+}
+
+.settings-hint {
+  margin: 0 0 12px;
+  color: #8b9099;
+  font-size: calc(12.5px * var(--font-scale));
+  line-height: 1.45;
+}
+
+.font-size-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.font-size-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  border: 1px solid #eaebed;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px 6px;
+  color: #1c1f23;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.font-size-option:hover {
+  background: #f7f7f8;
+}
+
+.font-size-option-active {
+  border-color: #1c1f23;
+  background: #f4f4f6;
+}
+
+.font-size-preview {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.font-size-label {
+  color: #5c626c;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 500;
+  text-align: center;
+}
+
+.settings-select {
+  gap: 8px;
+}
+
+.settings-manage-button {
+  margin-top: 12px;
+}
+
+.link-button {
+  padding: 0;
+  color: #355ee8;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .integration-copy {
@@ -1351,7 +1428,7 @@ select {
   background: #e6f4ea;
   padding: 3px 6px;
   color: #1b8a4b;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -1380,7 +1457,7 @@ select {
 .secondary-button {
   border-radius: 8px;
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -1425,7 +1502,7 @@ select {
 .login-wordmark {
   margin-top: 16px;
   color: #1c1f23;
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale));
   font-weight: 800;
   letter-spacing: 0.18em;
 }
@@ -1441,7 +1518,7 @@ select {
   display: block;
   margin-bottom: 6px;
   color: #8b9099;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -1452,7 +1529,7 @@ select {
 
 .login-input input {
   color: #1c1f23;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .signin-button {
