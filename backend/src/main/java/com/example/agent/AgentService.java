@@ -151,7 +151,7 @@ public class AgentService {
     }
 
     public AgentResponse chat(AgentRequest request) {
-        return runLoop(request, NO_OP_LISTENER, false, "global", true, null, null, null);
+        return runLoop(request, NO_OP_LISTENER, false, "global", true, null, null, null, null);
     }
 
     /**
@@ -354,11 +354,11 @@ public class AgentService {
      * once the loop completes.
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener) {
-        return runLoop(request, listener, true, "global", true, null, null, null);
+        return runLoop(request, listener, true, "global", true, null, null, null, null);
     }
 
     public AgentResponse chat(AgentRequest request, String owner) {
-        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, null, null);
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, null, null, null);
     }
 
     /**
@@ -367,11 +367,11 @@ public class AgentService {
      * is resolved against the configured default and ceiling.
      */
     public AgentResponse chat(AgentRequest request, String owner, Integer maxToolCalls) {
-        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, maxToolCalls, null);
+        return runLoop(request, NO_OP_LISTENER, false, normalizeOwner(owner), hasSandbox(request), null, maxToolCalls, null, null);
     }
 
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), null, null, null);
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), null, null, null, null);
     }
 
     /**
@@ -384,7 +384,7 @@ public class AgentService {
      */
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
                                     Long contextLimit) {
-        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit, null, null);
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit, null, null, null);
     }
 
     /**
@@ -396,7 +396,7 @@ public class AgentService {
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
                                     Long contextLimit, Integer maxToolCalls) {
         return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit,
-                maxToolCalls, null);
+                maxToolCalls, null, null);
     }
 
     /**
@@ -409,7 +409,20 @@ public class AgentService {
     public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
                                     Long contextLimit, Integer maxToolCalls, Integer requestTimeoutSeconds) {
         return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit,
-                maxToolCalls, requestTimeoutSeconds);
+                maxToolCalls, requestTimeoutSeconds, null);
+    }
+
+    /**
+     * Streaming variant that also overrides the model the {@code deep_research} tool uses for this run
+     * with {@code researchModel}. A {@code null} or blank value leaves the tool on its configured
+     * default; the override is threaded to the tool via {@link ToolContext} and applies only to this
+     * request, letting a user pick a research model in Settings without changing the server-wide one.
+     */
+    public AgentResponse chatStream(AgentRequest request, AgentStreamListener listener, String owner,
+                                    Long contextLimit, Integer maxToolCalls, Integer requestTimeoutSeconds,
+                                    String researchModel) {
+        return runLoop(request, listener, true, normalizeOwner(owner), hasSandbox(request), contextLimit,
+                maxToolCalls, requestTimeoutSeconds, researchModel);
     }
 
     public List<ChatMessage> history(String owner, String agentId, String sessionId) {
@@ -437,7 +450,7 @@ public class AgentService {
 
     private AgentResponse runLoop(AgentRequest request, AgentStreamListener listener, boolean stream,
                                   String owner, boolean includeWorkspaceTools, Long contextLimit,
-                                  Integer maxToolCalls, Integer requestTimeoutSeconds) {
+                                  Integer maxToolCalls, Integer requestTimeoutSeconds, String researchModel) {
         Duration timeout = resolveTimeout(requestTimeoutSeconds);
         Instant deadline = Instant.now().plus(timeout);
         int iterationCap = resolveIterationCap(maxToolCalls);
@@ -572,7 +585,7 @@ public class AgentService {
                     try {
                         toolResult = executeToolCall(toolCall,
                                 workspace, request.sessionId(), owner, request.agentId(), request.recentMessages(),
-                                request.sandboxId(), request.attachments());
+                                request.sandboxId(), request.attachments(), researchModel);
                     } catch (ToolApprovalRequiredException approval) {
                         // The tool needs user verification before it can act. Tag the call so the chat
                         // layer can resolve its tool card, then unwind the loop: the run pauses here and
@@ -916,7 +929,7 @@ public class AgentService {
     private String executeToolCall(ToolCall toolCall,
                                    Workspace workspace,
                                    String sessionId, String owner, String agentId, List<String> channelMessages,
-                                   String sandboxId, List<ChatAttachment> attachments) {
+                                   String sandboxId, List<ChatAttachment> attachments, String researchModel) {
         String toolName = toolCall.function().name();
         Map<String, Object> args = parseArguments(toolCall.function().arguments());
 
@@ -927,7 +940,7 @@ public class AgentService {
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);
             ToolContext ctx = new ToolContext(
-                    workspace, sessionId, owner, agentId, channelMessages, sandboxId, attachments);
+                    workspace, sessionId, owner, agentId, channelMessages, sandboxId, attachments, researchModel);
             try {
                 return localTool.execute(args, ctx);
             } catch (ToolApprovalRequiredException e) {

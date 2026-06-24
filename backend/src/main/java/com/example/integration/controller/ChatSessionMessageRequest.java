@@ -13,5 +13,6 @@ public record ChatSessionMessageRequest(
         String reasoningEffort,
         String sandboxId,
         Integer maxToolCalls,
-        Integer requestTimeoutSeconds
+        Integer requestTimeoutSeconds,
+        String researchModel
 ) {}

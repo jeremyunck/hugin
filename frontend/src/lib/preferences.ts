@@ -36,6 +36,11 @@ export type AppPreferences = {
   /** Preferred model for new chats; falls back to the first enabled model when unset/disabled. */
   defaultModelId: string | null;
   /**
+   * Model the `deep_research` tool uses for its web searches. `null` keeps the server-configured
+   * default; an enabled model id overrides it for this client's requests.
+   */
+  researchModelId: string | null;
+  /**
    * Maximum tool-call iterations the agent may run per message. `null` keeps the server default;
    * a number overrides it (bounded by the server to a safe range).
    */
@@ -48,7 +53,13 @@ export type AppPreferences = {
 };
 
 export function defaultPreferences(): AppPreferences {
-  return { fontSize: DEFAULT_FONT_SIZE, defaultModelId: null, maxToolCalls: null, requestTimeoutSeconds: null };
+  return {
+    fontSize: DEFAULT_FONT_SIZE,
+    defaultModelId: null,
+    researchModelId: null,
+    maxToolCalls: null,
+    requestTimeoutSeconds: null
+  };
 }
 
 /** Coerces arbitrary input into a valid tool-call cap, or null to use the server default. */
@@ -80,6 +91,7 @@ export function loadPreferences(): AppPreferences {
     return {
       fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : DEFAULT_FONT_SIZE,
       defaultModelId: typeof parsed.defaultModelId === "string" ? parsed.defaultModelId : null,
+      researchModelId: typeof parsed.researchModelId === "string" ? parsed.researchModelId : null,
       maxToolCalls: normalizeMaxToolCalls(parsed.maxToolCalls),
       requestTimeoutSeconds: normalizeRequestTimeout(parsed.requestTimeoutSeconds)
     };

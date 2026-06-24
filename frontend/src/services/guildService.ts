@@ -65,6 +65,7 @@ type SendChatMessageOptions = {
   sandboxId?: string;
   maxToolCalls?: number | null;
   requestTimeoutSeconds?: number | null;
+  researchModel?: string | null;
 };
 
 type SendChatMessageResponse = {
@@ -207,7 +208,8 @@ export async function sendChatMessage(
         ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
         ...(options.sandboxId ? { sandboxId: options.sandboxId } : {}),
         ...(options.maxToolCalls != null ? { maxToolCalls: options.maxToolCalls } : {}),
-        ...(options.requestTimeoutSeconds != null ? { requestTimeoutSeconds: options.requestTimeoutSeconds } : {})
+        ...(options.requestTimeoutSeconds != null ? { requestTimeoutSeconds: options.requestTimeoutSeconds } : {}),
+        ...(options.researchModel ? { researchModel: options.researchModel } : {})
       })
     },
     token

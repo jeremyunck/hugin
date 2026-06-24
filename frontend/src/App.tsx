@@ -523,6 +523,7 @@ function PreferencesScreen(props: {
   // The screen edits a local draft so nothing persists until the user presses Save.
   const [fontSize, setFontSize] = useState<FontSizeId>(preferences.fontSize);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(preferences.defaultModelId);
+  const [researchModelId, setResearchModelId] = useState<string | null>(preferences.researchModelId);
   const [maxToolCallsDraft, setMaxToolCallsDraft] = useState(
     preferences.maxToolCalls == null ? "" : String(preferences.maxToolCalls)
   );
@@ -535,6 +536,7 @@ function PreferencesScreen(props: {
   useEffect(() => {
     setFontSize(preferences.fontSize);
     setDefaultModelId(preferences.defaultModelId);
+    setResearchModelId(preferences.researchModelId);
     setMaxToolCallsDraft(preferences.maxToolCalls == null ? "" : String(preferences.maxToolCalls));
     setRequestTimeoutDraft(
       preferences.requestTimeoutSeconds == null ? "" : String(preferences.requestTimeoutSeconds)
@@ -542,12 +544,16 @@ function PreferencesScreen(props: {
   }, [preferences]);
 
   const resolvedDefault = enabledModels.find((model) => model.id === defaultModelId)?.id ?? enabledModels[0]?.id ?? "";
+  // The research model is optional: an empty value means "use the server default". A previously
+  // chosen model that is no longer enabled collapses back to the server default.
+  const resolvedResearch = enabledModels.find((model) => model.id === researchModelId)?.id ?? "";
   const normalizedMaxToolCalls = maxToolCallsDraft.trim() === "" ? null : normalizeMaxToolCalls(maxToolCallsDraft);
   const normalizedRequestTimeout = requestTimeoutDraft.trim() === "" ? null : normalizeRequestTimeout(requestTimeoutDraft);
 
   const dirty =
     fontSize !== preferences.fontSize
     || (resolvedDefault || null) !== preferences.defaultModelId
+    || (resolvedResearch || null) !== preferences.researchModelId
     || normalizedMaxToolCalls !== preferences.maxToolCalls
     || normalizedRequestTimeout !== preferences.requestTimeoutSeconds;
 
@@ -555,6 +561,7 @@ function PreferencesScreen(props: {
     onSave({
       fontSize,
       defaultModelId: resolvedDefault || null,
+      researchModelId: resolvedResearch || null,
       maxToolCalls: normalizedMaxToolCalls,
       requestTimeoutSeconds: normalizedRequestTimeout
     });
@@ -629,6 +636,38 @@ function PreferencesScreen(props: {
         <button type="button" className="secondary-button settings-manage-button" onClick={onOpenModelSettings}>
           Manage models
         </button>
+      </div>
+
+      <div className="settings-section">
+        <div className="history-group-label">RESEARCH MODEL</div>
+        <p className="settings-hint">
+          Model the deep research tool uses for its web searches. Leave on the server default, or pick
+          one of your enabled models to override it.
+        </p>
+        {enabledModels.length === 0 ? (
+          <p className="history-empty">
+            No models are enabled yet.{" "}
+            <button type="button" className="link-button" onClick={onOpenModelSettings}>
+              Enable a model
+            </button>{" "}
+            to choose a research model.
+          </p>
+        ) : (
+          <label className="composer-select settings-select">
+            <span>Model</span>
+            <select
+              value={resolvedResearch}
+              onChange={(event) => setResearchModelId(event.target.value || null)}
+            >
+              <option value="">Server default</option>
+              {enabledModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="settings-section">
@@ -1449,7 +1488,8 @@ export default function App() {
           reasoningEffort: selectedReasoning,
           sandboxId,
           maxToolCalls: preferences.maxToolCalls,
-          requestTimeoutSeconds: preferences.requestTimeoutSeconds
+          requestTimeoutSeconds: preferences.requestTimeoutSeconds,
+          researchModel: preferences.researchModelId
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : "The agent request failed.");
@@ -1461,7 +1501,7 @@ export default function App() {
         }
       }
     },
-    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store, preferences.defaultModelId, preferences.maxToolCalls, preferences.requestTimeoutSeconds]
+    [draft, draftAttachment, busy, session, refreshFiles, refreshAgentFiles, models, store, preferences.defaultModelId, preferences.researchModelId, preferences.maxToolCalls, preferences.requestTimeoutSeconds]
   );
 
   useEffect(() => {

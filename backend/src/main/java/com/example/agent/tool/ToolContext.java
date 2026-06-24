@@ -33,6 +33,10 @@ import java.util.List;
  * run. The default chat model is text-only and cannot view images, so the {@code describe_image}
  * tool reads them from here and forwards them to a vision-capable model. It may be {@code null} or
  * empty for requests with no attachments.
+ *
+ * <p>{@code researchModel} is an optional per-request override for the model the {@code deep_research}
+ * tool uses for its web searches. It lets a user pick a research model in Settings without changing
+ * the server-wide default; when {@code null} or blank the tool falls back to its configured model.
  */
 public record ToolContext(
         Workspace workspace,
@@ -41,7 +45,20 @@ public record ToolContext(
         String agentId,
         List<String> channelMessages,
         String sandboxId,
-        List<ChatAttachment> attachments) {
+        List<ChatAttachment> attachments,
+        String researchModel) {
+
+    /** Context without a per-request research-model override (defaults {@code researchModel} to {@code null}). */
+    public ToolContext(
+            Workspace workspace,
+            String sessionId,
+            String username,
+            String agentId,
+            List<String> channelMessages,
+            String sandboxId,
+            List<ChatAttachment> attachments) {
+        this(workspace, sessionId, username, agentId, channelMessages, sandboxId, attachments, null);
+    }
 
     /** Context without attachments (defaults {@code attachments} to {@code null}). */
     public ToolContext(
