@@ -9,6 +9,7 @@ UPDATE_LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
 DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
 DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
 REPO_URL="${HUGIN_DEV_REPO_URL:-}"
+SANDBOX_IMAGE="${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}"
 
 info() { printf '[hugin-update] %s\n' "$*"; }
 warn() { printf '[hugin-update] %s\n' "$*" >&2; }
@@ -90,9 +91,15 @@ built_jar=""
 if [[ -d "$DEPLOY_REPO_DIR/backend/target" ]]; then
   built_jar="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
 fi
+built_sandbox_image=false
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
+  && docker image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1; then
+  built_sandbox_image=true
+fi
 
 if [[ "$local_head" == "$remote_head" ]] \
   && [[ -n "$built_jar" ]] \
+  && [[ "$built_sandbox_image" == "true" ]] \
   && git diff --quiet --ignore-submodules -- \
   && git diff --cached --quiet --ignore-submodules --; then
   info "No changes to deploy."
@@ -117,6 +124,19 @@ info "Rebuilding frontend and backend artifacts..."
 # The backend Maven build runs the frontend build first, then packages the
 # compiled web assets into the jar served by the detached launchd process.
 MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" mvn -q -DskipTests package
+
+if ! command -v docker >/dev/null 2>&1; then
+  warn "Docker CLI not found on PATH. Install Docker Desktop; project/GitHub chats require ${SANDBOX_IMAGE}."
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  warn "Docker daemon not reachable. Start Docker Desktop so ${SANDBOX_IMAGE} can be rebuilt."
+  exit 1
+fi
+
+info "Building project-chat sandbox image ${SANDBOX_IMAGE}..."
+docker build -t "$SANDBOX_IMAGE" "$DEPLOY_REPO_DIR/docker/sandbox"
 
 info "Reloading launchd service ${SERVICE_LABEL} in detached mode..."
 launchctl bootout "gui/$(id -u)" "$SERVICE_PLIST" >/dev/null 2>&1 || true

@@ -16,6 +16,23 @@ RUN_SCRIPT="$REPO_DIR/scripts/hugin-launchd-run.sh"
 UPDATE_SCRIPT="$REPO_DIR/scripts/hugin-launchd-update.sh"
 REPO_URL="$(git -C "$REPO_DIR" remote get-url origin)"
 
+die() {
+  printf '[hugin-launchd-install] %s\n' "$*" >&2
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+if ! require_cmd docker; then
+  die "Docker CLI not found. Install Docker Desktop and re-run; project/GitHub chats require the sandbox image."
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  die "Docker daemon not reachable. Start Docker Desktop and re-run."
+fi
+
 mkdir -p "$LAUNCH_AGENTS_DIR" "$ENV_DIR" "$LOG_DIR" "$DEV_HOME" "$DEPLOY_REPO_DIR"
 
 if [[ -f "$ENV_FILE" ]]; then

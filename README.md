@@ -133,7 +133,12 @@ mvn -pl backend spring-boot:run
 
 ## macOS auto-redeploy from `main`
 
-To run this checkout as a `launchd` service and auto-update it every 30 minutes:
+To run this checkout as a `launchd` service and auto-update it every 30 minutes, install and start
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) first. The detached deploy flow
+rebuilds both the backend jar and the `hugin-agent-sandbox:latest` image used for project/GitHub
+repository chats.
+
+Then run:
 
 ```bash
 mvn -q -DskipTests package
@@ -145,6 +150,7 @@ The launchd updater lives at [`scripts/hugin-launchd-update.sh`](scripts/hugin-l
 - fetches `origin/main`
 - fast-forwards the checkout when there are new commits
 - rebuilds the backend jar, including the frontend bundle
+- rebuilds the `hugin-agent-sandbox:latest` Docker image from `docker/sandbox`
 - restarts the service with `launchctl kickstart -k`
 
 The installer writes:
