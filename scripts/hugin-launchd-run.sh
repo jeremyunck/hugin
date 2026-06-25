@@ -7,6 +7,12 @@ LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
 DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
 DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
 
+prepend_path() {
+  local dir="$1"
+  [[ -n "$dir" && -d "$dir" && ":$PATH:" != *":$dir:"* ]] || return 0
+  PATH="$dir:$PATH"
+}
+
 mkdir -p "$LOG_DIR"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -17,6 +23,11 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
+prepend_path "$HOME/.docker/bin"
+prepend_path "/Applications/Docker.app/Contents/Resources/bin"
+if [[ -n "${HUGIN_SANDBOX_DOCKER_BIN:-}" ]]; then
+  prepend_path "$(dirname "$HUGIN_SANDBOX_DOCKER_BIN")"
+fi
 if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
   export AGENT_HOME="$DEV_HOME"
 fi

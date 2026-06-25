@@ -13,6 +13,28 @@ SANDBOX_IMAGE="${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}"
 
 info() { printf '[hugin-update] %s\n' "$*"; }
 warn() { printf '[hugin-update] %s\n' "$*" >&2; }
+prepend_path() {
+  local dir="$1"
+  [[ -n "$dir" && -d "$dir" && ":$PATH:" != *":$dir:"* ]] || return 0
+  PATH="$dir:$PATH"
+}
+
+resolve_docker_bin() {
+  local candidate
+  for candidate in \
+    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "$(command -v docker 2>/dev/null || true)" \
+    "$HOME/.docker/bin/docker" \
+    "/Applications/Docker.app/Contents/Resources/bin/docker"
+  do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 stash_deployment_changes() {
   local stash_name="hugin-deploy-autostash-$(date +%s)"
   git stash push --include-untracked --message "$stash_name" >/dev/null
@@ -42,6 +64,11 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
+prepend_path "$HOME/.docker/bin"
+prepend_path "/Applications/Docker.app/Contents/Resources/bin"
+if [[ -n "${HUGIN_SANDBOX_DOCKER_BIN:-}" ]]; then
+  prepend_path "$(dirname "$HUGIN_SANDBOX_DOCKER_BIN")"
+fi
 if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
   export AGENT_HOME="$DEV_HOME"
 fi
@@ -92,8 +119,9 @@ if [[ -d "$DEPLOY_REPO_DIR/backend/target" ]]; then
   built_jar="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
 fi
 built_sandbox_image=false
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
-  && docker image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1; then
+DOCKER_BIN="$(resolve_docker_bin || true)"
+if [[ -n "$DOCKER_BIN" ]] && "$DOCKER_BIN" info >/dev/null 2>&1 \
+  && "$DOCKER_BIN" image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1; then
   built_sandbox_image=true
 fi
 
@@ -125,18 +153,18 @@ info "Rebuilding frontend and backend artifacts..."
 # compiled web assets into the jar served by the detached launchd process.
 MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" mvn -q -DskipTests package
 
-if ! command -v docker >/dev/null 2>&1; then
-  warn "Docker CLI not found on PATH. Install Docker Desktop; project/GitHub chats require ${SANDBOX_IMAGE}."
+if [[ -z "$DOCKER_BIN" ]]; then
+  warn "Docker CLI not found. Install Docker Desktop; project/GitHub chats require ${SANDBOX_IMAGE}."
   exit 1
 fi
 
-if ! docker info >/dev/null 2>&1; then
+if ! "$DOCKER_BIN" info >/dev/null 2>&1; then
   warn "Docker daemon not reachable. Start Docker Desktop so ${SANDBOX_IMAGE} can be rebuilt."
   exit 1
 fi
 
 info "Building project-chat sandbox image ${SANDBOX_IMAGE}..."
-docker build -t "$SANDBOX_IMAGE" "$DEPLOY_REPO_DIR/docker/sandbox"
+"$DOCKER_BIN" build -t "$SANDBOX_IMAGE" "$DEPLOY_REPO_DIR/docker/sandbox"
 
 info "Reloading launchd service ${SERVICE_LABEL} in detached mode..."
 launchctl bootout "gui/$(id -u)" "$SERVICE_PLIST" >/dev/null 2>&1 || true

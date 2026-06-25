@@ -30,6 +30,23 @@ ask()     { printf '\033[1;35m   >\033[0m %s' "$*"; }
 
 require_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+resolve_docker_bin() {
+  local candidate
+  for candidate in \
+    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "${SANDBOX_DOCKER_BIN:-}" \
+    "$(command -v docker 2>/dev/null || true)" \
+    "$HOME/.docker/bin/docker" \
+    "/Applications/Docker.app/Contents/Resources/bin/docker"
+  do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 resolve_hugin_version() {
   local package_json="$REPO_DIR/package.json"
   local version=""
@@ -226,7 +243,7 @@ if [[ "$OS_TYPE" == "macos" ]]; then
   pkg_install_docker() {
     # Project (GitHub repository) chats run in isolated Docker containers, so the Docker
     # CLI + daemon are required. On macOS that means Docker Desktop.
-    if require_cmd docker; then
+    if resolve_docker_bin >/dev/null 2>&1; then
       info "Docker already present."
     else
       warn "Docker not found — installing Docker Desktop via Homebrew..."
@@ -234,7 +251,11 @@ if [[ "$OS_TYPE" == "macos" ]]; then
         || die "Could not install Docker Desktop via Homebrew. Install it from https://www.docker.com/products/docker-desktop/ and re-run."
     fi
   }
-  docker_daemon_ok() { docker info >/dev/null 2>&1; }
+  docker_daemon_ok() {
+    local docker_bin
+    docker_bin="$(resolve_docker_bin)" || return 1
+    "$docker_bin" info >/dev/null 2>&1
+  }
   docker_start_daemon() {
     docker_daemon_ok && return 0
     info "Starting Docker Desktop (this can take up to a minute)..."
@@ -246,7 +267,11 @@ if [[ "$OS_TYPE" == "macos" ]]; then
       sleep 2
     done
   }
-  docker_build_sandbox_image() { docker build -t "$1" "$2"; }
+  docker_build_sandbox_image() {
+    local docker_bin
+    docker_bin="$(resolve_docker_bin)" || return 1
+    "$docker_bin" build -t "$1" "$2"
+  }
 
   svc_install() {
     # Write a LaunchAgent plist (user-level, no sudo).
@@ -778,6 +803,8 @@ GOOGLE_OAUTH_TOKEN_DIR=${GOOGLE_OAUTH_TOKEN_DIR:-}
 # Hugin home directory (workspace root is $HUGIN_HOME/workspace)
 AGENT_HOME=${HUGIN_HOME}
 HUGIN_HOME=${HUGIN_HOME}
+HUGIN_SANDBOX_DOCKER_BIN=$(resolve_docker_bin || true)
+SANDBOX_DOCKER_BIN=$(resolve_docker_bin || true)
 HUGIN_VERSION=${current_hugin_version}
 HUGIN_UPDATE_SOURCE_SHA=${current_hugin_source_sha}
 HUGIN_REPO_DIR=${REPO_DIR}

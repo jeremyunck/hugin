@@ -25,11 +25,28 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
-if ! require_cmd docker; then
+resolve_docker_bin() {
+  local candidate
+  for candidate in \
+    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "$(command -v docker 2>/dev/null || true)" \
+    "$HOME/.docker/bin/docker" \
+    "/Applications/Docker.app/Contents/Resources/bin/docker"
+  do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+DOCKER_BIN="$(resolve_docker_bin || true)"
+if [[ -z "$DOCKER_BIN" ]]; then
   die "Docker CLI not found. Install Docker Desktop and re-run; project/GitHub chats require the sandbox image."
 fi
 
-if ! docker info >/dev/null 2>&1; then
+if ! "$DOCKER_BIN" info >/dev/null 2>&1; then
   die "Docker daemon not reachable. Start Docker Desktop and re-run."
 fi
 
@@ -89,6 +106,7 @@ append_if_set HUGIN_DEV_SERVICE_LABEL "$SERVICE_LABEL"
 append_if_set HUGIN_DEV_UPDATE_LABEL "$UPDATE_LABEL"
 append_if_set HUGIN_DEV_DEPLOY_REPO_DIR "$DEPLOY_REPO_DIR"
 append_if_set HUGIN_DEV_REPO_URL "$REPO_URL"
+append_if_set HUGIN_SANDBOX_DOCKER_BIN "$DOCKER_BIN"
 chmod 600 "$ENV_FILE"
 
 cat > "$SERVICE_PLIST" <<EOF
