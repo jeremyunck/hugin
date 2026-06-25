@@ -8,6 +8,7 @@ import com.example.integration.github.GitHubAppService;
 import com.example.integration.sandbox.ProjectSandboxProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -34,6 +35,7 @@ public class SandboxSessionService {
     private final ProjectSandboxProperties properties;
     private final Optional<GitHubAppService> github;
 
+    @Autowired
     public SandboxSessionService(DockerSandboxRuntime runtime,
                                  SandboxSessionRepository repository,
                                  ProjectSandboxProperties properties,
