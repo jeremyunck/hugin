@@ -6,6 +6,10 @@
 # and runs the agent's bash/git/build/test commands. It never runs an HTTP server or agent runtime;
 # the backend drives it entirely through `docker exec`.
 #
+# Hugin's bundled skill files are written into the container by the backend at sandbox-creation time
+# (see DockerSandboxRuntime.copyBundledSkillsToContainer). They do not need to be baked into this
+# image.
+#
 # Build:
 #   docker build -t hugin-agent-sandbox:latest docker/sandbox
 FROM ubuntu:24.04

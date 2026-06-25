@@ -1,5 +1,6 @@
 package com.example.integration.service;
 
+import com.example.agent.BundledSkills;
 import com.example.agent.sandbox.FileEntry;
 import com.example.agent.sandbox.FileResult;
 import com.example.agent.sandbox.RepositoryConfig;
@@ -106,6 +107,7 @@ public class DockerSandboxRuntime implements SandboxRuntime {
 
         try {
             cloneRepositoryInContainer(containerName, repoPath, repository);
+            copyBundledSkillsToContainer(sandboxId, containerName);
         } catch (RuntimeException e) {
             destroyQuietly(sandboxId);
             throw e;
@@ -126,6 +128,33 @@ public class DockerSandboxRuntime implements SandboxRuntime {
                 now,
                 now,
                 expiresAt);
+    }
+
+    /**
+     * Copies Hugin's bundled skill files into the sandbox container's repository workspace.
+     * Each skill is written only if the file does not already exist in the cloned project,
+     * so project-specific skills always take precedence over bundled ones.
+     */
+    private void copyBundledSkillsToContainer(String sandboxId, String containerName) {
+        for (String skillPath : BundledSkills.SKILL_PATHS) {
+            String content = BundledSkills.readContent(skillPath);
+            if (content == null) {
+                continue;
+            }
+            String target = resolveInRepo(skillPath);
+            String parent = target.contains("/") ? target.substring(0, target.lastIndexOf('/')) : ".";
+            String b64 = Base64.getEncoder().encodeToString(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            // Write only if the file is absent from the cloned repository.
+            String cmd = "test -f " + shellQuote(target) + " || ("
+                    + "mkdir -p " + shellQuote(parent) + " && "
+                    + "printf %s " + shellQuote(b64) + " | base64 -d > " + shellQuote(target) + ")";
+            ProcessResult result = run(
+                    List.of(properties.dockerBin(), "exec", containerName, "bash", "-lc", cmd),
+                    properties.execTimeout(), null);
+            if (!result.ok()) {
+                log.warn("Could not copy bundled skill {} to sandbox {}: {}", skillPath, sandboxId, result.output());
+            }
+        }
     }
 
     private void cloneRepositoryInContainer(String containerName, String repoPath, RepositoryConfig repository) {

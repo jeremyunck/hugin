@@ -1,5 +1,6 @@
 package com.example.integration.service;
 
+import com.example.agent.BundledSkills;
 import com.example.agent.model.FileNode;
 import com.example.agent.model.SandboxInfo;
 import com.example.agent.sandbox.FileEntry;
@@ -203,6 +204,7 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
     private SandboxInfo registerProjectSandbox(SandboxSession session, String repoFullName, String imageOverride) {
         String id = session.sandboxId();
         Path placeholder = placeholderWorkspace(id);
+        extractBundledSkillsToPlaceholder(placeholder);
         workspaceRegistry.register(id, workspaceFactory.create(placeholder));
         if (repoFullName != null && !repoFullName.isBlank()) {
             workspaceRegistry.registerGithubRepo(id, repoFullName);
@@ -252,6 +254,20 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
         log.info("Rehydrated isolated project sandbox {} (repo={})",
                 sandboxId, repoFullNameFromUrl(session.repositoryUrl()));
         return true;
+    }
+
+    /**
+     * Writes Hugin's bundled skill files into the placeholder workspace directory so that
+     * {@link com.example.agent.WorkspaceSkills} can discover them for the initial system prompt.
+     * Failures are logged but never propagate — a missing skill listing is a degraded experience,
+     * not a fatal error.
+     */
+    private void extractBundledSkillsToPlaceholder(Path placeholder) {
+        try {
+            BundledSkills.extractTo(placeholder);
+        } catch (IOException e) {
+            log.warn("Could not extract bundled skills to placeholder workspace {}: {}", placeholder, e.getMessage());
+        }
     }
 
     /** Creates (once) the empty per-sandbox host directory used as the placeholder workspace root. */
