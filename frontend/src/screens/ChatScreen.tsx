@@ -78,6 +78,7 @@ export function ChatScreen(props: {
       {props.bugReportNotice ? <p className="screen-note screen-pad">{props.bugReportNotice}</p> : null}
       <ChatPanel
         name={props.name}
+        kind={thread.kind}
         entries={thread.entries}
         busy={props.busy}
         running={props.running}

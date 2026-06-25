@@ -1,14 +1,20 @@
 import { type RefObject } from "react";
 
-import type { ApprovalDecision, ChatAttachment, ChatEntry, ModelOption } from "../../lib/types";
+import type { ApprovalDecision, ChatAttachment, ChatEntry, ChatKind, ModelOption } from "../../lib/types";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
+import { PromptSuggestions } from "./PromptSuggestions";
 
-function Greeting({ name }: { name: string }) {
+function Greeting({ name, kind, disabled, onSend }: { name: string; kind: ChatKind; disabled: boolean; onSend: (prompt?: string) => void }) {
   return (
     <div className="greeting">
       <h1>Hi {name}! 👋</h1>
       <p>How can I help you today?</p>
+      <PromptSuggestions
+        kind={kind}
+        disabled={disabled}
+        onSelect={(prompt) => onSend(prompt)}
+      />
     </div>
   );
 }
@@ -19,6 +25,7 @@ function Greeting({ name }: { name: string }) {
  */
 export function ChatPanel(props: {
   name: string;
+  kind: ChatKind;
   entries: ChatEntry[];
   busy: boolean;
   running: boolean;
@@ -42,7 +49,7 @@ export function ChatPanel(props: {
     <>
       {fresh ? (
         <div className="chat-body">
-          <Greeting name={props.name} />
+          <Greeting name={props.name} kind={props.kind} disabled={props.busy || props.models.length === 0} onSend={props.onSend} />
         </div>
       ) : (
         <div className="chat-stack">
