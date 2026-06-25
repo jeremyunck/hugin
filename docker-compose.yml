@@ -3,10 +3,10 @@
 #   cp .env.example .env   # then add your LLM key and set HOST_PORT if 8080 is already taken
 #   docker compose up --build
 #
-# App is served on http://localhost:${HOST_PORT:-8081}. Stop with `docker compose down`;
+# App is served on http://localhost:${HOST_PORT:-8080}. Stop with `docker compose down`;
 # reset all local data (DB, Redis, agent home, workspace) with `docker compose down -v`.
 # If port 8080 is already in use on the host (e.g. by a native Hugin install), set
-# HOST_PORT to a free port in .env before starting.
+# HOST_PORT to a free port (e.g. HOST_PORT=8081) in .env before starting.
 
 services:
   postgres:
@@ -72,7 +72,7 @@ services:
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-change-me}
       AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD: ${AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD:-true}
     ports:
-      - "${HOST_PORT:-8081}:8080"
+      - "${HOST_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 10s
