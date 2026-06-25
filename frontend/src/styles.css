@@ -257,32 +257,12 @@ select {
 
 .prompt-suggestions {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 28px;
-  width: 100%;
-  max-width: 480px;
-}
-
-.prompt-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prompt-group-label {
-  color: #8b9099;
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0 4px;
-}
-
-.prompt-chips {
-  display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  margin-top: 28px;
+  max-width: 480px;
+  align-self: flex-end;
 }
 
 .prompt-chip {
