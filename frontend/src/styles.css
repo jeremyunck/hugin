@@ -1110,37 +1110,72 @@ select {
   cursor: pointer;
 }
 
-.menu-panel {
+.menu-dropdown {
   position: absolute;
-  right: 0;
-  top: 0;
+  right: 12px;
+  top: 12px;
   display: flex;
-  height: 100%;
-  width: 80%;
+  width: min(78%, 300px);
+  max-height: calc(100% - 24px);
   flex-direction: column;
-  background: #fff;
-  padding: 16px 12px;
-  box-shadow: -24px 0 48px rgba(17, 20, 24, 0.14);
+  gap: 10px;
+  animation: menuDropIn 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.menu-close {
+.menu-top-actions {
   display: flex;
-  justify-content: flex-end;
-  padding: 0 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  width: 34px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #1c1f23;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.menu-close-button:active {
+  opacity: 0.8;
+}
+
+.menu-card {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid #eaebed;
+  border-radius: 16px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: 0 18px 40px rgba(17, 20, 24, 0.16);
+}
+
+.menu-divider {
+  height: 1px;
+  margin: 6px 8px;
+  background: #eef0f2;
 }
 
 .menu-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 8px;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 12px;
   color: #1c1f23;
   font-size: calc(14px * var(--font-scale));
@@ -1163,13 +1198,15 @@ select {
   background: #f4f4f6;
 }
 
+.menu-item-danger {
+  color: #e5484d;
+}
+
 .menu-profile {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: auto;
-  border-top: 1px solid #eaebed;
-  padding: 14px 4px 0;
+  padding: 8px 12px;
 }
 
 .profile-avatar {
@@ -1456,23 +1493,195 @@ select {
 
 /* ── Integrations screen ─────────────────────────── */
 
+.integrations-screen {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.integration-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 18px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f1f2f4;
+}
+
+.integration-tab {
+  flex: 1;
+  border-radius: 9px;
+  padding: 9px 12px;
+  color: #5c626c;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.integration-tab-active {
+  background: #fff;
+  color: #1c1f23;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(17, 20, 24, 0.08);
+}
+
 .integrations-section {
   padding: 0 20px;
-  margin-top: 28px;
+  margin-top: 24px;
+}
+
+.integrations-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .integrations-section-label {
-  color: #8b9099;
-  font-size: calc(11px * var(--font-scale));
+  color: #1c1f23;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 600;
-  letter-spacing: 0.08em;
-  margin-bottom: 12px;
+}
+
+.integrations-section-sub {
+  margin-top: 2px;
+  color: #8b9099;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.integrations-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #e6f4ea;
+  padding: 4px 10px;
+  color: #1b8a4b;
+  font-size: calc(11.5px * var(--font-scale));
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.integrations-health-dot {
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+  border-radius: 999px;
+  background: #1b8a4b;
 }
 
 .integrations-cards {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.integration-card-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.integration-card-desc {
+  margin: 4px 0 0;
+  color: #8b9099;
+  font-size: calc(12.5px * var(--font-scale));
+  line-height: 1.4;
+}
+
+.integration-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 10px;
+}
+
+.integration-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8b9099;
+  font-size: calc(11.5px * var(--font-scale));
+}
+
+.integration-meta-health {
+  color: #1b8a4b;
+  font-weight: 500;
+}
+
+.integration-card-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.integration-link-action {
+  color: #355ee8;
+  font-size: calc(12.5px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.integration-link-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.integration-link-action:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.integration-link-danger {
+  color: #e5484d;
+}
+
+.integration-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  width: 32px;
+  flex-shrink: 0;
+  align-self: center;
+  border: 1px solid #e4e5e8;
+  border-radius: 999px;
+  background: #fff;
+  color: #1c1f23;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.integration-add-button:hover:not(:disabled) {
+  background: #f4f4f6;
+}
+
+.integration-add-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.integration-add-busy {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  border: 2px solid #c4c7cd;
+  border-top-color: #1c1f23;
+  animation: spin 0.7s linear infinite;
+}
+
+.integration-add-note {
+  flex-shrink: 0;
+  align-self: center;
+  color: #adb2ba;
+  font-size: calc(11px * var(--font-scale));
 }
 
 /* Integration card — new design matching the mock */
@@ -1896,6 +2105,20 @@ select {
   }
 }
 
+@keyframes menuDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+    transform-origin: top right;
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transform-origin: top right;
+  }
+}
+
 @keyframes dot {
   0%,
   80%,
@@ -1934,6 +2157,7 @@ select {
   .fade-in,
   .file-highlight,
   .panel-in,
+  .menu-dropdown,
   .backdrop-fade,
   .dot {
     animation: none !important;

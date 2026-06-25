@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import {
   ArrowLeft,
   Bot,
-  ChevronRight,
+  Bug,
   Github,
   History,
   Lock,
+  LogOut,
   MessageCirclePlus,
   Network,
   Puzzle,
@@ -370,6 +371,8 @@ function MenuOverlay(props: {
   username: string;
   roles: string[];
   githubConnected: boolean;
+  reportBusy?: boolean;
+  onReportBug?: () => void;
   onClose: () => void;
   onAgent: () => void;
   onGitHubRepo: () => void;
@@ -379,64 +382,116 @@ function MenuOverlay(props: {
   onIntegrations: () => void;
   onSettings: () => void;
   onPreferences: () => void;
+  onSignOut: () => void;
 }) {
-  const { username, roles, githubConnected, onClose, onAgent, onGitHubRepo, onChat, onHistory, onAgentThreads, onIntegrations, onSettings, onPreferences } = props;
+  const {
+    username,
+    roles,
+    githubConnected,
+    reportBusy,
+    onReportBug,
+    onClose,
+    onAgent,
+    onGitHubRepo,
+    onChat,
+    onHistory,
+    onAgentThreads,
+    onIntegrations,
+    onSettings,
+    onPreferences,
+    onSignOut
+  } = props;
   const initials = username.slice(0, 2).toUpperCase();
+
+  // Selecting any menu entry should also dismiss the dropdown so the chosen screen is visible.
+  const choose = (action: () => void) => () => {
+    action();
+    onClose();
+  };
 
   return (
     <div className="menu-overlay">
       <button type="button" className="menu-backdrop backdrop-fade" onClick={onClose} aria-label="Close menu" />
-      <div className="menu-panel panel-in">
-        <div className="menu-close">
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close menu">
-            <X size={22} strokeWidth={2} />
+      <div className="menu-dropdown">
+        <div className="menu-top-actions">
+          {onReportBug ? (
+            <button
+              type="button"
+              className="header-action-button"
+              onClick={onReportBug}
+              disabled={reportBusy}
+              aria-label="Report bug"
+            >
+              <Bug size={14} strokeWidth={2} />
+              <span>{reportBusy ? "Saving…" : "Report bug"}</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          <button type="button" className="menu-close-button" onClick={onClose} aria-label="Close menu">
+            <X size={18} strokeWidth={2.2} />
           </button>
         </div>
 
-        <nav className="menu-nav">
-          <button type="button" className="menu-item" onClick={onChat}>
-            <MessageCirclePlus size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>New chat</span>
-          </button>
-          <button type="button" className="menu-item" onClick={onAgent}>
-            <Bot size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>Agent</span>
-          </button>
-          {githubConnected ? (
-            <button type="button" className="menu-item" onClick={onGitHubRepo}>
-              <Github size={18} strokeWidth={2} color={COLORS.ink} />
-              <span>Project</span>
+        <div className="menu-card">
+          <nav className="menu-nav">
+            <button type="button" className="menu-item" onClick={choose(onChat)}>
+              <MessageCirclePlus size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>New chat</span>
             </button>
-          ) : null}
-          <button type="button" className="menu-item" onClick={onHistory}>
-            <History size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>History</span>
-          </button>
-          <button type="button" className="menu-item" onClick={onAgentThreads}>
-            <Network size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>Agent threads</span>
-          </button>
-          <button type="button" className="menu-item" onClick={onIntegrations}>
-            <Puzzle size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>Integrations</span>
-          </button>
-          <button type="button" className="menu-item" onClick={onSettings}>
-            <Settings2 size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>Model settings</span>
-          </button>
-          <button type="button" className="menu-item" onClick={onPreferences}>
-            <Settings size={18} strokeWidth={2} color={COLORS.ink} />
-            <span>Settings</span>
-          </button>
-        </nav>
+            <button type="button" className="menu-item" onClick={choose(onAgent)}>
+              <Bot size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>Agent</span>
+            </button>
+            {githubConnected ? (
+              <button type="button" className="menu-item" onClick={choose(onGitHubRepo)}>
+                <Github size={18} strokeWidth={2} color={COLORS.ink} />
+                <span>Project</span>
+              </button>
+            ) : null}
+            <button type="button" className="menu-item" onClick={choose(onHistory)}>
+              <History size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>History</span>
+            </button>
+            <button type="button" className="menu-item" onClick={choose(onAgentThreads)}>
+              <Network size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>Agent threads</span>
+            </button>
+          </nav>
 
-        <div className="menu-profile">
-          <div className="profile-avatar">{initials}</div>
-          <div className="profile-copy">
-            <div className="profile-name">{username}</div>
-            <div className="profile-email">{roles.join(", ") || "member"}</div>
+          <div className="menu-divider" />
+
+          <nav className="menu-nav">
+            <button type="button" className="menu-item" onClick={choose(onIntegrations)}>
+              <Puzzle size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>Integrations</span>
+            </button>
+            <button type="button" className="menu-item" onClick={choose(onSettings)}>
+              <Settings2 size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>Model settings</span>
+            </button>
+            <button type="button" className="menu-item" onClick={choose(onPreferences)}>
+              <Settings size={18} strokeWidth={2} color={COLORS.ink} />
+              <span>Settings</span>
+            </button>
+          </nav>
+
+          <div className="menu-divider" />
+
+          <div className="menu-profile">
+            <div className="profile-avatar">{initials}</div>
+            <div className="profile-copy">
+              <div className="profile-name">{username}</div>
+              <div className="profile-email">{roles.join(", ") || "member"}</div>
+            </div>
           </div>
-          <ChevronRight size={18} color={COLORS.faint} />
+
+          <nav className="menu-nav">
+            <button type="button" className="menu-item menu-item-danger" onClick={choose(onSignOut)}>
+              <LogOut size={18} strokeWidth={2} color={COLORS.danger} />
+              <span>Sign out</span>
+            </button>
+          </nav>
         </div>
       </div>
     </div>
@@ -1191,6 +1246,24 @@ export default function App() {
     }
   }, [username, password, signingIn, store]);
 
+  const signOut = useCallback(() => {
+    // Clear the stored session and return to the login screen. Re-allow bootstrap so a
+    // subsequent sign-in re-activates a thread.
+    saveAuthSession(null);
+    bootstrappedRef.current = false;
+    setMenuOpen(false);
+    setSession(null);
+    setScreen("login");
+    setUsername("");
+    setPassword("");
+    setDraft("");
+    setDraftAttachment(null);
+    setFiles([]);
+    setGitHubStatus(null);
+    setError(null);
+    setBugReportNotice(null);
+  }, []);
+
   const startChat = useCallback(() => {
     const fresh = createThread("chat");
     store.switchThread(fresh);
@@ -1880,6 +1953,8 @@ export default function App() {
             username={session.username}
             roles={session.roles}
             githubConnected={githubStatus?.active === true}
+            reportBusy={reportingBug}
+            onReportBug={screen === "chat" || screen === "purechat" ? saveBugReport : undefined}
             onClose={() => setMenuOpen(false)}
             onAgent={startAgent}
             onGitHubRepo={openGitHubRepoSetup}
@@ -1893,6 +1968,7 @@ export default function App() {
             onIntegrations={openIntegrations}
             onSettings={openSettings}
             onPreferences={openPreferences}
+            onSignOut={signOut}
           />
         ) : null}
       </div>
