@@ -24,7 +24,8 @@ class DefaultUserBootstrapTest {
                 "main-user",
                 "main-pass",
                 "shot-user",
-                "shot-pass");
+                "shot-pass",
+                false);
 
         bootstrap.run(new DefaultApplicationArguments(new String[0]));
 
@@ -46,7 +47,8 @@ class DefaultUserBootstrapTest {
                 "main-user",
                 "",
                 "shot-user",
-                "shot-pass");
+                "shot-pass",
+                false);
 
         bootstrap.run(new DefaultApplicationArguments(new String[0]));
 
@@ -66,7 +68,8 @@ class DefaultUserBootstrapTest {
                 "main-user",
                 "main-pass",
                 "shot-user",
-                "");
+                "",
+                false);
 
         bootstrap.run(new DefaultApplicationArguments(new String[0]));
 
@@ -87,11 +90,92 @@ class DefaultUserBootstrapTest {
                 "main-user",
                 "",
                 "shot-user",
-                "shot-pass");
+                "shot-pass",
+                false);
 
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
                 () -> bootstrap.run(new DefaultApplicationArguments(new String[0])));
 
         verify(repository, never()).saveOrUpdate(any());
+    }
+
+    @Test
+    void refusesWellKnownDefaultPasswordWhenInsecureNotAllowed() {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+        DefaultUserBootstrap bootstrap = new DefaultUserBootstrap(
+                repository,
+                encoder,
+                "admin",
+                "change-me",
+                "shot-user",
+                "",
+                false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> bootstrap.run(new DefaultApplicationArguments(new String[0])));
+
+        verify(repository, never()).saveOrUpdate(any());
+    }
+
+    @Test
+    void refusesWellKnownDefaultPasswordCaseInsensitively() {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+        DefaultUserBootstrap bootstrap = new DefaultUserBootstrap(
+                repository,
+                encoder,
+                "admin",
+                "Change-Me",
+                "shot-user",
+                "",
+                false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> bootstrap.run(new DefaultApplicationArguments(new String[0])));
+
+        verify(repository, never()).saveOrUpdate(any());
+    }
+
+    @Test
+    void allowsWeakPasswordInLocalDevWhenInsecureExplicitlyAllowed() throws Exception {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        when(encoder.encode("change-me")).thenReturn("weak-hash");
+
+        DefaultUserBootstrap bootstrap = new DefaultUserBootstrap(
+                repository,
+                encoder,
+                "admin",
+                "change-me",
+                "shot-user",
+                "",
+                true);
+
+        bootstrap.run(new DefaultApplicationArguments(new String[0]));
+
+        verify(repository).saveOrUpdate(new UserAccount("admin", "weak-hash", true, java.util.List.of("ROLE_USER")));
+    }
+
+    @Test
+    void allowsStrongPasswordWithoutInsecureFlag() throws Exception {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        when(encoder.encode("S3cure-Unique-Passphrase!")).thenReturn("strong-hash");
+
+        DefaultUserBootstrap bootstrap = new DefaultUserBootstrap(
+                repository,
+                encoder,
+                "operator",
+                "S3cure-Unique-Passphrase!",
+                "shot-user",
+                "",
+                false);
+
+        bootstrap.run(new DefaultApplicationArguments(new String[0]));
+
+        verify(repository).saveOrUpdate(new UserAccount("operator", "strong-hash", true, java.util.List.of("ROLE_USER")));
     }
 }

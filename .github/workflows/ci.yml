@@ -11,6 +11,51 @@ permissions:
   contents: read
 
 jobs:
+  # Frontend gate: typecheck, lint, unit tests, and a production build. Runs independently of the
+  # Maven build (which also builds the frontend) so a frontend-only break is reported clearly and
+  # fast without waiting on the JVM toolchain.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # Validates that the Compose stack (base + sandbox override) parses and resolves. Uses dummy
+  # values for required secrets so the config check never depends on external LLM API keys.
+  docker-compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate base compose config
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Validate compose config with sandbox override
+        run: docker compose -f docker-compose.yml -f docker-compose.sandbox.yml config --quiet
+
   build:
     runs-on: ubuntu-latest
     steps:

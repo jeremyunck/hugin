@@ -123,6 +123,31 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
     @PostConstruct
     void registerRehydrator() {
         workspaceRegistry.setRehydrator(this);
+        warnOnSandboxEnabled();
+    }
+
+    /**
+     * Surfaces a clear, loud startup warning when Docker-backed sandboxes are enabled. Sandbox mode
+     * executes agent-issued shell commands inside Docker containers; in the recommended deployment
+     * (docker-compose.sandbox.yml) it additionally bind-mounts the host Docker socket, which grants
+     * the app container control of the host's Docker daemon. This must only ever run on trusted,
+     * self-hosted/local machines and is never enabled silently.
+     */
+    private void warnOnSandboxEnabled() {
+        if (!properties.enabled()) {
+            log.info("Docker sandbox mode is disabled (agent.sandbox.enabled=false).");
+            return;
+        }
+        boolean dockerSocketPresent = Files.exists(Path.of("/var/run/docker.sock"));
+        log.warn("\n*** SANDBOX SECURITY NOTICE ***\n"
+                + "Docker sandbox mode is ENABLED (agent.sandbox.enabled=true). Agent-issued shell commands "
+                + "run inside Docker containers via '{}'.{}\n"
+                + "Only enable this on trusted local/self-hosted machines. To disable, set SANDBOX_ENABLED=false.",
+                properties.dockerBin(),
+                dockerSocketPresent
+                        ? " The host Docker socket (/var/run/docker.sock) is mounted, which grants this process "
+                          + "control of the host Docker daemon — this is powerful and effectively root-equivalent."
+                        : "");
     }
 
     /** Creates and starts a new sandbox container, returning its metadata. */

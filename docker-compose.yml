@@ -62,9 +62,13 @@ services:
       AGENT_WORKSPACE_ROOT: /workspace
       SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
       MEMORY_ENABLED: ${MEMORY_ENABLED:-false}
-      # Bootstrap login.
+      # Bootstrap login. The default password is a well-known weak value, so the app would normally
+      # refuse to start; this localhost quickstart opts in to the weak password (a loud warning is
+      # logged). Set a strong AUTH_BOOTSTRAP_PASSWORD and AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD=false
+      # before exposing Hugin beyond localhost.
       AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-change-me}
+      AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD: ${AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD:-true}
     ports:
       - "8080:8080"
     volumes:

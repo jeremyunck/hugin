@@ -229,6 +229,12 @@ auth:
     # not silently boot with a generic admin credential.
     username: ${AUTH_BOOTSTRAP_USERNAME:test}
     password: ${AUTH_BOOTSTRAP_PASSWORD:}
+    # Local-development escape hatch. When false (the default, and the expectation for any shared or
+    # production deployment) the app refuses to start if AUTH_BOOTSTRAP_PASSWORD is blank or a
+    # well-known weak/default value (e.g. change-me, admin, password). Set to true ONLY for local
+    # development to allow a weak password; a loud warning is logged in that case. The Docker
+    # quickstart (docker-compose.yml) sets this to true so the localhost demo boots.
+    allow-insecure-password: ${AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD:false}
   test-user:
     # Seeded account used by agents for authenticated UI verification and screenshots.
     # The password intentionally has no default: the account is only created when

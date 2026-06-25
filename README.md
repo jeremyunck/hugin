@@ -37,8 +37,12 @@ The app waits for PostgreSQL to pass its healthcheck before starting, so the fir
 few seconds longer while the database initializes.
 
 **Login:** a bootstrap account is created on first start from `AUTH_BOOTSTRAP_USERNAME` /
-`AUTH_BOOTSTRAP_PASSWORD` in `.env` (defaults `admin` / `change-me`). Change the password before
-exposing Hugin beyond localhost.
+`AUTH_BOOTSTRAP_PASSWORD` in `.env` (the quickstart ships `admin` / `change-me`). Because
+`change-me` is a well-known default, Hugin would normally **refuse to start** with it; the
+quickstart sets `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD=true` so the localhost demo boots while
+logging a loud warning. **Before exposing Hugin beyond localhost**, set a strong, unique
+`AUTH_BOOTSTRAP_PASSWORD` and remove `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD` (it defaults to
+`false`). See [Production credentials](#production-credentials).
 
 **Stop the stack:**
 
@@ -57,16 +61,77 @@ docker compose down -v
 - **LLM credentials are required for the agent to chat.** The stack boots without a key, but you
   must add `OPEN_ROUTER_API_KEY` (or `OPENAI_API_KEY` with `LLM_PROVIDER=openai`) for model calls to
   succeed.
-- **Sandbox mode is disabled by default** (`SANDBOX_ENABLED=false`). Hugin's per-session Docker
-  sandboxes need access to a Docker daemon. To enable them, layer in the override — note this mounts
-  the host Docker socket, which grants the container control of the host's Docker daemon:
+- **Sandbox mode is disabled by default in the quickstart** (`SANDBOX_ENABLED=false`). Hugin's
+  per-session Docker sandboxes run agent-issued shell commands inside Docker containers and need
+  access to a Docker daemon. To enable them, layer in the override:
 
   ```bash
   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
   ```
 
+  > ⚠️ **Security: the override mounts the host Docker socket** (`/var/run/docker.sock`), which
+  > grants the container control of the host's Docker daemon — effectively root-equivalent on the
+  > host. Only enable this on trusted local/self-hosted machines you control. Docker socket access is
+  > never enabled silently; when sandbox mode starts, Hugin logs a `SANDBOX SECURITY NOTICE` (and
+  > flags it explicitly when the socket is mounted).
+
 - **Secrets stay out of the image.** Keys are read from `.env` at runtime; `.env` is gitignored and
   never baked into the build.
+
+### Chat history & reconnect
+
+The **backend is the source of truth** for all chat history. Threads, messages, agent runs, and
+every stream event are persisted in PostgreSQL (`chat_sessions`, `chat_messages`, `agent_runs`,
+`chat_events`), and **each stream event is written to the database before it is emitted to the
+browser**. As a result:
+
+- **Refreshing the browser reloads the full conversation from the backend** — it does not depend on
+  local data. Signing in from another device/browser shows the same server-side history.
+- **Agent runs continue on the server after a client disconnect.** On reconnect the UI resumes from
+  the last applied event using `afterSeq`, so it only fetches the missing tail; events are ordered by
+  sequence number and de-duplicated by `runId + seq`, so a reconnect never duplicates messages.
+- **`localStorage` is used only for UI convenience** — the last selected thread id and lightweight
+  thread metadata. It is never the canonical chat state.
+
+The frontend is organized as a thin composition root (`frontend/src/App.tsx`) over `screens/`
+(per-screen UI), `hooks/` (auth, integrations, GitHub project setup, workspace, agent runs, thread
+selection, run stream), and `services/` (`apiClient`, `threadApi`, `runApi`, `integrationApi`,
+`githubApi`). See [`docs/ui-state-refactor.md`](docs/ui-state-refactor.md).
+
+### Production credentials
+
+For any shared or production deployment, set these environment variables (see `.env.example`):
+
+| Variable | Purpose |
+|---|---|
+| `AUTH_BOOTSTRAP_USERNAME` | Primary login username (no default that ships as admin/change-me in prod). |
+| `AUTH_BOOTSTRAP_PASSWORD` | **Strong, unique** password. Startup is refused if it is blank or a well-known weak value (`change-me`, `admin`, `password`, …). |
+| `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD` | Leave unset / `false` in production. Set to `true` only for local dev to permit a weak password (a loud warning is logged). |
+| `SPRING_DATASOURCE_*` | PostgreSQL connection. |
+| `OPEN_ROUTER_API_KEY` / `OPENAI_API_KEY` | LLM provider key. |
+| `AUTH_JWT_SECRET_BASE64` | Optional stable HMAC signing key; if blank an ephemeral key is generated per start. |
+
+### CI / validation
+
+`.github/workflows/ci.yml` gates pull requests with:
+
+- **Frontend** (`frontend/`): `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+- **Backend**: `mvn clean install` (unit tests + package), plus SpotBugs SAST, Trivy dependency scan, and gitleaks secret scan.
+- **Docker**: `docker compose config` validation for the base stack and the sandbox override (no external LLM keys required).
+
+Run the same checks locally:
+
+```bash
+# Frontend
+cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm run build
+
+# Backend
+mvn -pl backend clean install
+
+# Docker compose config
+docker compose -f docker-compose.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml config --quiet
+```
 
 ## Getting started (native install)
 

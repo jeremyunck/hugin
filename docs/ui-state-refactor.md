@@ -229,3 +229,52 @@ workaround belongs.
   (`hugin-ui-thread-index-v1`) and the active thread id (`hugin-active-thread-v1`). On load the
   transcript is rebuilt from backend events. `loadAppState`/`saveAppState` are deprecated and kept
   only for a one-time migration of the legacy `hugin-minimal-ui-state-v1` blob into metadata.
+
+---
+
+# Phase 3 — App.tsx breakdown (screens / hooks / services)
+
+Phase 3 turns `frontend/src/App.tsx` into a thin composition/routing/state-wiring root. The screen
+JSX, the per-feature state machines, and the HTTP surface now live in focused modules. `App.tsx`
+dropped from ~1890 lines to ~630.
+
+## Module map
+
+| Layer | Modules |
+|---|---|
+| Screens (per top-level screen UI) | `screens/LoginScreen.tsx`, `screens/ChatScreen.tsx`, `screens/IntegrationsScreen.tsx` (re-export of `IntegrationPanel`), `screens/GitHubProjectSetupScreen.tsx`, `screens/ModelSettingsScreen.tsx`, `screens/SettingsScreen.tsx`, `screens/AgentThreadsScreen.tsx` |
+| Hooks (feature state + actions) | `hooks/useAuthBootstrap.ts`, `hooks/useIntegrations.ts`, `hooks/useGitHubProjectSetup.ts`, `hooks/useWorkspaceState.ts`, `hooks/useAgentRuns.ts`, `hooks/useThreadSelection.ts`, `hooks/useRunStream.ts` |
+| Services (HTTP / persistence surface) | `services/apiClient.ts`, `services/threadApi.ts`, `services/runApi.ts`, `services/integrationApi.ts`, `services/githubApi.ts` |
+
+`components/MenuOverlay.tsx` holds the slide-in menu. `lib/screen.ts` owns the `Screen` union +
+`screenForThread`/`mostRecentThread`; `lib/launch.ts` owns the URL launch-param and last-thread
+restore helpers.
+
+## Services
+
+The former monolithic `services/guildService.ts` was split by domain:
+
+- `apiClient.ts` — the shared `apiFetch` wrapper, error unwrapping, `ChatEvent` type, auth/session
+  storage, and `login`/`fetchCurrentUser`.
+- `threadApi.ts` — threads, chat sessions, messages, the persisted event log, history rebuild, and
+  the SSE stream (`openChatEventStream`, which reconnects with `afterSeq`).
+- `runApi.ts` — agent runs, sandboxes, workspace files, tools.
+- `integrationApi.ts` — integrations, Google, models, bug reports.
+- `githubApi.ts` — GitHub connect/status/repositories/branches.
+
+`guildService.ts` remains as a compatibility barrel re-exporting the full surface, so existing
+imports and tests keep working unchanged. New code should import from the specific module.
+
+## Hooks and the requested mapping
+
+Six of the requested hooks are concrete extractions: `useAuthBootstrap`, `useIntegrations`,
+`useGitHubProjectSetup`, `useWorkspaceState`, `useThreadSelection`, and `useRunStream`
+(`useAgentRuns` is an extra for the Agent-threads polling screen).
+
+`useRunStream` is intentionally a thin accessor over `stores/chatSessionStore`: the append-only SSE
+engine — persist-before-emit ordering, per-run sequence tracking, reconnect with `afterSeq`, and
+de-dup by `runId + seq` — lives in the store and its reducer (`chatEventReducer`) so the same
+projection is produced from `GET /events` or live SSE. `useRunStream` exposes the active run's busy
+flag plus stop/approval controls keyed to the active thread. Likewise the canonical "selected
+thread" state lives in the store; `useThreadSelection` owns the surrounding navigation/lifecycle
+(start chat/agent, open from history, delete).
