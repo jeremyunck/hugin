@@ -13,6 +13,8 @@ const MUTED = "#8B9099";
  * the send button is replaced by a stop button (`onStop`) so the user can always interrupt a run
  * rather than being locked out of the thread.
  */
+import { useRef, useEffect } from "react";
+
 export function Composer(props: {
   value: string;
   disabled: boolean;
@@ -45,6 +47,16 @@ export function Composer(props: {
     onSend,
     onStop
   } = props;
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Adjust height to fit content up to a max height
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
+  }, [value]);
   const activeModel = models.find((model) => model.id === selectedModelId) ?? models[0];
   const reasoningOptions = activeModel?.reasoningOptions ?? [];
 
@@ -66,20 +78,19 @@ export function Composer(props: {
         <button type="button" className="input-bar-attach" onClick={onPickImage} disabled={disabled} aria-label="Add image">
           <ImageIcon size={18} strokeWidth={2} color={INK} />
         </button>
-        <input
+        <textarea
+          ref={textareaRef}
+          className="composer-input"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !disabled && (value.trim() || attachment)) {
+            if (event.key === "Enter" && !event.shiftKey && !disabled && (value.trim() || attachment)) {
               event.preventDefault();
               onSend();
             }
           }}
-          enterKeyHint="send"
-          autoComplete="off"
-          autoCorrect="on"
-          autoCapitalize="sentences"
-          spellCheck
+          rows={3}
+          disabled={disabled}
           placeholder={attachment ? "Ask about this image..." : "Message Hugin…"}
         />
         {busy ? (
