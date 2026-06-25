@@ -401,7 +401,7 @@ select {
 /* ── Inline tool calls ─────────────────────────────────────────────────────── */
 
 .tool-call {
-  max-width: 88%;
+  max-width: 100%;
   min-width: 0;
   border: 1px solid #e4e5e8;
   border-radius: 12px;
@@ -511,7 +511,7 @@ select {
 }
 
 .approval-card {
-  max-width: 88%;
+  max-width: 100%;
   min-width: 0;
   border: 1px solid #f0c98a;
   border-radius: 12px;
@@ -681,7 +681,7 @@ select {
 }
 
 .message-bubble-user {
-  max-width: 80%;
+  max-width: 100%;
   border-radius: 16px;
   background: #efeff1;
   padding: 10px 14px;
@@ -707,7 +707,7 @@ select {
 }
 
 .assistant-response {
-  max-width: 88%;
+  max-width: 100%;
   min-width: 0;
   padding: 2px 2px 2px 0;
   color: #1c1f23;
@@ -873,7 +873,7 @@ select {
 }
 
 .tool-event {
-  width: min(88%, 100%);
+  width: 100%;
 }
 
 /* Tool calls are collapsed by default; show a caret affordance that rotates open. */
