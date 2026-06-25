@@ -4,6 +4,7 @@ import com.example.agent.sandbox.RepositoryConfig;
 import com.example.agent.sandbox.SandboxRuntime;
 import com.example.agent.sandbox.SandboxSession;
 import com.example.agent.sandbox.SandboxStatus;
+import com.example.integration.github.GitHubAppService;
 import com.example.integration.sandbox.ProjectSandboxProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,43 @@ class SandboxSessionServiceTest {
 
         verify(runtime).restart(id);
         assertThat(result.status()).isEqualTo(SandboxStatus.READY);
+    }
+
+    @Test
+    void reconnectRefreshesGitCredentialsWithFreshToken() {
+        GitHubAppService github = mock(GitHubAppService.class);
+        when(github.installationToken()).thenReturn(Optional.of("fresh-token"));
+        service = new SandboxSessionService(runtime, repository, props(true), Optional.of(github));
+
+        SandboxSession stored = session(SandboxStatus.READY);
+        String id = stored.sandboxId();
+        when(repository.findById(id)).thenReturn(Optional.of(stored));
+        when(runtime.inspect(id)).thenReturn(
+                new SandboxRuntime.SandboxState(id, "cid", SandboxStatus.READY, true));
+
+        SandboxSession result = service.reconnect(id).orElseThrow();
+
+        // A fresh installation token is re-persisted into the container's credential helper so the
+        // resumed chat can still push after the clone-time token has expired.
+        verify(runtime).refreshCredentials(id, "fresh-token");
+        assertThat(result.status()).isEqualTo(SandboxStatus.READY);
+    }
+
+    @Test
+    void reconnectSkipsCredentialRefreshWhenNoTokenAvailable() {
+        GitHubAppService github = mock(GitHubAppService.class);
+        when(github.installationToken()).thenReturn(Optional.empty());
+        service = new SandboxSessionService(runtime, repository, props(true), Optional.of(github));
+
+        SandboxSession stored = session(SandboxStatus.READY);
+        String id = stored.sandboxId();
+        when(repository.findById(id)).thenReturn(Optional.of(stored));
+        when(runtime.inspect(id)).thenReturn(
+                new SandboxRuntime.SandboxState(id, "cid", SandboxStatus.READY, true));
+
+        service.reconnect(id).orElseThrow();
+
+        verify(runtime, never()).refreshCredentials(any(), any());
     }
 
     @Test

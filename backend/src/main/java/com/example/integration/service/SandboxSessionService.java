@@ -4,6 +4,7 @@ import com.example.agent.sandbox.RepositoryConfig;
 import com.example.agent.sandbox.SandboxRuntime;
 import com.example.agent.sandbox.SandboxSession;
 import com.example.agent.sandbox.SandboxStatus;
+import com.example.integration.github.GitHubAppService;
 import com.example.integration.sandbox.ProjectSandboxProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,13 +32,23 @@ public class SandboxSessionService {
     private final DockerSandboxRuntime runtime;
     private final SandboxSessionRepository repository;
     private final ProjectSandboxProperties properties;
+    private final Optional<GitHubAppService> github;
 
     public SandboxSessionService(DockerSandboxRuntime runtime,
                                  SandboxSessionRepository repository,
-                                 ProjectSandboxProperties properties) {
+                                 ProjectSandboxProperties properties,
+                                 Optional<GitHubAppService> github) {
         this.runtime = runtime;
         this.repository = repository;
         this.properties = properties;
+        this.github = github;
+    }
+
+    /** Convenience constructor for tests / hosts without GitHub App credentials (no credential refresh). */
+    public SandboxSessionService(DockerSandboxRuntime runtime,
+                                 SandboxSessionRepository repository,
+                                 ProjectSandboxProperties properties) {
+        this(runtime, repository, properties, Optional.empty());
     }
 
     public boolean enabled() {
@@ -97,7 +108,37 @@ public class SandboxSessionService {
                 return Optional.of(persistStatus(session, SandboxStatus.FAILED));
             }
         }
+        refreshGitCredentials(session);
         return Optional.of(touch(persistStatus(session, SandboxStatus.READY)));
+    }
+
+    /**
+     * Re-persists a freshly minted GitHub installation token in the reconnected sandbox's git
+     * credential helper. The token captured when the repository was first cloned is short-lived
+     * (GitHub App installation tokens expire after ~1 hour), so by the time a chat is reopened the
+     * stored credential is usually stale and {@code git_push} would fail to authenticate. Refreshing
+     * on every reconnect keeps git operations working for the resumed session.
+     *
+     * <p>Best-effort: when GitHub is not configured (no token available) or the refresh exec fails,
+     * we log and continue rather than blocking the reconnect — the chat can still browse and edit, and
+     * the user gets a clear git error if they later push without a valid token.
+     */
+    private void refreshGitCredentials(SandboxSession session) {
+        if (github.isEmpty()) {
+            return;
+        }
+        Optional<String> token = github.get().installationToken();
+        if (token.isEmpty()) {
+            log.debug("No GitHub installation token available; leaving sandbox {} credentials unchanged",
+                    session.sandboxId());
+            return;
+        }
+        try {
+            runtime.refreshCredentials(session.sandboxId(), token.get());
+            log.debug("Refreshed git credentials for reconnected sandbox {}", session.sandboxId());
+        } catch (RuntimeException e) {
+            log.warn("Could not refresh git credentials for sandbox {}: {}", session.sandboxId(), e.getMessage());
+        }
     }
 
     /** Refreshes the idle clock for a sandbox that was just used by a request. */
