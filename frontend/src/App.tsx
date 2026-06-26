@@ -245,14 +245,32 @@ export default function App() {
       .catch(() => setGitHubStatus(null));
   }, [session]);
 
-  // Live OpenRouter credit balance for the sidebar usage meter. Re-fetched whenever the user lands
-  // back on a non-account screen so saving/removing a key in Account is reflected promptly.
-  useEffect(() => {
-    if (!session || screen === "user-details") return;
-    fetchOpenRouterCredits(session.token)
+  // Live OpenRouter credit balance for the sidebar usage meter.
+  const refreshOpenRouterCredits = useCallback(() => {
+    const token = session?.token;
+    if (!token) return;
+    fetchOpenRouterCredits(token)
       .then((credits) => setOpenRouterCredits(credits))
       .catch(() => setOpenRouterCredits(null));
-  }, [session, screen]);
+  }, [session?.token]);
+
+  // Refresh when the user lands back on a non-account screen, so saving/removing a key in Account
+  // (or returning from it) is reflected promptly.
+  useEffect(() => {
+    if (screen === "user-details") return;
+    refreshOpenRouterCredits();
+  }, [screen, refreshOpenRouterCredits]);
+
+  // Refresh after each agent run finishes (busy → idle): the run just spent credits invoking the
+  // model, so the meter should reflect the new balance. Skipped while on the Account screen.
+  const prevBusyRef = useRef(false);
+  useEffect(() => {
+    const wasBusy = prevBusyRef.current;
+    prevBusyRef.current = store.activeBusy;
+    if (wasBusy && !store.activeBusy && screen !== "user-details") {
+      refreshOpenRouterCredits();
+    }
+  }, [store.activeBusy, screen, refreshOpenRouterCredits]);
 
   // Populate the desktop project panel with live GitHub metadata for the active project thread.
   const repoFullName = thread?.kind === "github" ? thread.repoFullName : undefined;
