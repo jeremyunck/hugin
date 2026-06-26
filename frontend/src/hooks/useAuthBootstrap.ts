@@ -52,7 +52,9 @@ export function useAuthBootstrap(params: {
     setSigningIn(true);
     setLoginError(null);
     try {
-      const validated = await loginRequest(username.trim(), password);
+      const loginResult = await loginRequest(username.trim(), password);
+      // Fetch the full profile (display name, email, custom instructions) right after login.
+      const validated = await fetchCurrentUser(loginResult.token).catch(() => loginResult);
       saveAuthSession(validated);
       onSignedIn(validated);
       setSession(validated);

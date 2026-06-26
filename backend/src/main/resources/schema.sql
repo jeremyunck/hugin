@@ -7,6 +7,10 @@ create table if not exists app_users (
     created_at timestamp with time zone not null default current_timestamp
 );
 
+alter table app_users add column if not exists display_name varchar(200);
+alter table app_users add column if not exists email varchar(255);
+alter table app_users add column if not exists custom_instructions text;
+
 create table if not exists user_agents (
     id varchar(36) primary key,
     owner_username varchar(100) not null references app_users(username) on delete cascade,

@@ -7,9 +7,12 @@ import com.example.agent.AgentStreamListener;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
+import com.example.agent.prompts.Prompts;
 import com.example.agent.tool.HomeWorkspaceService;
 import com.example.agent.tool.ToolApprovalRequiredException;
 import com.example.agent.tool.WorkspaceRegistry;
+import com.example.integration.auth.UserAccount;
+import com.example.integration.auth.UserAccountRepository;
 import com.example.integration.controller.ChatSessionMessageRequest;
 import com.example.integration.google.GmailDeletionService;
 import com.example.integration.modelsettings.ModelContextService;
@@ -62,6 +65,7 @@ public class ChatSessionService {
     private final WorkspaceRegistry workspaceRegistry;
     private final HomeWorkspaceService homeWorkspaceService;
     private final GmailDeletionService gmailDeletionService;
+    private final UserAccountRepository userAccountRepository;
     private final String defaultModel;
 
     public ChatSessionService(ChatSessionRepository repository,
@@ -74,6 +78,7 @@ public class ChatSessionService {
                               WorkspaceRegistry workspaceRegistry,
                               HomeWorkspaceService homeWorkspaceService,
                               GmailDeletionService gmailDeletionService,
+                              UserAccountRepository userAccountRepository,
                               @Value("${llm.model:}") String defaultModel) {
         this.repository = repository;
         this.broker = broker;
@@ -85,6 +90,7 @@ public class ChatSessionService {
         this.workspaceRegistry = workspaceRegistry;
         this.homeWorkspaceService = homeWorkspaceService;
         this.gmailDeletionService = gmailDeletionService;
+        this.userAccountRepository = userAccountRepository;
         this.defaultModel = defaultModel;
     }
 
@@ -138,13 +144,22 @@ public class ChatSessionService {
             workspaceRegistry.register(sessionId, homeWorkspaceService.workspace());
         }
         List<ChatMessage> priorMessages = repository.buildPriorMessages(sessionId, userMessageSeq);
+        String userContextPrompt = userAccountRepository.findByUsername(owner)
+                .map(u -> Prompts.userContext(u.displayName(), u.customInstructions()))
+                .orElse("");
         AgentRequest agentRequest = new AgentRequest(
                 request.content(),
                 request.attachments(),
                 request.model(),
                 request.reasoningEffort(),
+                request.model(),
+                request.model(),
+                request.model(),
+                null,
+                userContextPrompt.isBlank() ? null : userContextPrompt,
                 sessionId,
                 priorMessages,
+                null,
                 request.sandboxId(),
                 true);
         runRegistry.register(runId, owner, agentRequest, request.model(), Thread.currentThread());

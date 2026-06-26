@@ -1416,6 +1416,25 @@ select {
   font-size: calc(12px * var(--font-scale));
 }
 
+.profile-username {
+  color: #8b9099;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.menu-profile-button {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+
+.menu-profile-button:hover {
+  background: #f4f5f7;
+}
+
 .screen-title {
   padding: 20px 20px 0;
 }

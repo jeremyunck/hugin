@@ -4,6 +4,7 @@ import { createThread, getThreadTitle } from "./services/threadApi";
 import { fetchModels, reportBug, saveEnabledModels } from "./services/integrationApi";
 import { fetchGitHubStatus } from "./services/githubApi";
 import { deleteSandbox } from "./services/runApi";
+import { saveAuthSession } from "./services/apiClient";
 import type {
   AuthSession,
   ChatAttachment,
@@ -36,6 +37,7 @@ import { GitHubProjectSetupScreen } from "./screens/GitHubProjectSetupScreen";
 import { ModelSettingsScreen } from "./screens/ModelSettingsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AgentThreadsScreen } from "./screens/AgentThreadsScreen";
+import { UserDetailsScreen } from "./screens/UserDetailsScreen";
 import { MenuOverlay } from "./components/MenuOverlay";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { DesktopSidebar } from "./components/desktop/DesktopSidebar";
@@ -341,6 +343,20 @@ export default function App() {
     setMenuOpen(false);
     setBugReportNotice(null);
   }, [screen, returnScreen]);
+
+  const openUserDetails = useCallback(() => {
+    setReturnScreen(screen === "user-details" ? returnScreen : screen);
+    setScreen("user-details");
+    setMenuOpen(false);
+    setBugReportNotice(null);
+  }, [screen, returnScreen]);
+
+  const handleSessionUpdate = useCallback((updated: Partial<AuthSession>) => {
+    if (!session) return;
+    const next: AuthSession = { ...session, ...updated };
+    setSession(next);
+    saveAuthSession(next);
+  }, [session]);
 
   const send = useCallback(
     async (textArg?: string) => {
@@ -660,6 +676,13 @@ export default function App() {
             onBack={() => setScreen(returnScreen)}
             onCancel={agentRuns.cancelRun}
           />
+        ) : screen === "user-details" && session ? (
+          <UserDetailsScreen
+            session={session}
+            onBack={() => setScreen(returnScreen)}
+            onMenu={() => setMenuOpen(true)}
+            onSessionUpdate={handleSessionUpdate}
+          />
         ) : (
           <HistoryPanel
             threads={store.historyThreads}
@@ -676,6 +699,7 @@ export default function App() {
         {menuOpen && session ? (
           <MenuOverlay
             username={session.username}
+            displayName={session.displayName}
             roles={session.roles}
             githubConnected={githubStatus?.active === true}
             reportBusy={reportingBug}
@@ -693,6 +717,7 @@ export default function App() {
             onIntegrations={openIntegrations}
             onSettings={openSettings}
             onPreferences={openPreferences}
+            onUserDetails={openUserDetails}
             onSignOut={auth.signOut}
           />
         ) : null}

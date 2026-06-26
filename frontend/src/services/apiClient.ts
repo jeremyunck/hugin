@@ -15,6 +15,9 @@ type AuthMeResponse = {
   roles: string[];
   issuedAt: string;
   expiresAt: string;
+  displayName?: string | null;
+  email?: string | null;
+  customInstructions?: string | null;
 };
 
 /**
@@ -130,6 +133,38 @@ export async function fetchCurrentUser(token: string): Promise<AuthSession> {
     token,
     username: response.username,
     roles: response.roles,
-    expiresAt: response.expiresAt
+    expiresAt: response.expiresAt,
+    displayName: response.displayName,
+    email: response.email,
+    customInstructions: response.customInstructions
   };
+}
+
+export type UserProfile = {
+  username: string;
+  displayName: string | null;
+  email: string | null;
+  customInstructions: string | null;
+};
+
+export async function fetchUserProfile(token: string): Promise<UserProfile> {
+  return apiFetch<UserProfile>("/api/user/profile", {}, token);
+}
+
+export async function updateUserProfile(
+  token: string,
+  profile: { displayName: string | null; email: string | null; customInstructions: string | null }
+): Promise<UserProfile> {
+  return apiFetch<UserProfile>("/api/user/profile", { method: "PUT", body: JSON.stringify(profile) }, token);
+}
+
+export async function changeUserPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  await apiFetch<void>("/api/user/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword })
+  }, token);
 }

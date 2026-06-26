@@ -9,7 +9,8 @@ export type Screen =
   | "settings"
   | "preferences"
   | "github-repo"
-  | "agent-threads";
+  | "agent-threads"
+  | "user-details";
 
 export function screenForThread(thread: ChatThread): Screen {
   // Agent and Project threads carry a workspace file tree, so they use the "chat" screen; a plain

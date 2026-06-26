@@ -68,6 +68,11 @@ public class AuthService {
 
     public AuthMeResponse currentUser(org.springframework.security.oauth2.jwt.Jwt jwt) {
         List<String> roles = jwt.getClaimAsStringList("roles");
-        return new AuthMeResponse(jwt.getSubject(), roles == null ? List.of() : roles, jwt.getIssuedAt(), jwt.getExpiresAt());
+        UserAccount user = userAccountRepository.findByUsername(jwt.getSubject()).orElse(null);
+        String displayName = user != null ? user.displayName() : null;
+        String email = user != null ? user.email() : null;
+        String customInstructions = user != null ? user.customInstructions() : null;
+        return new AuthMeResponse(jwt.getSubject(), roles == null ? List.of() : roles,
+                jwt.getIssuedAt(), jwt.getExpiresAt(), displayName, email, customInstructions);
     }
 }

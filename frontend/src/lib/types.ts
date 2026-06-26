@@ -3,6 +3,9 @@ export type AuthSession = {
   username: string;
   roles: string[];
   expiresAt: string;
+  displayName?: string | null;
+  email?: string | null;
+  customInstructions?: string | null;
 };
 
 export type StreamToolEvent = {

@@ -16,6 +16,7 @@ import { COLORS } from "../lib/theme";
 
 export function MenuOverlay(props: {
   username: string;
+  displayName?: string | null;
   roles: string[];
   githubConnected: boolean;
   reportBusy?: boolean;
@@ -29,10 +30,12 @@ export function MenuOverlay(props: {
   onIntegrations: () => void;
   onSettings: () => void;
   onPreferences: () => void;
+  onUserDetails: () => void;
   onSignOut: () => void;
 }) {
   const {
     username,
+    displayName,
     githubConnected,
     reportBusy,
     onReportBug,
@@ -45,9 +48,11 @@ export function MenuOverlay(props: {
     onIntegrations,
     onSettings,
     onPreferences,
+    onUserDetails,
     onSignOut
   } = props;
-  const initials = username.slice(0, 2).toUpperCase();
+  const label = displayName && displayName.trim() ? displayName.trim() : username;
+  const initials = label.slice(0, 2).toUpperCase();
 
   // Selecting any menu entry should also dismiss the dropdown so the chosen screen is visible.
   const choose = (action: () => void) => () => {
@@ -124,12 +129,15 @@ export function MenuOverlay(props: {
 
           <div className="menu-divider" />
 
-          <div className="menu-profile">
+          <button type="button" className="menu-profile menu-profile-button" onClick={choose(onUserDetails)}>
             <div className="profile-avatar">{initials}</div>
             <div className="profile-copy">
-              <div className="profile-name">{username}</div>
+              <div className="profile-name">{label}</div>
+              {displayName && displayName.trim() ? (
+                <div className="profile-username">@{username}</div>
+              ) : null}
             </div>
-          </div>
+          </button>
 
           <nav className="menu-nav">
             <button type="button" className="menu-item menu-item-danger" onClick={choose(onSignOut)}>

@@ -19,7 +19,7 @@ public class UserAccountRepository {
     public Optional<UserAccount> findByUsername(String username) {
         List<UserAccount> matches = jdbcTemplate.query(
                 """
-                        select username, password_hash, enabled, roles
+                        select username, password_hash, enabled, roles, display_name, email, custom_instructions
                         from app_users
                         where username = ?
                         """,
@@ -27,7 +27,10 @@ public class UserAccountRepository {
                         rs.getString("username"),
                         rs.getString("password_hash"),
                         rs.getBoolean("enabled"),
-                        parseRoles(rs.getString("roles"))),
+                        parseRoles(rs.getString("roles")),
+                        rs.getString("display_name"),
+                        rs.getString("email"),
+                        rs.getString("custom_instructions")),
                 username);
         return matches.stream().findFirst();
     }
@@ -48,6 +51,26 @@ public class UserAccountRepository {
                             """,
                     user.username(), user.passwordHash(), user.enabled(), joinRoles(user.roles()));
         }
+    }
+
+    public void updateProfile(String username, String displayName, String email, String customInstructions) {
+        jdbcTemplate.update(
+                """
+                        update app_users
+                        set display_name = ?, email = ?, custom_instructions = ?
+                        where username = ?
+                        """,
+                displayName, email, customInstructions, username);
+    }
+
+    public void updatePassword(String username, String newPasswordHash) {
+        jdbcTemplate.update(
+                """
+                        update app_users
+                        set password_hash = ?
+                        where username = ?
+                        """,
+                newPasswordHash, username);
     }
 
     private static List<String> parseRoles(String roles) {

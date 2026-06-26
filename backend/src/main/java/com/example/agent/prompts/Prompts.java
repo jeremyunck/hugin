@@ -228,6 +228,31 @@ public final class Prompts {
             message to the user.""";
 
     /**
+     * Builds a system prompt fragment that tells the model the user's name and any custom standing
+     * instructions they have configured. Returns an empty string when both are absent.
+     *
+     * @param displayName        the user's preferred display name, or null/blank to omit
+     * @param customInstructions free-form standing instructions from the user, or null/blank to omit
+     */
+    public static String userContext(String displayName, String customInstructions) {
+        boolean hasName = displayName != null && !displayName.isBlank();
+        boolean hasInstructions = customInstructions != null && !customInstructions.isBlank();
+        if (!hasName && !hasInstructions) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (hasName) {
+            sb.append("The user's name is ").append(displayName.trim()).append(".");
+        }
+        if (hasInstructions) {
+            if (hasName) sb.append("\n\n");
+            sb.append("The user has provided the following standing instructions that apply to every session:\n")
+              .append(customInstructions.trim());
+        }
+        return sb.toString();
+    }
+
+    /**
      * Builds the initial system prompt for a user-created agent.
      *
      * <p>The returned prompt is stored with the agent record and injected as a system message on

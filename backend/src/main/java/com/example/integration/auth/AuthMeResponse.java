@@ -7,5 +7,8 @@ public record AuthMeResponse(
         String username,
         List<String> roles,
         Instant issuedAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        String displayName,
+        String email,
+        String customInstructions) {
 }
