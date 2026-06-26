@@ -35,18 +35,20 @@ public class CredentialCipher {
     private final SecretKeySpec key;
     private final SecureRandom random = new SecureRandom();
 
+    /** Built-in key material used only when no secret is configured (development convenience). */
+    private static final String DEVELOPMENT_FALLBACK_SECRET = "hugin-insecure-development-key";
+
     public CredentialCipher(@Value("${app.encryption.secret:}") String secret) {
-        byte[] material;
+        String effectiveSecret;
         if (secret == null || secret.isBlank()) {
-            log.warn("app.encryption.secret is not set; using a process-local fallback key. "
-                    + "Stored credentials will become undecryptable across restarts/redeploys — "
-                    + "set APP_ENCRYPTION_SECRET for production.");
-            material = new byte[32];
-            random.nextBytes(material);
+            log.warn("app.encryption.secret is not set; using a built-in development key that offers "
+                    + "no real protection. Set APP_ENCRYPTION_SECRET to a strong, stable secret for "
+                    + "production — changing it later makes previously stored credentials undecryptable.");
+            effectiveSecret = DEVELOPMENT_FALLBACK_SECRET;
         } else {
-            material = sha256(secret.getBytes(StandardCharsets.UTF_8));
+            effectiveSecret = secret;
         }
-        this.key = new SecretKeySpec(material, "AES");
+        this.key = new SecretKeySpec(sha256(effectiveSecret.getBytes(StandardCharsets.UTF_8)), "AES");
     }
 
     /** Encrypts {@code plaintext}, returning a self-describing, URL-safe-free token. */
