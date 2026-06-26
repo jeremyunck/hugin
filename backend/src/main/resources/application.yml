@@ -283,11 +283,11 @@ auth:
 resend:
   # Transactional email provider used to deliver the email-verification codes (see
   # auth.email-verification above). Create an API key at https://resend.com and verify a sending
-  # domain/address. When the API key or from-address is blank, Hugin logs the code at WARN instead of
-  # emailing it — convenient for local development but not for any shared deployment.
+  # domain/address. When the API key is blank, Hugin logs the code at WARN instead of emailing it.
+  # If RESEND_FROM is omitted, Hugin defaults to Resend's onboarding sender for local testing.
   api-key: ${RESEND_API_KEY:}
-  # Verified sender address, e.g. "Hugin <login@yourdomain.com>".
-  from: ${RESEND_FROM:}
+  # Verified sender address, e.g. "Hugin <login@yourdomain.com>". Defaults to Resend's test sender.
+  from: ${RESEND_FROM:onboarding@resend.dev}
   endpoint: ${RESEND_ENDPOINT:https://api.resend.com/emails}
 
 google:

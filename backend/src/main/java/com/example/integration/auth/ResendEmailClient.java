@@ -38,7 +38,7 @@ public class ResendEmailClient {
     @Autowired
     public ResendEmailClient(
             @Value("${resend.api-key:}") String apiKey,
-            @Value("${resend.from:}") String fromAddress,
+            @Value("${resend.from:onboarding@resend.dev}") String fromAddress,
             @Value("${resend.endpoint:https://api.resend.com/emails}") String endpoint,
             ObjectMapper objectMapper) {
         this(apiKey, fromAddress, endpoint, objectMapper,
