@@ -2,16 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AuthSession } from "../lib/types";
 import {
+  confirmForgotPassword,
   fetchCurrentUser,
   loadAuthSession,
+  requestForgotPassword,
   requestLogin,
   requestRegister,
   saveAuthSession,
   verifyCode
 } from "../services/apiClient";
 
-/** Which step of the email + password + code flow the login surface is showing. */
-export type AuthMode = "login" | "register" | "verify";
+/**
+ * Which step of the email + password + code flow the login surface is showing. {@code forgot} is the
+ * "I forgot my password" recovery form (email + new password), and {@code forgot-verify} is its code
+ * step — kept distinct from {@code verify} so the code step knows to reset the password rather than
+ * authenticate an existing one.
+ */
+export type AuthMode = "login" | "register" | "verify" | "forgot" | "forgot-verify";
 
 /**
  * Owns auth/session startup and the email-based login surface. On mount it validates any stored
@@ -59,21 +66,28 @@ export function useAuthBootstrap(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Switch between the sign-in and create-account forms, clearing any transient state. */
+  /** Switch between the sign-in, create-account, and forgot-password forms, clearing transient state. */
   const switchMode = useCallback((next: AuthMode) => {
     setMode(next);
     setError(null);
     setNotice(null);
     setCode("");
+    // Clear the password so a sign-in attempt never carries over into the "new password" field of the
+    // register/forgot forms (and vice versa).
+    setPassword("");
     setConfirmPassword("");
   }, []);
 
-  /** Step 1: submit email/password to either log in or register, which emails a verification code. */
+  /**
+   * Step 1: submit email/password to log in, register, or (for {@code forgot}) start a password
+   * reset. In every case the backend emails a verification code and we advance to the matching code
+   * step. {@code password} doubles as the new password while in the {@code forgot} flow.
+   */
   const submitCredentials = useCallback(async () => {
     if (busy) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password.trim()) return;
-    if (mode === "register" && password !== confirmPassword) {
+    if ((mode === "register" || mode === "forgot") && password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -81,14 +95,20 @@ export function useAuthBootstrap(params: {
     setError(null);
     setNotice(null);
     try {
-      const challenge =
-        mode === "register"
-          ? await requestRegister(trimmedEmail, password, confirmPassword)
-          : await requestLogin(trimmedEmail, password);
+      let challenge;
+      let nextMode: AuthMode = "verify";
+      if (mode === "register") {
+        challenge = await requestRegister(trimmedEmail, password, confirmPassword);
+      } else if (mode === "forgot") {
+        challenge = await requestForgotPassword(trimmedEmail, password, confirmPassword);
+        nextMode = "forgot-verify";
+      } else {
+        challenge = await requestLogin(trimmedEmail, password);
+      }
       setPendingEmail(challenge.email || trimmedEmail);
       setNotice(challenge.message);
       setCode("");
-      setMode("verify");
+      setMode(nextMode);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -96,13 +116,20 @@ export function useAuthBootstrap(params: {
     }
   }, [busy, email, password, confirmPassword, mode]);
 
-  /** Step 2: confirm the emailed code to finish creating/authenticating the account. */
+  /**
+   * Step 2: confirm the emailed code. For {@code forgot-verify} this persists the new password and
+   * signs in with it; otherwise it finishes creating/authenticating the account. Either way it
+   * establishes the session.
+   */
   const submitCode = useCallback(async () => {
     if (busy || !code.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const session = await verifyCode(pendingEmail, code.trim());
+      const session =
+        mode === "forgot-verify"
+          ? await confirmForgotPassword(pendingEmail, code.trim())
+          : await verifyCode(pendingEmail, code.trim());
       // Fetch the full profile (display name, email, custom instructions) right after verification.
       const validated = await fetchCurrentUser(session.token).catch(() => session);
       saveAuthSession(validated);
@@ -116,7 +143,7 @@ export function useAuthBootstrap(params: {
     } finally {
       setBusy(false);
     }
-  }, [busy, code, pendingEmail, onSignedIn, setSession]);
+  }, [busy, code, mode, pendingEmail, onSignedIn, setSession]);
 
   /** Abandon the code step and return to the sign-in form. */
   const cancelVerification = useCallback(() => {

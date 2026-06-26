@@ -33,6 +33,16 @@ public class AuthController {
         return authService.verify(request);
     }
 
+    @PostMapping("/password/forgot")
+    public AuthChallengeResponse forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/password/forgot/verify")
+    public AuthLoginResponse confirmForgotPassword(@RequestBody AuthVerifyRequest request) {
+        return authService.confirmForgotPassword(request);
+    }
+
     @GetMapping("/me")
     public AuthMeResponse me(@AuthenticationPrincipal Jwt jwt) {
         return authService.currentUser(jwt);

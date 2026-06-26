@@ -161,6 +161,37 @@ export async function verifyCode(email: string, code: string): Promise<AuthSessi
   };
 }
 
+/**
+ * Step 1 of the forgotten-password flow (login screen, no session): submit the account email and a
+ * new password to trigger an emailed verification code. The response message is generic so it never
+ * reveals whether the email is registered.
+ */
+export async function requestForgotPassword(
+  email: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<AuthChallengeResponse> {
+  return apiFetch<AuthChallengeResponse>("/api/auth/password/forgot", {
+    method: "POST",
+    body: JSON.stringify({ email, newPassword, confirmPassword })
+  });
+}
+
+/** Step 2 of the forgotten-password flow: confirm the code, persist the new password, and sign in. */
+export async function confirmForgotPassword(email: string, code: string): Promise<AuthSession> {
+  const response = await apiFetch<AuthLoginResponse>("/api/auth/password/forgot/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code })
+  });
+
+  return {
+    token: response.token,
+    username: response.username,
+    roles: response.roles,
+    expiresAt: response.expiresAt
+  };
+}
+
 export async function fetchCurrentUser(token: string): Promise<AuthSession> {
   const response = await apiFetch<AuthMeResponse>("/api/auth/me", {}, token);
   return {

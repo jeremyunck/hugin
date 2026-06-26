@@ -121,6 +121,7 @@ public class SecurityConfig {
         http.securityMatcher("/api/**")
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/verify").permitAll()
+                        .requestMatchers("/api/auth/password/forgot", "/api/auth/password/forgot/verify").permitAll()
                         .requestMatchers("/api/github/callback", "/api/github/setup").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
