@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, GitBranch, Lock, RefreshCw, Star } from "lucide-react";
 
-import type { ChatThread, FileNode } from "../../lib/types";
+import type { ChatThread, FileNode, GitHubRepositoryDetail } from "../../lib/types";
 import { COLORS } from "../../lib/theme";
 
 function FileNodeItem({ node, depth }: { node: FileNode; depth: number }) {
@@ -44,11 +44,16 @@ export function DesktopProjectPanel(props: {
   wsOpen: boolean;
   onToggleWs: () => void;
   sandboxStatus?: string;
+  repoDetail?: GitHubRepositoryDetail | null;
+  repoDetailLoading?: boolean;
+  onRefresh?: () => void;
 }) {
-  const { thread, files } = props;
+  const { thread, files, repoDetail } = props;
   const projectName =
-    thread.repoName ?? thread.repoFullName ?? (thread.kind === "agent" ? "Agent workspace" : "Project");
+    repoDetail?.name ?? thread.repoName ?? thread.repoFullName ?? (thread.kind === "agent" ? "Agent workspace" : "Project");
   const isProject = thread.kind === "github" || thread.kind === "agent";
+  const isGitHub = thread.kind === "github";
+  const branch = thread.branchName ?? repoDetail?.defaultBranch;
 
   return (
     <aside className="desktop-panel">
@@ -56,7 +61,7 @@ export function DesktopProjectPanel(props: {
       <div className="dp-header">
         <span className="dp-header-title">Project Context</span>
         <div className="dp-header-actions">
-          <button type="button" className="icon-button" aria-label="Refresh context">
+          <button type="button" className="icon-button" aria-label="Refresh context" onClick={props.onRefresh}>
             <RefreshCw size={14} strokeWidth={2} />
           </button>
         </div>
@@ -66,18 +71,51 @@ export function DesktopProjectPanel(props: {
       {isProject ? (
         <div className="dp-project-name">
           <span>{projectName}</span>
+          {repoDetail?.privateRepo ? <Lock size={12} color={COLORS.muted} /> : null}
           <ChevronDown size={14} color={COLORS.muted} />
         </div>
+      ) : null}
+
+      {/* Repository description from GitHub */}
+      {isGitHub && repoDetail?.description ? (
+        <div className="dp-repo-description">{repoDetail.description}</div>
       ) : null}
 
       {/* Overview */}
       <div className="dp-section">
         <div className="dp-section-label">Overview</div>
         <div className="dp-overview-grid">
-          <span className="dp-overview-key">Language</span>
-          <span className="dp-overview-val">—</span>
-          <span className="dp-overview-key">Framework</span>
-          <span className="dp-overview-val">—</span>
+          {isGitHub ? (
+            <>
+              <span className="dp-overview-key">Language</span>
+              <span className="dp-overview-val">{repoDetailValue(props, repoDetail?.language)}</span>
+              <span className="dp-overview-key">Visibility</span>
+              <span className="dp-overview-val">
+                {repoDetail ? (repoDetail.privateRepo ? "Private" : "Public") : repoDetailValue(props, null)}
+              </span>
+              {branch ? (
+                <>
+                  <span className="dp-overview-key">Branch</span>
+                  <span className="dp-overview-val dp-overview-inline">
+                    <GitBranch size={12} color={COLORS.muted} />
+                    <span className="mono">{branch}</span>
+                  </span>
+                </>
+              ) : null}
+              <span className="dp-overview-key">Stars</span>
+              <span className="dp-overview-val dp-overview-inline">
+                <Star size={12} color={COLORS.muted} />
+                {repoDetail ? repoDetail.stargazers.toLocaleString() : repoDetailValue(props, null)}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="dp-overview-key">Language</span>
+              <span className="dp-overview-val">—</span>
+              <span className="dp-overview-key">Framework</span>
+              <span className="dp-overview-val">—</span>
+            </>
+          )}
           <span className="dp-overview-key">Size</span>
           <span className="dp-overview-val">{files.length > 0 ? `${countFiles(files)} files` : "—"}</span>
           {props.sandboxStatus ? (
@@ -131,6 +169,16 @@ export function DesktopProjectPanel(props: {
       </div>
     </aside>
   );
+}
+
+/** Shows a loading placeholder while repo details are in flight, otherwise the value or an em dash. */
+function repoDetailValue(
+  props: { repoDetail?: GitHubRepositoryDetail | null; repoDetailLoading?: boolean },
+  value: string | null | undefined
+): string {
+  if (value) return value;
+  if (props.repoDetailLoading && !props.repoDetail) return "…";
+  return "—";
 }
 
 function countFiles(nodes: FileNode[]): number {

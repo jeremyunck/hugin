@@ -215,6 +215,22 @@ export type GitHubBranch = {
   name: string;
 };
 
+/** Richer metadata for a single repository, used to populate the desktop project panel. */
+export type GitHubRepositoryDetail = {
+  fullName: string;
+  name: string;
+  owner: string;
+  privateRepo: boolean;
+  defaultBranch: string;
+  description: string | null;
+  language: string | null;
+  stargazers: number;
+  forks: number;
+  openIssues: number;
+  htmlUrl: string | null;
+  pushedAt: string | null;
+};
+
 export type ModelOption = {
   id: string;
   name: string;

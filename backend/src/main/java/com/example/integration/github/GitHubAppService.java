@@ -195,6 +195,29 @@ public class GitHubAppService {
         return results;
     }
 
+    /** Fetches richer metadata for a single repository (language, stars, description, …). */
+    public synchronized GitHubRepositoryDetail repositoryDetails(String owner, String repo) throws Exception {
+        HttpResponse<String> response = api("GET", "/repos/" + owner + "/" + repo, null);
+        if (response.statusCode() >= 300) {
+            throw new IllegalStateException("repository lookup failed: HTTP " + response.statusCode()
+                    + " " + response.body());
+        }
+        JsonNode r = objectMapper.readTree(response.body());
+        return new GitHubRepositoryDetail(
+                r.path("full_name").asText(""),
+                r.path("name").asText(""),
+                r.path("owner").path("login").asText(""),
+                r.path("private").asBoolean(),
+                r.path("default_branch").asText(""),
+                textOrNull(r, "description"),
+                textOrNull(r, "language"),
+                r.path("stargazers_count").asInt(0),
+                r.path("forks_count").asInt(0),
+                r.path("open_issues_count").asInt(0),
+                textOrNull(r, "html_url"),
+                textOrNull(r, "pushed_at"));
+    }
+
     public synchronized List<String> listBranches(String owner, String repo) throws Exception {
         HttpResponse<String> response = api("GET", "/repos/" + owner + "/" + repo + "/branches?per_page=100", null);
         if (response.statusCode() >= 300) {
@@ -379,6 +402,16 @@ public class GitHubAppService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /** Returns the text value at {@code key}, or {@code null} when absent, blank, or JSON null. */
+    private static String textOrNull(JsonNode node, String key) {
+        JsonNode value = node.path(key);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        String text = value.asText("");
+        return text.isBlank() ? null : text;
+    }
+
     public record GitHubRepositoryRef(
             String fullName,
             String name,
@@ -386,5 +419,20 @@ public class GitHubAppService {
             boolean privateRepo,
             String defaultBranch,
             String description) {
+    }
+
+    public record GitHubRepositoryDetail(
+            String fullName,
+            String name,
+            String owner,
+            boolean privateRepo,
+            String defaultBranch,
+            String description,
+            String language,
+            int stargazers,
+            int forks,
+            int openIssues,
+            String htmlUrl,
+            String pushedAt) {
     }
 }

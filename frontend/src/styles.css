@@ -578,6 +578,160 @@ select {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
+/* ── File diff card (write_file / edit_file) ──────────────────────────────── */
+
+.file-diff {
+  width: 100%;
+  border: 1px solid #e3e5e8;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.file-diff-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  background: #fafafb;
+  color: #30353d;
+  cursor: pointer;
+  list-style: none;
+}
+
+.file-diff-summary::-webkit-details-marker {
+  display: none;
+}
+
+.file-diff-caret {
+  color: #8b9099;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+.file-diff[open] > .file-diff-summary .file-diff-caret {
+  transform: rotate(90deg);
+}
+
+.file-diff-icon {
+  color: #8b9099;
+  flex: none;
+}
+
+.file-diff-path {
+  font-size: calc(12.5px * var(--font-scale));
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.file-diff-stats {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  font-size: calc(11.5px * var(--font-scale));
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  flex: none;
+}
+
+.file-diff-stat-add {
+  color: #20a65a;
+}
+
+.file-diff-stat-del {
+  color: #e5484d;
+}
+
+.file-diff-status {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #bfc3ca;
+  flex: none;
+}
+
+.file-diff-status-running {
+  background: #d28b16;
+}
+
+.file-diff-status-completed {
+  background: #20a65a;
+}
+
+.file-diff-status-error {
+  background: #e5484d;
+}
+
+.file-diff-body {
+  border-top: 1px solid #ececef;
+}
+
+.file-diff-code {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.file-diff-line {
+  display: flex;
+  align-items: baseline;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-diff-line-add {
+  background: #e6f6ec;
+}
+
+.file-diff-line-del {
+  background: #fce8e9;
+}
+
+.file-diff-gutter {
+  flex: none;
+  width: 14px;
+  color: #8b9099;
+  user-select: none;
+}
+
+.file-diff-line-add .file-diff-gutter {
+  color: #1a7f43;
+}
+
+.file-diff-line-del .file-diff-gutter {
+  color: #c0383c;
+}
+
+.file-diff-text {
+  flex: 1;
+  min-width: 0;
+  color: #1c1f23;
+}
+
+.file-diff-empty,
+.file-diff-error {
+  padding: 10px 12px;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.file-diff-empty {
+  color: #8b9099;
+}
+
+.file-diff-error {
+  color: #c0383c;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .message-notice {
   padding: 4px 12px;
   border-radius: 999px;
@@ -2750,9 +2904,24 @@ select {
   flex-shrink: 0;
 }
 
+.dp-repo-description {
+  padding: 10px 16px;
+  font-size: calc(12.5px * var(--font-scale));
+  line-height: 1.5;
+  color: #5c626c;
+  border-bottom: 1px solid #eaebed;
+  flex-shrink: 0;
+}
+
 .dp-section {
   padding: 14px 16px 10px;
   flex-shrink: 0;
+}
+
+.dp-overview-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .dp-section-label {

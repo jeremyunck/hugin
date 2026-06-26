@@ -73,6 +73,23 @@ class GitHubControllerTest {
     }
 
     @Test
+    void repositoryReturnsRepositoryDetails() throws Exception {
+        when(github.repositoryDetails("octocat", "hello-world")).thenReturn(
+                new GitHubAppService.GitHubRepositoryDetail(
+                        "octocat/hello-world", "hello-world", "octocat", false, "main",
+                        "Example repo", "TypeScript", 42, 7, 3,
+                        "https://github.com/octocat/hello-world", "2026-06-26T00:00:00Z"));
+
+        mockMvc.perform(get("/api/github/repositories/octocat/hello-world"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("octocat/hello-world"))
+                .andExpect(jsonPath("$.language").value("TypeScript"))
+                .andExpect(jsonPath("$.stargazers").value(42))
+                .andExpect(jsonPath("$.defaultBranch").value("main"))
+                .andExpect(jsonPath("$.privateRepo").value(false));
+    }
+
+    @Test
     void callbackRedirectsBackToState() throws Exception {
         mockMvc.perform(get("/api/github/callback")
                         .param("state", "http://localhost:5173/chat?tab=repo#composer")

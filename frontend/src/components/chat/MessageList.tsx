@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { Check, ChevronRight, Image as ImageIcon, Loader2, Mail, ShieldAlert, Wrench, X } from "lucide-react";
 
 import type { ApprovalDecision, ApprovalItem, ChatEntry, StreamToolEvent } from "../../lib/types";
+import { FileDiffEntry, parseFileDiff } from "./FileDiffEntry";
 
 function normalizeAssistantMarkdown(content: string) {
   return content.replace(/<br\s*\/?>/gi, "\n");
@@ -170,6 +171,15 @@ export function MessageList({
         }
 
         if (entry.type === "tool") {
+          // Render file-writing tools as a git-style diff so the agent's edits read at a glance;
+          // anything we can't parse into a diff falls back to the generic tool-call card.
+          const diff =
+            entry.tool.name === "write_file" || entry.tool.name === "edit_file"
+              ? parseFileDiff(entry.tool)
+              : null;
+          if (diff) {
+            return <FileDiffEntry key={entry.id} tool={entry.tool} diff={diff} />;
+          }
           return <ToolCallEntry key={entry.id} tool={entry.tool} />;
         }
 

@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 
 import { createThread, getThreadTitle } from "./services/threadApi";
 import { fetchModels, reportBug, saveEnabledModels } from "./services/integrationApi";
-import { fetchGitHubStatus } from "./services/githubApi";
+import { fetchGitHubRepository, fetchGitHubStatus } from "./services/githubApi";
 import { deleteSandbox } from "./services/runApi";
 import { saveAuthSession } from "./services/apiClient";
 import type {
   AuthSession,
   ChatAttachment,
   ChatThread,
+  GitHubRepositoryDetail,
   GitHubStatus,
   ModelOption
 } from "./lib/types";
@@ -115,6 +116,8 @@ export default function App() {
   const [wsOpen, setWsOpen] = useState(true);
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
   const [pendingAutoPrompt, setPendingAutoPrompt] = useState<string | null>(null);
+  const [repoDetail, setRepoDetail] = useState<GitHubRepositoryDetail | null>(null);
+  const [repoDetailLoading, setRepoDetailLoading] = useState(false);
 
   const [models, setModels] = useState<ModelOption[]>([]);
   const [savingModels, setSavingModels] = useState(false);
@@ -240,6 +243,28 @@ export default function App() {
       .then((status) => setGitHubStatus(status))
       .catch(() => setGitHubStatus(null));
   }, [session]);
+
+  // Populate the desktop project panel with live GitHub metadata for the active project thread.
+  const repoFullName = thread?.kind === "github" ? thread.repoFullName : undefined;
+  const githubActive = githubStatus?.active === true;
+  const loadRepoDetail = useCallback(() => {
+    if (!session || !repoFullName || !githubActive) return;
+    setRepoDetailLoading(true);
+    fetchGitHubRepository(session.token, repoFullName)
+      .then((detail) => setRepoDetail(detail))
+      .catch(() => setRepoDetail(null))
+      .finally(() => setRepoDetailLoading(false));
+  }, [session, repoFullName, githubActive]);
+
+  useEffect(() => {
+    if (!session || !repoFullName || !githubActive) {
+      setRepoDetail(null);
+      setRepoDetailLoading(false);
+      return;
+    }
+    setRepoDetail(null);
+    loadRepoDetail();
+  }, [session, repoFullName, githubActive, loadRepoDetail]);
 
   const updatePreferences = useCallback((partial: Partial<AppPreferences>) => {
     setPreferences((current) => {
@@ -729,6 +754,9 @@ export default function App() {
           wsOpen={wsOpen}
           onToggleWs={() => setWsOpen((current) => !current)}
           sandboxStatus={sandboxStatus}
+          repoDetail={repoDetail}
+          repoDetailLoading={repoDetailLoading}
+          onRefresh={loadRepoDetail}
         />
       ) : null}
     </div>

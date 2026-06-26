@@ -37,6 +37,21 @@ public class GitHubController {
     public record GitHubBranchOption(String name) {
     }
 
+    public record GitHubRepositoryDetailResponse(
+            String fullName,
+            String name,
+            String owner,
+            boolean privateRepo,
+            String defaultBranch,
+            String description,
+            String language,
+            int stargazers,
+            int forks,
+            int openIssues,
+            String htmlUrl,
+            String pushedAt) {
+    }
+
     private final GitHubAppService github;
 
     public GitHubController(GitHubAppService github) {
@@ -64,6 +79,25 @@ public class GitHubController {
     @GetMapping("/repositories/{owner}/{repo}/branches")
     public List<GitHubBranchOption> branches(@PathVariable String owner, @PathVariable String repo) throws Exception {
         return github.listBranches(owner, repo).stream().map(GitHubBranchOption::new).toList();
+    }
+
+    @GetMapping("/repositories/{owner}/{repo}")
+    public GitHubRepositoryDetailResponse repository(@PathVariable String owner, @PathVariable String repo)
+            throws Exception {
+        var detail = github.repositoryDetails(owner, repo);
+        return new GitHubRepositoryDetailResponse(
+                detail.fullName(),
+                detail.name(),
+                detail.owner(),
+                detail.privateRepo(),
+                detail.defaultBranch(),
+                detail.description(),
+                detail.language(),
+                detail.stargazers(),
+                detail.forks(),
+                detail.openIssues(),
+                detail.htmlUrl(),
+                detail.pushedAt());
     }
 
     @GetMapping("/callback")

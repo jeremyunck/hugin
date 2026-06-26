@@ -1,4 +1,4 @@
-import type { GitHubBranch, GitHubRepository, GitHubStatus } from "../lib/types";
+import type { GitHubBranch, GitHubRepository, GitHubRepositoryDetail, GitHubStatus } from "../lib/types";
 import { apiFetch } from "./apiClient";
 
 type GitHubConnectResponse = {
@@ -35,6 +35,21 @@ export async function fetchGitHubBranches(token: string, repoFullName: string): 
   }
   return apiFetch<GitHubBranch[]>(
     `/api/github/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    {},
+    token
+  );
+}
+
+export async function fetchGitHubRepository(
+  token: string,
+  repoFullName: string
+): Promise<GitHubRepositoryDetail> {
+  const [owner, repo] = repoFullName.split("/", 2);
+  if (!owner || !repo) {
+    throw new Error("Repository must be in owner/repo format.");
+  }
+  return apiFetch<GitHubRepositoryDetail>(
+    `/api/github/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
     {},
     token
   );
