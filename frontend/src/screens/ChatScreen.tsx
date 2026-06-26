@@ -1,4 +1,5 @@
 import { type ChangeEvent, type RefObject } from "react";
+import { Pencil } from "lucide-react";
 
 import type { ApprovalDecision, ChatAttachment, ChatThread, FileNode, ModelOption } from "../lib/types";
 import { AppHeader } from "../components/AppHeader";
@@ -45,10 +46,22 @@ export function ChatScreen(props: {
   const { thread } = props;
   return (
     <>
-      <AppHeader
-        onMenu={props.onMenu}
-        reportAction={{ busy: props.reportingBug, onClick: props.onReportBug }}
-      />
+      {/* Mobile header: hidden on desktop via CSS */}
+      <div className="mobile-chat-header">
+        <AppHeader
+          onMenu={props.onMenu}
+          reportAction={{ busy: props.reportingBug, onClick: props.onReportBug }}
+        />
+      </div>
+
+      {/* Desktop title bar: hidden on mobile via CSS */}
+      <div className="desktop-chat-header">
+        <span className="desktop-chat-title">{thread.title || "New Chat"}</span>
+        <button type="button" className="icon-button" aria-label="Edit title">
+          <Pencil size={14} strokeWidth={2} />
+        </button>
+      </div>
+
       <input
         ref={props.imageInputRef}
         type="file"
@@ -57,22 +70,25 @@ export function ChatScreen(props: {
         className="visually-hidden"
         tabIndex={-1}
       />
+      {/* Workspace panel: shown in center column on mobile, hidden on desktop (shown in right panel instead) */}
       {props.showWorkspace ? (
-        <WorkspacePanel
-          sessionId={thread.id}
-          files={props.files}
-          wsOpen={props.wsOpen}
-          onToggleWs={props.onToggleWs}
-          label={thread.kind === "github"
-            ? `${thread.repoName ?? thread.repoFullName ?? "repo"} · ${thread.branchName ?? "branch"}`
-            : "~/"}
-          rootName={thread.kind === "github"
-            ? (thread.repoName ?? thread.repoFullName ?? "repo")
-            : "~"}
-          badge={thread.kind === "github" ? "github" : "agent"}
-          sandboxStatus={thread.kind === "github" ? props.sandboxStatus : undefined}
-          defaultOpenDirectories={thread.kind !== "github"}
-        />
+        <div className="workspace-panel-mobile">
+          <WorkspacePanel
+            sessionId={thread.id}
+            files={props.files}
+            wsOpen={props.wsOpen}
+            onToggleWs={props.onToggleWs}
+            label={thread.kind === "github"
+              ? `${thread.repoName ?? thread.repoFullName ?? "repo"} · ${thread.branchName ?? "branch"}`
+              : "~/"}
+            rootName={thread.kind === "github"
+              ? (thread.repoName ?? thread.repoFullName ?? "repo")
+              : "~"}
+            badge={thread.kind === "github" ? "github" : "agent"}
+            sandboxStatus={thread.kind === "github" ? props.sandboxStatus : undefined}
+            defaultOpenDirectories={thread.kind !== "github"}
+          />
+        </div>
       ) : null}
       {props.error ? <p className="login-error screen-pad">{props.error}</p> : null}
       {props.bugReportNotice ? <p className="screen-note screen-pad">{props.bugReportNotice}</p> : null}

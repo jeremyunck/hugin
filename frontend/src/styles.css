@@ -2368,3 +2368,521 @@ select {
     animation: none !important;
   }
 }
+
+/* ── Desktop layout (≥ 1100px) ─────────────────────────────────────────────── */
+
+/* Desktop-only elements: invisible by default, revealed at the desktop breakpoint */
+.desktop-sidebar,
+.desktop-panel,
+.desktop-chat-header {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Transform the page wrapper into a CSS grid */
+  .mock-page {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 100vh;
+    height: 100vh;
+    min-height: 100vh;
+    max-height: 100vh;
+    padding: 0;
+    background: #f8fafc;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  /* Two-column: sidebar + chat */
+  .mock-page.desktop-has-sidebar {
+    grid-template-columns: 260px 1fr;
+  }
+
+  /* Three-column: sidebar + chat + right panel */
+  .mock-page.desktop-has-sidebar.desktop-has-panel {
+    grid-template-columns: 260px minmax(600px, 1fr) 420px;
+  }
+
+  /* Center column: remove the mobile phone-frame styling */
+  .device-shell {
+    max-width: none !important;
+    width: 100% !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    border-left: 1px solid #eaebed !important;
+    border-right: 1px solid #eaebed !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  /* Show desktop-only elements */
+  .desktop-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .desktop-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    background: #fff;
+  }
+
+  .desktop-chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 20px;
+    border-bottom: 1px solid #eaebed;
+    flex-shrink: 0;
+    background: #fff;
+  }
+
+  /* Hide the mobile primary app header on desktop (replaced by desktop-chat-header) */
+  .mobile-chat-header {
+    display: none;
+  }
+
+  /* Hide the workspace panel from the center column on desktop
+     (it moves into the right panel as DesktopProjectPanel) */
+  .workspace-panel-mobile {
+    display: none;
+  }
+}
+
+/* Mobile: keep workspace panel visible in the center column */
+.workspace-panel-mobile {
+  display: block;
+}
+
+/* ── Desktop Sidebar ───────────────────────────────────────────────────────── */
+
+.ds-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 12px;
+  flex-shrink: 0;
+}
+
+.ds-brand-name {
+  font-size: calc(17px * var(--font-scale));
+  font-weight: 700;
+  color: #1c1f23;
+  letter-spacing: -0.01em;
+}
+
+.ds-top-actions {
+  padding: 0 10px 10px;
+  flex-shrink: 0;
+}
+
+.ds-new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: #1c1f23;
+  color: #fff;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s ease;
+}
+
+.ds-new-chat-btn:hover {
+  opacity: 0.88;
+}
+
+.ds-new-chat-btn:active {
+  opacity: 0.75;
+}
+
+.ds-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.ds-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: #5c626c;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.ds-nav-item:hover {
+  background: #f4f4f6;
+  color: #1c1f23;
+}
+
+.ds-nav-item-active {
+  background: #f1f2f4;
+  color: #1c1f23;
+  font-weight: 600;
+}
+
+.ds-recents {
+  margin-top: 16px;
+  padding: 0 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-section-label {
+  padding: 0 8px 6px;
+  font-size: calc(10.5px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #adb2ba;
+  flex-shrink: 0;
+}
+
+.ds-recent-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ds-recent-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ds-recent-item:hover {
+  background: #f4f4f6;
+}
+
+.ds-recent-item-active {
+  background: #f1f2f4;
+}
+
+.ds-recent-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(12.5px * var(--font-scale));
+  color: #3c414a;
+}
+
+.ds-spacer {
+  flex: 1;
+  min-height: 8px;
+}
+
+.ds-credit-card {
+  margin: 8px 10px;
+  border: 1px solid #eaebed;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.ds-credit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ds-credit-label {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: #1c1f23;
+}
+
+.ds-credit-bar-wrap {
+  margin-bottom: 10px;
+}
+
+.ds-credit-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #f1f2f4;
+  overflow: hidden;
+}
+
+.ds-credit-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: #1c1f23;
+}
+
+.ds-credit-manage-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid #e4e5e8;
+  background: #fff;
+  color: #1c1f23;
+  font-size: calc(12.5px * var(--font-scale));
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ds-credit-manage-btn:hover {
+  background: #f4f4f6;
+}
+
+.ds-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid #eaebed;
+  flex-shrink: 0;
+}
+
+/* ── Desktop chat title bar ─────────────────────────────────────────────────── */
+
+.desktop-chat-title {
+  flex: 1;
+  font-size: calc(14.5px * var(--font-scale));
+  font-weight: 600;
+  color: #1c1f23;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Desktop Project Panel ──────────────────────────────────────────────────── */
+
+.dp-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eaebed;
+  flex-shrink: 0;
+}
+
+.dp-header-title {
+  flex: 1;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b9099;
+}
+
+.dp-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.dp-project-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 16px;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 600;
+  color: #1c1f23;
+  border-bottom: 1px solid #eaebed;
+  flex-shrink: 0;
+}
+
+.dp-section {
+  padding: 14px 16px 10px;
+  flex-shrink: 0;
+}
+
+.dp-section-label {
+  font-size: calc(10.5px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b9099;
+  margin-bottom: 10px;
+}
+
+.dp-overview-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+}
+
+.dp-overview-key {
+  font-size: calc(12px * var(--font-scale));
+  color: #8b9099;
+}
+
+.dp-overview-val {
+  font-size: calc(12px * var(--font-scale));
+  color: #1c1f23;
+  font-weight: 500;
+}
+
+.dp-files-section {
+  padding: 14px 16px 10px;
+  border-top: 1px solid #eaebed;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.dp-file-tree {
+  border: 1px solid #eaebed;
+  border-radius: 10px;
+  background: #fafafb;
+  overflow-y: auto;
+  max-height: 260px;
+}
+
+.dp-file-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: calc(12px * var(--font-scale));
+  color: #1c1f23;
+}
+
+.dp-file-row-dir {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.dp-file-row-dir:hover {
+  background: #f1f2f4;
+}
+
+.dp-empty {
+  padding: 12px 8px;
+  font-size: calc(12.5px * var(--font-scale));
+  color: #adb2ba;
+}
+
+.dp-terminal-section {
+  padding: 14px 16px 16px;
+  border-top: 1px solid #eaebed;
+  flex-shrink: 0;
+}
+
+.dp-terminal {
+  border: 1px solid #eaebed;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.dp-terminal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #eaebed;
+  background: #f7f7f8;
+}
+
+.dp-terminal-tab {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 500;
+  color: #1c1f23;
+  padding: 2px 10px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid #eaebed;
+}
+
+.dp-terminal-tab-action {
+  font-size: calc(14px * var(--font-scale));
+  color: #8b9099;
+  padding: 1px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  line-height: 1;
+  transition: background 0.12s ease;
+}
+
+.dp-terminal-tab-action:hover {
+  background: #ececef;
+}
+
+.dp-terminal-body {
+  padding: 10px 14px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.65;
+  background: #fff;
+  color: #1c1f23;
+}
+
+.dp-terminal-line {
+  display: flex;
+  align-items: baseline;
+}
+
+.dp-terminal-ps1 {
+  color: #20a65a;
+  margin-right: 7px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dp-terminal-out {
+  color: #5c626c;
+}
+
+.dp-terminal-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: #1c1f23;
+  border-radius: 1px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 1.1s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
