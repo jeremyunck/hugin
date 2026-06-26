@@ -20,6 +20,17 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+app:
+  encryption:
+    # Secret used to encrypt user-supplied credentials (e.g. per-user OpenRouter API keys) at rest.
+    # Set APP_ENCRYPTION_SECRET to a stable, high-entropy value in production — rotating or losing it
+    # makes previously stored keys undecryptable (they simply fall back to the server-wide key).
+    secret: ${APP_ENCRYPTION_SECRET:}
+
+openrouter:
+  # Base URL used for account-management calls (e.g. fetching remaining credits for a user's key).
+  api-base-url: ${OPENROUTER_API_BASE_URL:https://openrouter.ai/api/v1}
+
 llm:
   # Active LLM provider — must match a key under llm.providers below. Override with LLM_PROVIDER.
   provider: ${LLM_PROVIDER:openrouter}

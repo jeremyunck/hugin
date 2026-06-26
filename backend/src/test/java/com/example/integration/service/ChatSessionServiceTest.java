@@ -91,11 +91,14 @@ class ChatSessionServiceTest {
         homeWorkspaceService = mock(com.example.agent.tool.HomeWorkspaceService.class);
         gmailDeletionService = mock(com.example.integration.google.GmailDeletionService.class);
         userAccountRepository = mock(com.example.integration.auth.UserAccountRepository.class);
+        var openRouterKeyService = mock(com.example.integration.auth.UserOpenRouterKeyService.class);
+        when(openRouterKeyService.resolveApiKey(any())).thenReturn(java.util.Optional.empty());
+        var openRouterKeyContext = new com.example.agent.OpenRouterKeyContext();
 
         service = new ChatSessionService(
                 repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate,
                 modelContextService, workspaceRegistry, homeWorkspaceService, gmailDeletionService,
-                userAccountRepository, "model-x");
+                userAccountRepository, openRouterKeyService, openRouterKeyContext, "model-x");
     }
 
     @Test

@@ -2811,6 +2811,18 @@ select {
   color: #1c1f23;
 }
 
+.ds-credit-value {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 500;
+  color: #5a5f66;
+}
+
+.ds-credit-empty {
+  margin: 0 0 10px;
+  font-size: calc(12px * var(--font-scale));
+  color: #8a8f96;
+}
+
 .ds-credit-bar-wrap {
   margin-bottom: 10px;
 }

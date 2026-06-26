@@ -4,7 +4,7 @@ import { createThread, getThreadTitle } from "./services/threadApi";
 import { fetchModels, reportBug, saveEnabledModels } from "./services/integrationApi";
 import { fetchGitHubRepository, fetchGitHubStatus } from "./services/githubApi";
 import { deleteSandbox } from "./services/runApi";
-import { saveAuthSession } from "./services/apiClient";
+import { saveAuthSession, fetchOpenRouterCredits, type OpenRouterCredits } from "./services/apiClient";
 import type {
   AuthSession,
   ChatAttachment,
@@ -115,6 +115,7 @@ export default function App() {
 
   const [wsOpen, setWsOpen] = useState(true);
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
+  const [openRouterCredits, setOpenRouterCredits] = useState<OpenRouterCredits | null>(null);
   const [pendingAutoPrompt, setPendingAutoPrompt] = useState<string | null>(null);
   const [repoDetail, setRepoDetail] = useState<GitHubRepositoryDetail | null>(null);
   const [repoDetailLoading, setRepoDetailLoading] = useState(false);
@@ -243,6 +244,15 @@ export default function App() {
       .then((status) => setGitHubStatus(status))
       .catch(() => setGitHubStatus(null));
   }, [session]);
+
+  // Live OpenRouter credit balance for the sidebar usage meter. Re-fetched whenever the user lands
+  // back on a non-account screen so saving/removing a key in Account is reflected promptly.
+  useEffect(() => {
+    if (!session || screen === "user-details") return;
+    fetchOpenRouterCredits(session.token)
+      .then((credits) => setOpenRouterCredits(credits))
+      .catch(() => setOpenRouterCredits(null));
+  }, [session, screen]);
 
   // Populate the desktop project panel with live GitHub metadata for the active project thread.
   const repoFullName = thread?.kind === "github" ? thread.repoFullName : undefined;
@@ -601,6 +611,8 @@ export default function App() {
           onIntegrations={openIntegrations}
           onSettings={openPreferences}
           onThread={openHistory}
+          openRouterCredits={openRouterCredits}
+          onManageApiKey={openUserDetails}
         />
       ) : null}
       <div className="device-shell">

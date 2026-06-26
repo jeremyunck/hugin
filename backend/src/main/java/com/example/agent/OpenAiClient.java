@@ -62,11 +62,14 @@ public class OpenAiClient {
     private final ObjectMapper objectMapper;
     private final HttpClient streamingHttpClient;
     private final String apiKey;
+    private final OpenRouterKeyContext keyContext;
     private final String reasoningEffort;
     private final boolean deepSeekCompat;
 
-    public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper, OpenRouterKeyContext keyContext) {
         this.objectMapper = objectMapper;
+        this.keyContext = keyContext;
 
         LlmProperties.Provider provider = properties.activeProvider();
         String baseUrl = provider.baseUrl();
@@ -87,15 +90,13 @@ public class OpenAiClient {
         // agent loop is still bounded by agent.request-timeout.
         factory.setReadTimeout(Duration.ofSeconds(120));
 
-        var builder = RestClient.builder()
+        // Auth is applied per request (see effectiveApiKey) rather than via a constructor-baked
+        // interceptor, so a per-user OpenRouter key bound to the current thread can override the
+        // server-wide configured key for that request.
+        this.restClient = RestClient.builder()
                 .requestFactory(factory)
-                .requestInterceptor(new LoggingInterceptor());
-
-        if (provider.hasApiKey()) {
-            builder.requestInterceptor(new BearerAuthInterceptor(provider.apiKey()));
-        }
-
-        this.restClient = builder.build();
+                .requestInterceptor(new LoggingInterceptor())
+                .build();
 
         // Separate client for streaming: no read timeout (SSE streams are long-lived) and no
         // buffering interceptor, so chunks can be processed as they arrive.
@@ -105,6 +106,21 @@ public class OpenAiClient {
 
         log.info("OpenAiClient configured: provider={}, endpoint={}, auth={}",
                 properties.provider(), endpoint, provider.hasApiKey() ? "bearer" : "none");
+    }
+
+    /** Back-compatible constructor with no per-user key context (always uses the configured key). */
+    public OpenAiClient(LlmProperties properties, ObjectMapper objectMapper) {
+        this(properties, objectMapper, new OpenRouterKeyContext());
+    }
+
+    /**
+     * The API key to authenticate the current call: a per-user OpenRouter key bound to this thread
+     * when present, otherwise the server-wide configured key. Returns {@code null} when neither is
+     * available (e.g. a local Ollama endpoint), in which case no auth header is sent.
+     */
+    private String effectiveApiKey() {
+        String bound = keyContext.current().filter(k -> !k.isBlank()).orElse(null);
+        return bound != null ? bound : apiKey;
     }
 
     /**
@@ -124,6 +140,12 @@ public class OpenAiClient {
         return withRetry(() -> restClient.post()
                 .uri(endpoint)
                 .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> {
+                    String key = effectiveApiKey();
+                    if (key != null && !key.isBlank()) {
+                        headers.setBearerAuth(key);
+                    }
+                })
                 .body(request)
                 .retrieve()
                 .body(ChatResponse.class));
@@ -201,8 +223,9 @@ public class OpenAiClient {
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
                     .POST(BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-            if (apiKey != null) {
-                httpRequestBuilder.header("Authorization", "Bearer " + apiKey);
+            String key = effectiveApiKey();
+            if (key != null && !key.isBlank()) {
+                httpRequestBuilder.header("Authorization", "Bearer " + key);
             }
             try {
                 HttpResponse<InputStream> response = streamingHttpClient.send(
@@ -531,17 +554,6 @@ public class OpenAiClient {
 
         ToolCall toToolCall() {
             return new ToolCall(id, type, new ToolCall.FunctionCall(name, arguments.toString()));
-        }
-    }
-
-    /** Adds {@code Authorization: Bearer <key>} to every request (OpenRouter, OpenAI, etc.). */
-    private record BearerAuthInterceptor(String apiKey) implements ClientHttpRequestInterceptor {
-
-        @Override
-        public ClientHttpResponse intercept(HttpRequest request, byte[] body,
-                                            ClientHttpRequestExecution execution) throws IOException {
-            request.getHeaders().setBearerAuth(apiKey);
-            return execution.execute(request, body);
         }
     }
 
