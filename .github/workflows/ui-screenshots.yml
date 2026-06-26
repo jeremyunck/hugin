@@ -2,8 +2,9 @@ name: UI Screenshots
 
 # Generates UI screenshots for every pull request so reviewers can eyeball the frontend before
 # merging. This is a review aid only — there are no baseline images and no pixel-diff comparisons
-# (yet). The screenshots are captured by Playwright against the frontend running in mock mode (no
-# backend) and uploaded as a workflow artifact, with a sticky PR comment linking to it.
+# (yet). Playwright captures every screen (desktop + mobile) against the frontend running in mock
+# mode (no backend). The PNGs are uploaded as an artifact, published to a dedicated `ui-screenshots`
+# assets branch, and embedded in the PR description as an image gallery.
 
 on:
   pull_request:
@@ -12,20 +13,20 @@ concurrency:
   group: ui-screenshots-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# Least privilege: read the repo, and (for same-repo PRs) write the sticky comment. Pull requests
-# from forks run with a read-only token; the comment step is skipped for them but the artifact still
-# uploads and the job still succeeds.
+# Least privilege: read the repo + write the assets branch and the PR description. Pull requests from
+# forks run with a read-only token; the publish/description steps are skipped for them (and never
+# fail the job), while the artifact still uploads.
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   screenshots:
     name: Capture UI screenshots
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    # Whether this PR can write back (same-repo PRs only; forks get a read-only token).
+    env:
+      CAN_PUBLISH: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,17 +39,21 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Install Playwright Chromium
+        working-directory: frontend
         run: npx playwright install --with-deps chromium
 
       - name: Build frontend (mock mode)
+        working-directory: frontend
         run: npm run build:mock
 
       - name: Generate screenshots
         # The Playwright web server serves the mock build via `vite preview` and the spec captures a
         # full-page screenshot of every screen at desktop and mobile viewports.
+        working-directory: frontend
         run: npm run screenshots
 
       - name: Upload screenshots artifact
@@ -60,50 +65,97 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Post or update sticky PR comment
-        # Skip on forked PRs (read-only token) but never fail the job because of it.
-        if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+      - name: Publish screenshots to assets branch
+        # Commit the PNGs to a long-lived `ui-screenshots` branch under pr-<n>/<sha>/ so they have
+        # stable, embeddable raw URLs. The per-PR folder is reset each run so only the latest set for
+        # an open PR is kept. Skipped (and non-fatal) on forks.
+        if: ${{ always() && env.CAN_PUBLISH == 'true' }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PR=${{ github.event.pull_request.number }}
+          SHA=${{ github.event.pull_request.head.sha }}
+          SHORT=${SHA:0:7}
+          BRANCH=ui-screenshots
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          work="$(mktemp -d)"
+          # Clone the existing assets branch, or start it as an orphan if it doesn't exist yet.
+          if git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$work" 2>/dev/null; then
+            :
+          else
+            git clone --quiet --depth 1 "$REPO_URL" "$work"
+            git -C "$work" checkout --orphan "$BRANCH"
+            git -C "$work" rm -rqf . 2>/dev/null || true
+          fi
+
+          # Keep only the latest screenshots for this PR.
+          git -C "$work" rm -rqf "pr-$PR" 2>/dev/null || true
+          dest="$work/pr-$PR/$SHORT"
+          mkdir -p "$dest"
+          cp frontend/screenshots/*.png "$dest/"
+
+          git -C "$work" add -A
+          git -C "$work" -c user.email=github-actions[bot]@users.noreply.github.com \
+                         -c user.name=github-actions[bot] \
+                         commit -qm "UI screenshots for PR #$PR ($SHORT)" || { echo "Nothing to commit"; exit 0; }
+          git -C "$work" push --quiet "$REPO_URL" "$BRANCH"
+
+      - name: Append screenshots to PR description
+        # Embed the gallery in the PR body between hidden markers so re-runs update in place rather
+        # than appending duplicates. Skipped (and non-fatal) on forks.
+        if: ${{ always() && env.CAN_PUBLISH == 'true' }}
         continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
-            const marker = '<!-- hugin-ui-screenshots -->';
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const sha = context.payload.pull_request.head.sha;
-            const body = [
-              marker,
-              '## UI Screenshot Preview',
+            const START = '<!-- ui-screenshots:start -->';
+            const END = '<!-- ui-screenshots:end -->';
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const sha = pr.head.sha.substring(0, 7);
+            const base = `https://raw.githubusercontent.com/${owner}/${repo}/ui-screenshots/pr-${pr.number}/${sha}`;
+
+            // Label -> mockScreen id (the file stem). Keep in sync with tests/visual/ui-screenshots.spec.ts.
+            const screens = [
+              ['Login', 'login'],
+              ['Chat', 'purechat'],
+              ['Project chat', 'chat'],
+              ['History', 'history'],
+              ['Integrations', 'integrations'],
+              ['Model settings', 'settings'],
+              ['Preferences', 'preferences'],
+              ['GitHub project', 'github-repo'],
+              ['Agent threads', 'agent-threads'],
+              ['Account', 'user-details']
+            ];
+
+            const cell = (url, width) => `<a href="${url}"><img src="${url}" width="${width}"></a>`;
+            const rows = screens.map(([label, id]) =>
+              `<tr><td><b>${label}</b></td>` +
+              `<td>${cell(`${base}/desktop-${id}.png`, 420)}</td>` +
+              `<td>${cell(`${base}/mobile-${id}.png`, 150)}</td></tr>`
+            );
+
+            const section = [
+              START,
+              '## 📸 UI Screenshots',
               '',
-              `Commit: \`${sha}\``,
+              `Captured in mock mode at commit \`${sha}\`. Click any image to view full size. ` +
+                'Review aid only — visual regression is not enabled.',
               '',
-              'Screens captured (desktop + mobile):',
-              '',
-              '- Login',
-              '- Chat',
-              '- History',
-              '- Integrations',
-              '- Settings',
-              '- GitHub',
-              '- Preferences',
-              '- Agent Threads',
-              '- User Details',
-              '',
-              `Download the screenshots from the **hugin-ui-screenshots** artifact on [this workflow run](${runUrl}).`,
-              '',
-              'This is a review aid only.',
-              'Visual regression comparisons are not yet enabled.'
+              '<table>',
+              '<tr><th align="left">Screen</th><th>Desktop · 1440×1000</th><th>Mobile · 390×844</th></tr>',
+              ...rows,
+              '</table>',
+              END
             ].join('\n');
 
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
+            const { data: fresh } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+            const current = fresh.body || '';
+            const re = new RegExp(`${START}[\\s\\S]*?${END}`);
+            const body = re.test(current) ? current.replace(re, section) : `${current}\n\n${section}`;
 
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner, repo, issue_number, per_page: 100
-            });
-            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
-
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+            await github.rest.pulls.update({ owner, repo, pull_number: pr.number, body });
