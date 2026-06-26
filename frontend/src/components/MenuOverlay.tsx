@@ -33,7 +33,6 @@ export function MenuOverlay(props: {
 }) {
   const {
     username,
-    roles,
     githubConnected,
     reportBusy,
     onReportBug,

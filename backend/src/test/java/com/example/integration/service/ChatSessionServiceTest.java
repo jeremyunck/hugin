@@ -49,6 +49,7 @@ class ChatSessionServiceTest {
     private com.example.agent.tool.WorkspaceRegistry workspaceRegistry;
     private com.example.agent.tool.HomeWorkspaceService homeWorkspaceService;
     private com.example.integration.google.GmailDeletionService gmailDeletionService;
+    private com.example.integration.auth.UserAccountRepository userAccountRepository;
     private List<ChatSessionEvent> published;
 
     @BeforeEach
@@ -89,10 +90,12 @@ class ChatSessionServiceTest {
         workspaceRegistry = mock(com.example.agent.tool.WorkspaceRegistry.class);
         homeWorkspaceService = mock(com.example.agent.tool.HomeWorkspaceService.class);
         gmailDeletionService = mock(com.example.integration.google.GmailDeletionService.class);
+        userAccountRepository = mock(com.example.integration.auth.UserAccountRepository.class);
 
         service = new ChatSessionService(
                 repository, broker, agentService, inlineExecutor, runRegistry, transactionTemplate,
-                modelContextService, workspaceRegistry, homeWorkspaceService, gmailDeletionService, "model-x");
+                modelContextService, workspaceRegistry, homeWorkspaceService, gmailDeletionService,
+                userAccountRepository, "model-x");
     }
 
     @Test
