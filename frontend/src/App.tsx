@@ -4,7 +4,7 @@ import { createThread, getThreadTitle } from "./services/threadApi";
 import { fetchModels, reportBug, saveEnabledModels } from "./services/integrationApi";
 import { fetchGitHubRepository, fetchGitHubStatus } from "./services/githubApi";
 import { deleteSandbox } from "./services/runApi";
-import { saveAuthSession } from "./services/apiClient";
+import { saveAuthSession, fetchOpenRouterCredits, type OpenRouterCredits } from "./services/apiClient";
 import type {
   AuthSession,
   ChatAttachment,
@@ -115,6 +115,7 @@ export default function App() {
 
   const [wsOpen, setWsOpen] = useState(true);
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
+  const [openRouterCredits, setOpenRouterCredits] = useState<OpenRouterCredits | null>(null);
   const [pendingAutoPrompt, setPendingAutoPrompt] = useState<string | null>(null);
   const [repoDetail, setRepoDetail] = useState<GitHubRepositoryDetail | null>(null);
   const [repoDetailLoading, setRepoDetailLoading] = useState(false);
@@ -243,6 +244,33 @@ export default function App() {
       .then((status) => setGitHubStatus(status))
       .catch(() => setGitHubStatus(null));
   }, [session]);
+
+  // Live OpenRouter credit balance for the sidebar usage meter.
+  const refreshOpenRouterCredits = useCallback(() => {
+    const token = session?.token;
+    if (!token) return;
+    fetchOpenRouterCredits(token)
+      .then((credits) => setOpenRouterCredits(credits))
+      .catch(() => setOpenRouterCredits(null));
+  }, [session?.token]);
+
+  // Refresh when the user lands back on a non-account screen, so saving/removing a key in Account
+  // (or returning from it) is reflected promptly.
+  useEffect(() => {
+    if (screen === "user-details") return;
+    refreshOpenRouterCredits();
+  }, [screen, refreshOpenRouterCredits]);
+
+  // Refresh after each agent run finishes (busy → idle): the run just spent credits invoking the
+  // model, so the meter should reflect the new balance. Skipped while on the Account screen.
+  const prevBusyRef = useRef(false);
+  useEffect(() => {
+    const wasBusy = prevBusyRef.current;
+    prevBusyRef.current = store.activeBusy;
+    if (wasBusy && !store.activeBusy && screen !== "user-details") {
+      refreshOpenRouterCredits();
+    }
+  }, [store.activeBusy, screen, refreshOpenRouterCredits]);
 
   // Populate the desktop project panel with live GitHub metadata for the active project thread.
   const repoFullName = thread?.kind === "github" ? thread.repoFullName : undefined;
@@ -601,6 +629,8 @@ export default function App() {
           onIntegrations={openIntegrations}
           onSettings={openPreferences}
           onThread={openHistory}
+          openRouterCredits={openRouterCredits}
+          onManageApiKey={openUserDetails}
         />
       ) : null}
       <div className="device-shell">

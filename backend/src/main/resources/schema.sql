@@ -10,6 +10,9 @@ create table if not exists app_users (
 alter table app_users add column if not exists display_name varchar(200);
 alter table app_users add column if not exists email varchar(255);
 alter table app_users add column if not exists custom_instructions text;
+-- Per-user OpenRouter API key, encrypted at rest (AES-GCM via CredentialCipher). Only ever read back
+-- through endpoints scoped to the authenticated user, so one user can never see another's key.
+alter table app_users add column if not exists openrouter_api_key_encrypted text;
 
 create table if not exists user_agents (
     id varchar(36) primary key,

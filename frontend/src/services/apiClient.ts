@@ -168,3 +168,35 @@ export async function changeUserPassword(
     body: JSON.stringify({ currentPassword, newPassword })
   }, token);
 }
+
+export type OpenRouterKeyStatus = {
+  configured: boolean;
+  last4: string | null;
+};
+
+export type OpenRouterCredits = {
+  configured: boolean;
+  totalCredits: number | null;
+  totalUsage: number | null;
+  remaining: number | null;
+  error: string | null;
+};
+
+export async function fetchOpenRouterKeyStatus(token: string): Promise<OpenRouterKeyStatus> {
+  return apiFetch<OpenRouterKeyStatus>("/api/user/openrouter-key", {}, token);
+}
+
+export async function saveOpenRouterKey(token: string, apiKey: string): Promise<OpenRouterKeyStatus> {
+  return apiFetch<OpenRouterKeyStatus>("/api/user/openrouter-key", {
+    method: "PUT",
+    body: JSON.stringify({ apiKey })
+  }, token);
+}
+
+export async function deleteOpenRouterKey(token: string): Promise<OpenRouterKeyStatus> {
+  return apiFetch<OpenRouterKeyStatus>("/api/user/openrouter-key", { method: "DELETE" }, token);
+}
+
+export async function fetchOpenRouterCredits(token: string): Promise<OpenRouterCredits> {
+  return apiFetch<OpenRouterCredits>("/api/user/openrouter-credits", {}, token);
+}

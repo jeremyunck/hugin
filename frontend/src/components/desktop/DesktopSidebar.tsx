@@ -2,8 +2,14 @@ import { FolderGit2, Home, MessageCirclePlus, Puzzle, Search, Settings } from "l
 
 import type { ChatThread } from "../../lib/types";
 import type { Screen } from "../../lib/screen";
+import type { OpenRouterCredits } from "../../services/apiClient";
 
 const LOGO = "/hugin-bird.jpg";
+
+/** Formats a credit amount as a compact dollar figure (OpenRouter credits are denominated in USD). */
+function formatCredits(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
 
 export function DesktopSidebar(props: {
   username: string;
@@ -18,10 +24,21 @@ export function DesktopSidebar(props: {
   onIntegrations: () => void;
   onSettings: () => void;
   onThread: (thread: ChatThread) => void;
+  openRouterCredits: OpenRouterCredits | null;
+  onManageApiKey: () => void;
 }) {
   const initials = props.username.slice(0, 2).toUpperCase();
   const recentThreads = props.threads.slice(0, 12);
   const onChat = props.screen === "purechat" || props.screen === "chat";
+
+  const credits = props.openRouterCredits;
+  const hasBalance =
+    credits?.configured === true && credits.remaining != null && credits.totalCredits != null;
+  // Fraction of purchased credits already spent, so the bar fills as the balance is consumed.
+  const usedFraction =
+    hasBalance && credits!.totalCredits! > 0
+      ? Math.min(1, Math.max(0, (credits!.totalUsage ?? 0) / credits!.totalCredits!))
+      : 0;
 
   return (
     <aside className="desktop-sidebar">
@@ -109,14 +126,29 @@ export function DesktopSidebar(props: {
       <div className="ds-credit-card">
         <div className="ds-credit-row">
           <span className="ds-credit-label">OpenRouter</span>
+          {hasBalance ? (
+            <span className="ds-credit-value">{formatCredits(credits!.remaining!)} left</span>
+          ) : null}
         </div>
-        <div className="ds-credit-bar-wrap">
-          <div className="ds-credit-bar">
-            <div className="ds-credit-bar-fill" style={{ width: "25%" }} />
+        {hasBalance ? (
+          <div className="ds-credit-bar-wrap">
+            <div className="ds-credit-bar">
+              <div className="ds-credit-bar-fill" style={{ width: `${usedFraction * 100}%` }} />
+            </div>
           </div>
-        </div>
-        <button type="button" className="ds-credit-manage-btn" onClick={props.onIntegrations}>
-          Manage API Key
+        ) : (
+          <p className="ds-credit-empty">
+            {credits == null
+              ? "Loading…"
+              : credits.configured === false
+                ? "No API key connected."
+                : credits.error
+                  ? "Couldn’t load balance."
+                  : "Balance unavailable."}
+          </p>
+        )}
+        <button type="button" className="ds-credit-manage-btn" onClick={props.onManageApiKey}>
+          {credits?.configured ? "Manage API Key" : "Add API Key"}
         </button>
       </div>
 

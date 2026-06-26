@@ -63,6 +63,22 @@ public class UserAccountRepository {
                 displayName, email, customInstructions, username);
     }
 
+    /** Returns the stored (encrypted) OpenRouter API key for a user, or empty when none is set. */
+    public Optional<String> findOpenRouterApiKeyEncrypted(String username) {
+        List<String> matches = jdbcTemplate.query(
+                "select openrouter_api_key_encrypted from app_users where username = ?",
+                (rs, rowNum) -> rs.getString("openrouter_api_key_encrypted"),
+                username);
+        return matches.stream().findFirst().filter(value -> value != null && !value.isBlank());
+    }
+
+    /** Stores (or, when {@code encrypted} is null, clears) a user's encrypted OpenRouter API key. */
+    public void updateOpenRouterApiKey(String username, String encrypted) {
+        jdbcTemplate.update(
+                "update app_users set openrouter_api_key_encrypted = ? where username = ?",
+                encrypted, username);
+    }
+
     public void updatePassword(String username, String newPasswordHash) {
         jdbcTemplate.update(
                 """

@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { AppHeader } from "../components/AppHeader";
-import { updateUserProfile, changeUserPassword } from "../services/apiClient";
+import {
+  updateUserProfile,
+  changeUserPassword,
+  fetchOpenRouterKeyStatus,
+  saveOpenRouterKey,
+  deleteOpenRouterKey
+} from "../services/apiClient";
+import type { OpenRouterKeyStatus } from "../services/apiClient";
 import type { AuthSession } from "../lib/types";
 
 export function UserDetailsScreen(props: {
@@ -20,6 +27,12 @@ export function UserDetailsScreen(props: {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [keyStatus, setKeyStatus] = useState<OpenRouterKeyStatus | null>(null);
+  const [savingKey, setSavingKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -33,6 +46,59 @@ export function UserDetailsScreen(props: {
     setEmail(session.email ?? "");
     setCustomInstructions(session.customInstructions ?? "");
   }, [session.displayName, session.email, session.customInstructions]);
+
+  // Load whether an OpenRouter key is already on file (and its masked suffix).
+  useEffect(() => {
+    let cancelled = false;
+    fetchOpenRouterKeyStatus(session.token)
+      .then((status) => {
+        if (!cancelled) setKeyStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setKeyStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.token]);
+
+  const handleSaveKey = async () => {
+    if (savingKey) return;
+    setKeyError(null);
+    setKeySaved(false);
+    if (!apiKeyInput.trim()) {
+      setKeyError("Enter an API key.");
+      return;
+    }
+    setSavingKey(true);
+    try {
+      const status = await saveOpenRouterKey(session.token, apiKeyInput.trim());
+      setKeyStatus(status);
+      setApiKeyInput("");
+      setKeySaved(true);
+      window.setTimeout(() => setKeySaved(false), 3000);
+    } catch (e) {
+      setKeyError(e instanceof Error ? e.message : "Could not save API key.");
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const handleRemoveKey = async () => {
+    if (savingKey) return;
+    setKeyError(null);
+    setKeySaved(false);
+    setSavingKey(true);
+    try {
+      const status = await deleteOpenRouterKey(session.token);
+      setKeyStatus(status);
+      setApiKeyInput("");
+    } catch (e) {
+      setKeyError(e instanceof Error ? e.message : "Could not remove API key.");
+    } finally {
+      setSavingKey(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (savingProfile) return;
@@ -172,6 +238,59 @@ export function UserDetailsScreen(props: {
         >
           {savingProfile ? "Saving…" : "Save profile"}
         </button>
+      </div>
+
+      <div className="settings-section">
+        <div className="history-group-label">OPENROUTER API KEY</div>
+        <p className="settings-hint">
+          Your personal OpenRouter key is used to run your agent sessions and powers the usage meter.
+          It is encrypted at rest and never shared with other users.
+        </p>
+
+        {keyStatus?.configured ? (
+          <div className="screen-pad">
+            <p className="settings-hint">
+              A key is on file{keyStatus.last4 ? <> (ending in <code>••••{keyStatus.last4}</code>)</> : null}.
+              Enter a new key below to replace it.
+            </p>
+          </div>
+        ) : null}
+
+        <label className="composer-select settings-select">
+          <span>API key</span>
+          <input
+            type="password"
+            placeholder="sk-or-v1-..."
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            autoComplete="off"
+            className="settings-number-input"
+          />
+        </label>
+
+        {keyError && <p className="login-error">{keyError}</p>}
+        {keySaved && <p className="screen-note">API key saved.</p>}
+
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={handleSaveKey}
+            disabled={savingKey}
+          >
+            {savingKey ? "Saving…" : keyStatus?.configured ? "Replace key" : "Save key"}
+          </button>
+          {keyStatus?.configured ? (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={handleRemoveKey}
+              disabled={savingKey}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="settings-section">

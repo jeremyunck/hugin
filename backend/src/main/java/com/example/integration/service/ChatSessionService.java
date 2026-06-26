@@ -4,6 +4,7 @@ import com.example.agent.AgentRunCancelledException;
 import com.example.agent.AgentRunRegistry;
 import com.example.agent.AgentService;
 import com.example.agent.AgentStreamListener;
+import com.example.agent.OpenRouterKeyContext;
 import com.example.agent.model.AgentRequest;
 import com.example.agent.model.AgentResponse;
 import com.example.agent.model.ChatMessage;
@@ -13,6 +14,7 @@ import com.example.agent.tool.ToolApprovalRequiredException;
 import com.example.agent.tool.WorkspaceRegistry;
 import com.example.integration.auth.UserAccount;
 import com.example.integration.auth.UserAccountRepository;
+import com.example.integration.auth.UserOpenRouterKeyService;
 import com.example.integration.controller.ChatSessionMessageRequest;
 import com.example.integration.google.GmailDeletionService;
 import com.example.integration.modelsettings.ModelContextService;
@@ -66,6 +68,8 @@ public class ChatSessionService {
     private final HomeWorkspaceService homeWorkspaceService;
     private final GmailDeletionService gmailDeletionService;
     private final UserAccountRepository userAccountRepository;
+    private final UserOpenRouterKeyService openRouterKeyService;
+    private final OpenRouterKeyContext openRouterKeyContext;
     private final String defaultModel;
 
     public ChatSessionService(ChatSessionRepository repository,
@@ -79,6 +83,8 @@ public class ChatSessionService {
                               HomeWorkspaceService homeWorkspaceService,
                               GmailDeletionService gmailDeletionService,
                               UserAccountRepository userAccountRepository,
+                              UserOpenRouterKeyService openRouterKeyService,
+                              OpenRouterKeyContext openRouterKeyContext,
                               @Value("${llm.model:}") String defaultModel) {
         this.repository = repository;
         this.broker = broker;
@@ -91,6 +97,8 @@ public class ChatSessionService {
         this.homeWorkspaceService = homeWorkspaceService;
         this.gmailDeletionService = gmailDeletionService;
         this.userAccountRepository = userAccountRepository;
+        this.openRouterKeyService = openRouterKeyService;
+        this.openRouterKeyContext = openRouterKeyContext;
         this.defaultModel = defaultModel;
     }
 
@@ -163,6 +171,10 @@ public class ChatSessionService {
                 request.sandboxId(),
                 true);
         runRegistry.register(runId, owner, agentRequest, request.model(), Thread.currentThread());
+        // Bind this user's personal OpenRouter key (when set) to the worker thread for the whole run,
+        // so every LLM call made by the agent authenticates with — and bills — their own key. The whole
+        // run executes on this thread; the key is cleared in the finally below before it returns to the pool.
+        openRouterKeyContext.set(openRouterKeyService.resolveApiKey(owner).orElse(null));
         // Holds the id of the assistant message currently being streamed, or null when none is open.
         // A new bubble is opened lazily on the first token/reasoning after a tool call, so assistant
         // text and tool-call cards interleave in the event log exactly as they occur.
@@ -257,6 +269,7 @@ public class ChatSessionService {
             }
             throw t;
         } finally {
+            openRouterKeyContext.clear();
             runRegistry.unregister(runId);
         }
     }
