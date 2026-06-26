@@ -2300,6 +2300,12 @@ select {
   overflow-y: auto;
 }
 
+/* Keep breathing room below the final section so the last control never sits flush against the
+   scroll edge (sections themselves have no bottom padding). */
+.settings-body > .settings-section:last-child {
+  padding-bottom: 24px;
+}
+
 .settings-number-input {
   width: 100%;
   border: 1px solid #e4e5e8;
@@ -2311,6 +2317,25 @@ select {
 }
 
 .settings-number-input::placeholder {
+  color: #a8adb5;
+}
+
+.settings-textarea {
+  width: 100%;
+  border: 1px solid #e4e5e8;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #1c1f23;
+  font-family: inherit;
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.settings-textarea::placeholder {
   color: #a8adb5;
 }
 
@@ -2549,6 +2574,15 @@ select {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  /* iOS Safari auto-zooms when a focused field's font-size is below 16px. The chat composer already
+     renders at calc(16px * font-scale); pin every form control to that same minimum on mobile so
+     focusing any of them never zooms the page, while still growing with the font-scale preference. */
+  .device-shell input,
+  .device-shell textarea,
+  .device-shell select {
+    font-size: max(16px, calc(16px * var(--font-scale)));
   }
 }
 

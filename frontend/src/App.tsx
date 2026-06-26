@@ -39,6 +39,7 @@ import { ModelSettingsScreen } from "./screens/ModelSettingsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AgentThreadsScreen } from "./screens/AgentThreadsScreen";
 import { UserDetailsScreen } from "./screens/UserDetailsScreen";
+import { PasswordResetScreen } from "./screens/PasswordResetScreen";
 import { MenuOverlay } from "./components/MenuOverlay";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { DesktopSidebar } from "./components/desktop/DesktopSidebar";
@@ -254,10 +255,10 @@ export default function App() {
       .catch(() => setOpenRouterCredits(null));
   }, [session?.token]);
 
-  // Refresh when the user lands back on a non-account screen, so saving/removing a key in Account
-  // (or returning from it) is reflected promptly.
+  // Refresh when the user lands back on a screen other than Settings (where the OpenRouter key is
+  // managed), so saving/removing a key there is reflected promptly once they navigate away.
   useEffect(() => {
-    if (screen === "user-details") return;
+    if (screen === "preferences") return;
     refreshOpenRouterCredits();
   }, [screen, refreshOpenRouterCredits]);
 
@@ -267,7 +268,7 @@ export default function App() {
   useEffect(() => {
     const wasBusy = prevBusyRef.current;
     prevBusyRef.current = store.activeBusy;
-    if (wasBusy && !store.activeBusy && screen !== "user-details") {
+    if (wasBusy && !store.activeBusy && screen !== "preferences") {
       refreshOpenRouterCredits();
     }
   }, [store.activeBusy, screen, refreshOpenRouterCredits]);
@@ -403,6 +404,12 @@ export default function App() {
     setMenuOpen(false);
     setBugReportNotice(null);
   }, [screen, returnScreen]);
+
+  const openPasswordReset = useCallback(() => {
+    setScreen("password-reset");
+    setMenuOpen(false);
+    setBugReportNotice(null);
+  }, []);
 
   const handleSessionUpdate = useCallback((updated: Partial<AuthSession>) => {
     if (!session) return;
@@ -609,7 +616,8 @@ export default function App() {
     );
   }
 
-  const name = session?.username ?? "there";
+  // Refer to the user by their chosen name, falling back to their login email then a generic greeting.
+  const name = session?.displayName?.trim() || session?.username || "there";
   const isChatScreen = screen === "chat" || screen === "purechat";
   const showDesktopPanel = screen === "chat" && !!thread;
 
@@ -630,7 +638,7 @@ export default function App() {
           onSettings={openPreferences}
           onThread={openHistory}
           openRouterCredits={openRouterCredits}
-          onManageApiKey={openUserDetails}
+          onManageApiKey={openPreferences}
         />
       ) : null}
       <div className="device-shell">
@@ -724,8 +732,9 @@ export default function App() {
             onToggle={toggleModelEnabled}
             onSave={saveModelPreferences}
           />
-        ) : screen === "preferences" ? (
+        ) : screen === "preferences" && session ? (
           <SettingsScreen
+            session={session}
             preferences={preferences}
             enabledModels={enabledModels}
             onBack={() => setScreen(returnScreen)}
@@ -746,7 +755,14 @@ export default function App() {
             session={session}
             onBack={() => setScreen(returnScreen)}
             onMenu={() => setMenuOpen(true)}
+            onResetPassword={openPasswordReset}
             onSessionUpdate={handleSessionUpdate}
+          />
+        ) : screen === "password-reset" && session ? (
+          <PasswordResetScreen
+            session={session}
+            onBack={() => setScreen("user-details")}
+            onMenu={() => setMenuOpen(true)}
           />
         ) : (
           <HistoryPanel

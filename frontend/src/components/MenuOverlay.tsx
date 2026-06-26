@@ -134,7 +134,7 @@ export function MenuOverlay(props: {
             <div className="profile-copy">
               <div className="profile-name">{label}</div>
               {displayName && displayName.trim() ? (
-                <div className="profile-username">@{username}</div>
+                <div className="profile-username">{username}</div>
               ) : null}
             </div>
           </button>

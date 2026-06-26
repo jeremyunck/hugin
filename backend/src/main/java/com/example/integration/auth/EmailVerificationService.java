@@ -31,10 +31,15 @@ public class EmailVerificationService {
 
     public enum Purpose {
         REGISTER,
-        LOGIN
+        LOGIN,
+        PASSWORD_RESET
     }
 
-    /** A pending verification. {@code passwordHash} is set only for {@link Purpose#REGISTER}. */
+    /**
+     * A pending verification. {@code passwordHash} carries the already-hashed password for
+     * {@link Purpose#REGISTER} (the account to create) and {@link Purpose#PASSWORD_RESET} (the new
+     * password to apply once the code is confirmed); it is {@code null} for {@link Purpose#LOGIN}.
+     */
     public static final class Challenge {
         private final Purpose purpose;
         private final String code;

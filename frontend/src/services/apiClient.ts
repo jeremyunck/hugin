@@ -185,14 +185,28 @@ export async function updateUserProfile(
   return apiFetch<UserProfile>("/api/user/profile", { method: "PUT", body: JSON.stringify(profile) }, token);
 }
 
-export async function changeUserPassword(
+export type PasswordResetChallenge = {
+  email: string;
+  verificationRequired: boolean;
+  message: string;
+};
+
+/** Step 1 of a verified password reset: validate the new password and email a verification code. */
+export async function requestPasswordReset(
   token: string,
-  currentPassword: string,
   newPassword: string
-): Promise<void> {
-  await apiFetch<void>("/api/user/password", {
-    method: "PUT",
-    body: JSON.stringify({ currentPassword, newPassword })
+): Promise<PasswordResetChallenge> {
+  return apiFetch<PasswordResetChallenge>("/api/user/password/reset/request", {
+    method: "POST",
+    body: JSON.stringify({ newPassword })
+  }, token);
+}
+
+/** Step 2 of a verified password reset: confirm the emailed code and persist the new password. */
+export async function confirmPasswordReset(token: string, code: string): Promise<void> {
+  await apiFetch<void>("/api/user/password/reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ code })
   }, token);
 }
 
