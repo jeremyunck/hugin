@@ -1,19 +1,22 @@
-import { Lock, User } from "lucide-react";
+import { KeyRound, Lock, Mail } from "lucide-react";
 
+import type { AuthMode } from "../hooks/useAuthBootstrap";
 import { COLORS } from "../lib/theme";
 
 const LOGO = "/hugin-bird.jpg";
 
 function Field(props: {
-  icon: typeof User;
+  icon: typeof Mail;
   label: string;
   value: string;
   type?: string;
   placeholder: string;
+  inputMode?: "text" | "numeric";
+  maxLength?: number;
   onChange: (value: string) => void;
   onEnter?: () => void;
 }) {
-  const { icon: Icon, label, value, type = "text", placeholder, onChange, onEnter } = props;
+  const { icon: Icon, label, value, type = "text", placeholder, inputMode, maxLength, onChange, onEnter } = props;
 
   return (
     <label className="login-field">
@@ -23,6 +26,8 @@ function Field(props: {
         <input
           type={type}
           value={value}
+          inputMode={inputMode}
+          maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") onEnter?.();
@@ -38,49 +43,145 @@ function Field(props: {
 }
 
 export function LoginScreen(props: {
-  username: string;
+  mode: AuthMode;
+  email: string;
   password: string;
+  confirmPassword: string;
+  code: string;
+  pendingEmail: string;
+  notice: string | null;
   error: string | null;
   busy: boolean;
-  onUser: (value: string) => void;
-  onPass: (value: string) => void;
-  onSignIn: () => void;
+  onEmail: (value: string) => void;
+  onPassword: (value: string) => void;
+  onConfirmPassword: (value: string) => void;
+  onCode: (value: string) => void;
+  onSwitchMode: (mode: AuthMode) => void;
+  onSubmitCredentials: () => void;
+  onSubmitCode: () => void;
+  onCancelVerification: () => void;
 }) {
-  const { username, password, error, busy, onUser, onPass, onSignIn } = props;
-  const ready = Boolean(username.trim() && password.trim()) && !busy;
+  const {
+    mode,
+    email,
+    password,
+    confirmPassword,
+    code,
+    pendingEmail,
+    notice,
+    error,
+    busy,
+    onEmail,
+    onPassword,
+    onConfirmPassword,
+    onCode,
+    onSwitchMode,
+    onSubmitCredentials,
+    onSubmitCode,
+    onCancelVerification
+  } = props;
+
+  if (mode === "verify") {
+    const ready = code.trim().length === 6 && !busy;
+    return (
+      <div className="login-screen">
+        <div className="login-brand">
+          <img src={LOGO} alt="Hugin" className="login-logo" />
+          <span className="login-wordmark">HUGIN</span>
+          <p>Enter the code we emailed{pendingEmail ? ` to ${pendingEmail}` : ""}</p>
+        </div>
+
+        <div className="login-fields">
+          <Field
+            icon={KeyRound}
+            label="Verification code"
+            value={code}
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="123456"
+            onChange={(value) => onCode(value.replace(/\D/g, "").slice(0, 6))}
+            onEnter={() => ready && onSubmitCode()}
+          />
+        </div>
+
+        {notice ? <p className="screen-note">{notice}</p> : null}
+        {error ? <p className="login-error">{error}</p> : null}
+
+        <button type="button" className="signin-button" disabled={!ready} onClick={() => ready && onSubmitCode()}>
+          {busy ? "Verifying…" : "Verify & continue"}
+        </button>
+
+        <button type="button" className="login-link" onClick={onCancelVerification} disabled={busy}>
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  const isRegister = mode === "register";
+  const credentialsReady =
+    Boolean(email.trim() && password.trim()) &&
+    (!isRegister || Boolean(confirmPassword.trim())) &&
+    !busy;
 
   return (
     <div className="login-screen">
       <div className="login-brand">
         <img src={LOGO} alt="Hugin" className="login-logo" />
         <span className="login-wordmark">HUGIN</span>
-        <p>Sign in to your workspace</p>
+        <p>{isRegister ? "Create your account" : "Sign in to your workspace"}</p>
       </div>
 
       <div className="login-fields">
         <Field
-          icon={User}
-          label="Username"
-          value={username}
-          placeholder="Enter your username"
-          onChange={onUser}
-          onEnter={() => ready && onSignIn()}
+          icon={Mail}
+          label="Email"
+          type="email"
+          value={email}
+          placeholder="you@example.com"
+          onChange={onEmail}
+          onEnter={() => credentialsReady && onSubmitCredentials()}
         />
         <Field
           icon={Lock}
           label="Password"
           type="password"
           value={password}
-          placeholder="Enter your password"
-          onChange={onPass}
-          onEnter={() => ready && onSignIn()}
+          placeholder={isRegister ? "At least 8 characters" : "Enter your password"}
+          onChange={onPassword}
+          onEnter={() => credentialsReady && onSubmitCredentials()}
         />
+        {isRegister ? (
+          <Field
+            icon={Lock}
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            placeholder="Re-enter your password"
+            onChange={onConfirmPassword}
+            onEnter={() => credentialsReady && onSubmitCredentials()}
+          />
+        ) : null}
       </div>
 
       {error ? <p className="login-error">{error}</p> : null}
 
-      <button type="button" className="signin-button" disabled={!ready} onClick={() => ready && onSignIn()}>
-        {busy ? "Signing in…" : "Sign in"}
+      <button
+        type="button"
+        className="signin-button"
+        disabled={!credentialsReady}
+        onClick={() => credentialsReady && onSubmitCredentials()}
+      >
+        {busy ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
+      </button>
+
+      <button
+        type="button"
+        className="login-link"
+        onClick={() => onSwitchMode(isRegister ? "login" : "register")}
+        disabled={busy}
+      >
+        {isRegister ? "Already have an account? Sign in" : "Create an account"}
       </button>
     </div>
   );

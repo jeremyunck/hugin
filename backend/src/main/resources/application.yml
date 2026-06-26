@@ -247,6 +247,13 @@ auth:
     secret-base64: ${AUTH_JWT_SECRET_BASE64:}
     issuer: hugin
     token-ttl: 12h
+  email-verification:
+    # Both registration and login email the user a one-time 6-digit code (delivered via Resend, see
+    # the resend.* block below) that must be confirmed before a session is issued.
+    # How long an issued code remains valid.
+    code-ttl: ${AUTH_EMAIL_VERIFICATION_CODE_TTL:10m}
+    # Maximum number of incorrect attempts before the code is invalidated and a new one is required.
+    max-attempts: ${AUTH_EMAIL_VERIFICATION_MAX_ATTEMPTS:5}
   # Self-scheduling: the schedule_prompt / list_scheduled_prompts / cancel_scheduled_prompt tools
   # let the agent set a prompt to run later (one-shot or recurring cron). When it fires, the prompt
   # runs through the full agent and the result is delivered back to the origin (the session it was
@@ -261,6 +268,16 @@ auth:
     max-per-target: 20
     # IANA timezone used when a schedule request omits one (e.g. America/Chicago for US Central).
     default-zone: ${SCHEDULER_DEFAULT_ZONE:}
+
+resend:
+  # Transactional email provider used to deliver the email-verification codes (see
+  # auth.email-verification above). Create an API key at https://resend.com and verify a sending
+  # domain/address. When the API key or from-address is blank, Hugin logs the code at WARN instead of
+  # emailing it — convenient for local development but not for any shared deployment.
+  api-key: ${RESEND_API_KEY:}
+  # Verified sender address, e.g. "Hugin <login@yourdomain.com>".
+  from: ${RESEND_FROM:}
+  endpoint: ${RESEND_ENDPOINT:https://api.resend.com/emails}
 
 google:
   # Google Workspace integration powering the google_drive_*, google_docs_*,

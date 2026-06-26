@@ -18,9 +18,19 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @PostMapping("/register")
+    public AuthChallengeResponse register(@RequestBody AuthRegisterRequest request) {
+        return authService.register(request);
+    }
+
     @PostMapping("/login")
-    public AuthLoginResponse login(@RequestBody AuthLoginRequest request) {
+    public AuthChallengeResponse login(@RequestBody AuthLoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/verify")
+    public AuthLoginResponse verify(@RequestBody AuthVerifyRequest request) {
+        return authService.verify(request);
     }
 
     @GetMapping("/me")

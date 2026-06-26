@@ -606,13 +606,23 @@ export default function App() {
       <div className="device-shell">
         {!session || screen === "login" ? (
           <LoginScreen
-            username={auth.username}
+            mode={auth.mode}
+            email={auth.email}
             password={auth.password}
-            error={auth.loginError}
-            busy={auth.signingIn}
-            onUser={auth.setUsername}
-            onPass={auth.setPassword}
-            onSignIn={auth.signIn}
+            confirmPassword={auth.confirmPassword}
+            code={auth.code}
+            pendingEmail={auth.pendingEmail}
+            notice={auth.notice}
+            error={auth.error}
+            busy={auth.busy}
+            onEmail={auth.setEmail}
+            onPassword={auth.setPassword}
+            onConfirmPassword={auth.setConfirmPassword}
+            onCode={auth.setCode}
+            onSwitchMode={auth.switchMode}
+            onSubmitCredentials={auth.submitCredentials}
+            onSubmitCode={auth.submitCode}
+            onCancelVerification={auth.cancelVerification}
           />
         ) : isChatScreen && thread ? (
           <ChatScreen

@@ -113,10 +113,37 @@ export function saveAuthSession(session: AuthSession | null) {
   window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 }
 
-export async function login(username: string, password: string): Promise<AuthSession> {
-  const response = await apiFetch<AuthLoginResponse>("/api/auth/login", {
+type AuthChallengeResponse = {
+  email: string;
+  verificationRequired: boolean;
+  message: string;
+};
+
+/** Step 1 of login: validate the password and trigger the emailed 6-digit verification code. */
+export async function requestLogin(email: string, password: string): Promise<AuthChallengeResponse> {
+  return apiFetch<AuthChallengeResponse>("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ email, password })
+  });
+}
+
+/** Step 1 of sign-up: register an email/password and trigger the emailed verification code. */
+export async function requestRegister(
+  email: string,
+  password: string,
+  confirmPassword: string
+): Promise<AuthChallengeResponse> {
+  return apiFetch<AuthChallengeResponse>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, confirmPassword })
+  });
+}
+
+/** Step 2 (shared by login + sign-up): confirm the code to create/authenticate and get a session. */
+export async function verifyCode(email: string, code: string): Promise<AuthSession> {
+  const response = await apiFetch<AuthLoginResponse>("/api/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code })
   });
 
   return {

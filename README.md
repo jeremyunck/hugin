@@ -36,7 +36,15 @@ Compose starts three services and creates everything automatically:
 The app waits for PostgreSQL to pass its healthcheck before starting, so the first `up` may take a
 few seconds longer while the database initializes.
 
-**Login:** a bootstrap account is created on first start from `AUTH_BOOTSTRAP_USERNAME` /
+**Login:** authentication is email + password with a one-time email verification code. New users
+click **Create an account**, enter an email and password (twice), then confirm the 6-digit code that
+is emailed to them; every subsequent login re-confirms a fresh code. Codes are delivered with
+[Resend](https://resend.com) — set `RESEND_API_KEY` and `RESEND_FROM` in `.env`. **When Resend is
+not configured, the code is written to the app logs instead of being emailed** (`docker compose logs
+hugin`), which keeps the localhost demo usable without a Resend account; do not rely on this beyond
+local development. All accounts created this way are `ROLE_USER`.
+
+A bootstrap account is still created on first start from `AUTH_BOOTSTRAP_USERNAME` /
 `AUTH_BOOTSTRAP_PASSWORD` in `.env` (the quickstart ships `admin` / `change-me`). Because
 `change-me` is a well-known default, Hugin would normally **refuse to start** with it; the
 quickstart sets `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD=true` so the localhost demo boots while
@@ -110,6 +118,7 @@ For any shared or production deployment, set these environment variables (see `.
 | `SPRING_DATASOURCE_*` | PostgreSQL connection. |
 | `OPEN_ROUTER_API_KEY` / `OPENAI_API_KEY` | LLM provider key. |
 | `AUTH_JWT_SECRET_BASE64` | Optional stable HMAC signing key; if blank an ephemeral key is generated per start. |
+| `RESEND_API_KEY` / `RESEND_FROM` | Resend API key and verified sender used to email login/registration verification codes. If unset, codes are logged instead of emailed (local dev only). |
 
 ### CI / validation
 

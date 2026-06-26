@@ -35,6 +35,20 @@ public class UserAccountRepository {
         return matches.stream().findFirst();
     }
 
+    /**
+     * Creates a new email-based account. The email doubles as the unique username (the JWT subject
+     * and the owner key used across the schema) and is stored in the dedicated email column too.
+     * All accounts created through the public sign-up flow are {@code ROLE_USER}.
+     */
+    public void createUser(String email, String passwordHash) {
+        jdbcTemplate.update(
+                """
+                        insert into app_users (username, password_hash, enabled, roles, email)
+                        values (?, ?, true, 'ROLE_USER', ?)
+                        """,
+                email, passwordHash, email);
+    }
+
     public void saveOrUpdate(UserAccount user) {
         int updated = jdbcTemplate.update(
                 """

@@ -19,10 +19,12 @@ export {
   fetchCurrentUser,
   formatTimestamp,
   loadAuthSession,
-  login,
   nowIso,
+  requestLogin,
+  requestRegister,
   saveAuthSession,
-  uid
+  uid,
+  verifyCode
 } from "./apiClient";
 
 export type {

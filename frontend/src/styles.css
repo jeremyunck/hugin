@@ -2424,6 +2424,27 @@ select {
   margin-top: 28px;
 }
 
+.login-link {
+  margin-top: 16px;
+  align-self: center;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.login-link:hover:not(:disabled) {
+  color: #1c1f23;
+  text-decoration: underline;
+}
+
+.login-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .file-highlight {
   border-radius: 6px;
   animation: fileNew 1.2s ease forwards;

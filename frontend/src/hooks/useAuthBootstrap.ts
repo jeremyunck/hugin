@@ -4,13 +4,20 @@ import type { AuthSession } from "../lib/types";
 import {
   fetchCurrentUser,
   loadAuthSession,
-  login as loginRequest,
-  saveAuthSession
+  requestLogin,
+  requestRegister,
+  saveAuthSession,
+  verifyCode
 } from "../services/apiClient";
 
+/** Which step of the email + password + code flow the login surface is showing. */
+export type AuthMode = "login" | "register" | "verify";
+
 /**
- * Owns auth/session startup and the login form. On mount it validates any stored session so a
- * refresh keeps the user signed in; {@code signIn} authenticates and persists a new session. The
+ * Owns auth/session startup and the email-based login surface. On mount it validates any stored
+ * session so a refresh keeps the user signed in. Both signing in and creating an account are
+ * two-step: submitting credentials emails a 6-digit code ({@code submitCredentials}), and confirming
+ * that code ({@code submitCode}) creates the account (for sign-up) and establishes the session. The
  * authenticated session is published via {@code setSession} (the chat store keys off it), and the
  * caller wires post-auth side effects through the {@code onSignedIn} / {@code onSessionRestored}
  * callbacks so this hook stays focused on identity.
@@ -24,10 +31,15 @@ export function useAuthBootstrap(params: {
   const { setSession, onSignedIn, onSessionRestored, onSignedOut } = params;
 
   const [booting, setBooting] = useState(true);
-  const [username, setUsername] = useState("");
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [signingIn, setSigningIn] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const existing = loadAuthSession();
@@ -47,45 +59,108 @@ export function useAuthBootstrap(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const signIn = useCallback(async () => {
-    if (!username.trim() || !password.trim() || signingIn) return;
-    setSigningIn(true);
-    setLoginError(null);
+  /** Switch between the sign-in and create-account forms, clearing any transient state. */
+  const switchMode = useCallback((next: AuthMode) => {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+    setCode("");
+    setConfirmPassword("");
+  }, []);
+
+  /** Step 1: submit email/password to either log in or register, which emails a verification code. */
+  const submitCredentials = useCallback(async () => {
+    if (busy) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password.trim()) return;
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
     try {
-      const loginResult = await loginRequest(username.trim(), password);
-      // Fetch the full profile (display name, email, custom instructions) right after login.
-      const validated = await fetchCurrentUser(loginResult.token).catch(() => loginResult);
+      const challenge =
+        mode === "register"
+          ? await requestRegister(trimmedEmail, password, confirmPassword)
+          : await requestLogin(trimmedEmail, password);
+      setPendingEmail(challenge.email || trimmedEmail);
+      setNotice(challenge.message);
+      setCode("");
+      setMode("verify");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, email, password, confirmPassword, mode]);
+
+  /** Step 2: confirm the emailed code to finish creating/authenticating the account. */
+  const submitCode = useCallback(async () => {
+    if (busy || !code.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await verifyCode(pendingEmail, code.trim());
+      // Fetch the full profile (display name, email, custom instructions) right after verification.
+      const validated = await fetchCurrentUser(session.token).catch(() => session);
       saveAuthSession(validated);
       onSignedIn(validated);
       setSession(validated);
       setPassword("");
+      setConfirmPassword("");
+      setCode("");
     } catch (e) {
-      setLoginError(e instanceof Error ? e.message : "Sign in failed.");
+      setError(e instanceof Error ? e.message : "Verification failed.");
     } finally {
-      setSigningIn(false);
+      setBusy(false);
     }
-  }, [username, password, signingIn, onSignedIn, setSession]);
+  }, [busy, code, pendingEmail, onSignedIn, setSession]);
+
+  /** Abandon the code step and return to the sign-in form. */
+  const cancelVerification = useCallback(() => {
+    setMode("login");
+    setCode("");
+    setError(null);
+    setNotice(null);
+  }, []);
 
   const signOut = useCallback(() => {
     // Clear the stored session and form, then let the caller reset app-level UI state and re-allow
     // bootstrap so a subsequent sign-in re-activates a thread.
     saveAuthSession(null);
     setSession(null);
-    setUsername("");
+    setMode("login");
+    setEmail("");
     setPassword("");
-    setLoginError(null);
+    setConfirmPassword("");
+    setCode("");
+    setPendingEmail("");
+    setNotice(null);
+    setError(null);
     onSignedOut();
   }, [setSession, onSignedOut]);
 
   return {
     booting,
-    username,
+    mode,
+    email,
     password,
-    loginError,
-    signingIn,
-    setUsername,
+    confirmPassword,
+    code,
+    pendingEmail,
+    notice,
+    error,
+    busy,
+    setEmail,
     setPassword,
-    signIn,
+    setConfirmPassword,
+    setCode,
+    switchMode,
+    submitCredentials,
+    submitCode,
+    cancelVerification,
     signOut
   };
 }
