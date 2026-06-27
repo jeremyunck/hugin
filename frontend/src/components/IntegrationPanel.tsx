@@ -8,8 +8,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import type { Integration } from "../lib/types";
+import type { AuthSession, Integration } from "../lib/types";
+import type { Screen } from "../lib/screen";
 import { AppHeader } from "./AppHeader";
+import { McpServersSection } from "./McpServersSection";
 
 /* ------------------------------------------------------------------ */
 /*  Brand logo SVG components                                          */
@@ -101,15 +103,21 @@ export function IntegrationPanel(props: {
   loading: boolean;
   error: string | null;
   busyId: string | null;
+  session: AuthSession | null;
+  screen: Screen;
   onBack: () => void;
   onToggle: (integration: Integration) => void;
   onReconnect: (integration: Integration) => void;
+  onError: (message: string) => void;
+  onMcpChanged: () => void;
 }) {
-  const { integrations, loading, error, busyId, onBack, onToggle, onReconnect } = props;
+  const { integrations, loading, error, busyId, session, screen, onBack, onToggle, onReconnect } = props;
   const [tab, setTab] = useState<Tab>("mine");
 
-  const connected = integrations.filter((i) => i.connected);
-  const available = integrations.filter((i) => !i.connected);
+  // MCP has its own dedicated section below; keep it out of the generic connect/disconnect card lists.
+  const cards = integrations.filter((i) => i.id !== "mcp");
+  const connected = cards.filter((i) => i.connected);
+  const available = cards.filter((i) => !i.connected);
   const allHealthy = connected.length > 0;
 
   return (
@@ -226,6 +234,14 @@ export function IntegrationPanel(props: {
             )}
           </div>
         ) : null}
+
+        {/* ── MCP servers (user-connected) ───────── */}
+        <McpServersSection
+          session={session}
+          screen={screen}
+          onError={props.onError}
+          onChanged={props.onMcpChanged}
+        />
       </div>
     </>
   );

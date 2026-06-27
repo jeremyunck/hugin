@@ -5,6 +5,7 @@ import com.example.agent.prompts.Prompts;
 import com.example.agent.tool.LocalTool;
 import com.example.agent.tool.LocalToolRegistry;
 import com.example.agent.tool.JustInTimeToolRegistry;
+import com.example.agent.tool.OwnerScopedToolProvider;
 import com.example.agent.tool.ToolApprovalRequiredException;
 import com.example.agent.sandbox.WorkspaceContext;
 import com.example.agent.tool.ToolContext;
@@ -65,6 +66,12 @@ public class AgentService {
     private final OpenAiClient llmClient;
     private final LocalToolRegistry localTools;
     private final JustInTimeToolRegistry jitTools;
+    /**
+     * Per-user tool provider (MCP servers). Optional and injected via setter so the many existing
+     * {@code new AgentService(...)} call sites — production wiring and tests alike — keep working
+     * unchanged; when absent, MCP tools are simply never advertised or executed.
+     */
+    private OwnerScopedToolProvider ownerScopedTools;
     private final ObjectMapper objectMapper;
     private final Duration requestTimeout;
     private final String defaultModel;
@@ -109,6 +116,16 @@ public class AgentService {
             names.add(tool.name());
         }
         this.builtinToolNames = Set.copyOf(names);
+    }
+
+    /**
+     * Wires the optional owner-scoped tool provider (MCP). Setter injection keeps it out of the
+     * constructor so existing call sites are unaffected; {@code required = false} means the agent runs
+     * fine without it.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setOwnerScopedToolProvider(OwnerScopedToolProvider ownerScopedTools) {
+        this.ownerScopedTools = ownerScopedTools;
     }
 
     public record ToolSummary(String name, String description, String server, String transport) {}
@@ -468,7 +485,7 @@ public class AgentService {
         // Host-backed agent sessions (the "Agent" mode rooted at ~/) register a workspace by session id
         // but carry no sandbox, so grant them filesystem/shell tools when a workspace is registered.
         boolean workspaceTools = includeWorkspaceTools || workspaceRegistry.isRegistered(workspaceKey);
-        List<ToolDefinition> initialToolDefinitions = collectTools(workspace, workspaceTools);
+        List<ToolDefinition> initialToolDefinitions = collectTools(workspace, workspaceTools, owner);
 
         log.debug("Agent chat: model={}, route={}, decisionModel={}, tools available={} (local={}), "
                         + "workspaceTools={}, stream={}",
@@ -537,7 +554,7 @@ public class AgentService {
 
             // Rebuild the tool list on every loop iteration so freshly written local manifests
             // become visible without a service restart.
-            List<ToolDefinition> toolDefinitions = collectTools(workspace, workspaceTools);
+            List<ToolDefinition> toolDefinitions = collectTools(workspace, workspaceTools, owner);
 
             // Keep the growing transcript (prior turns + this turn's accumulating tool results) within
             // the model's context window so the provider does not reject the next call for being too long.
@@ -697,9 +714,12 @@ public class AgentService {
      *       access), and the just-in-time workspace tools, are only included when
      *       {@code includeWorkspaceTools} is set — i.e. the request is bound to a sandbox. Pure chat
      *       requests therefore get a leaner tool set without filesystem tools.</li>
+     *   <li>The authenticated owner's enabled MCP tools are appended (when an
+     *       {@link OwnerScopedToolProvider} is wired). These are user-scoped, so only this owner's
+     *       tools are ever advertised — never another user's.</li>
      * </ul>
      */
-    private List<ToolDefinition> collectTools(Workspace workspace, boolean includeWorkspaceTools) {
+    private List<ToolDefinition> collectTools(Workspace workspace, boolean includeWorkspaceTools, String owner) {
         List<ToolDefinition> toolDefinitions = new ArrayList<>();
         Set<String> names = new LinkedHashSet<>();
         for (LocalTool tool : localTools.tools()) {
@@ -719,6 +739,15 @@ public class AgentService {
                             tool.name(), workspace.root());
                     continue;
                 }
+                if (names.add(tool.name())) {
+                    toolDefinitions.add(ToolDefinition.from(tool.name(), tool.description(), tool.inputSchema()));
+                }
+            }
+        }
+        // Append this user's enabled MCP tools. The provider returns only the owner's enabled,
+        // non-stale tools on enabled servers, so isolation is preserved here by construction.
+        if (ownerScopedTools != null) {
+            for (LocalTool tool : ownerScopedTools.tools(owner)) {
                 if (names.add(tool.name())) {
                     toolDefinitions.add(ToolDefinition.from(tool.name(), tool.description(), tool.inputSchema()));
                 }
@@ -941,6 +970,11 @@ public class AgentService {
         LocalTool localTool = localTools.find(toolName);
         if (localTool == null) {
             localTool = jitTools.find(toolName, workspace);
+        }
+        // MCP tools are owner-scoped: the provider only resolves a tool the authenticated user owns and
+        // has enabled, so another user's tools can never be executed even if their name were guessed.
+        if (localTool == null && ownerScopedTools != null) {
+            localTool = ownerScopedTools.find(owner, toolName);
         }
         if (localTool != null) {
             log.debug("Executing built-in tool '{}' with args: {}", toolName, args);

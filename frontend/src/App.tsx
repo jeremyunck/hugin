@@ -701,9 +701,13 @@ export default function App() {
             loading={integrations.integrationsLoading}
             error={integrations.integrationsError}
             busyId={integrations.integrationBusy}
+            session={session}
+            screen={screen}
             onBack={() => setScreen(returnScreen)}
             onToggle={integrations.toggleIntegration}
             onReconnect={integrations.reconnectIntegration}
+            onError={setError}
+            onMcpChanged={() => void integrations.loadIntegrations({ silent: true })}
           />
         ) : screen === "github-repo" ? (
           <GitHubProjectSetupScreen

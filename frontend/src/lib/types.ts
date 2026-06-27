@@ -193,6 +193,49 @@ export type Integration = {
   message: string;
 };
 
+/** A tool discovered from an MCP server. Mirrors the backend McpToolDto. */
+export type McpTool = {
+  id: string;
+  toolName: string;
+  huginToolName: string;
+  description: string | null;
+  enabled: boolean;
+  stale: boolean;
+  lastSeenAt: string | null;
+};
+
+/** A user-connected MCP server. Mirrors the backend McpServerDto — never carries the bearer token. */
+export type McpServer = {
+  id: string;
+  name: string;
+  displayName: string;
+  transport: string;
+  endpointUrl: string;
+  authType: string;
+  enabled: boolean;
+  hasToken: boolean;
+  toolCount: number;
+  enabledToolCount: number;
+  createdAt: string;
+  updatedAt: string;
+  tools: McpTool[];
+};
+
+export type McpTestResult = {
+  success: boolean;
+  message: string;
+  serverName: string | null;
+  serverVersion: string | null;
+  protocolVersion: string | null;
+};
+
+export type McpDiscoveryResult = {
+  success: boolean;
+  message: string;
+  discoveredCount: number;
+  tools: McpTool[];
+};
+
 export type GitHubStatus = {
   active: boolean;
   configured: boolean;

@@ -22,10 +22,20 @@ spring:
 
 app:
   encryption:
-    # Secret used to encrypt user-supplied credentials (e.g. per-user OpenRouter API keys) at rest.
-    # Set APP_ENCRYPTION_SECRET to a stable, high-entropy value in production — rotating or losing it
-    # makes previously stored keys undecryptable (they simply fall back to the server-wide key).
-    secret: ${APP_ENCRYPTION_SECRET:}
+    # Secret used to encrypt user-supplied credentials at rest (per-user OpenRouter API keys and MCP
+    # bearer tokens). Set APP_ENCRYPTION_SECRET (or HUGIN_SECRET_KEY) to a stable, high-entropy value
+    # in production — rotating or losing it makes previously stored secrets undecryptable. If neither is
+    # set a built-in development key is used (MCP encryption still initializes, but offers no real
+    # protection).
+    secret: ${APP_ENCRYPTION_SECRET:${HUGIN_SECRET_KEY:}}
+
+mcp:
+  # Streamable HTTP transport tuning for outbound MCP calls.
+  http:
+    connect-timeout-seconds: ${MCP_HTTP_CONNECT_TIMEOUT_SECONDS:10}
+    request-timeout-seconds: ${MCP_HTTP_REQUEST_TIMEOUT_SECONDS:30}
+    # Hard cap on a single MCP response body to bound memory use (default 2 MiB).
+    max-response-bytes: ${MCP_HTTP_MAX_RESPONSE_BYTES:2097152}
 
 openrouter:
   # Base URL used for account-management calls (e.g. fetching remaining credits for a user's key).

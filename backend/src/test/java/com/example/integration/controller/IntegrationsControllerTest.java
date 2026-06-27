@@ -4,14 +4,19 @@ import com.example.integration.github.GitHubAppService;
 import com.example.integration.github.GitHubStatus;
 import com.example.integration.google.GoogleWorkspaceClientFactory;
 import com.example.integration.google.GoogleWorkspaceStatus;
+import com.example.integration.mcp.McpConnectionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,12 +31,20 @@ class IntegrationsControllerTest {
     @Mock
     private GitHubAppService github;
 
+    @Mock
+    private McpConnectionService mcp;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        IntegrationsController controller = new IntegrationsController(google, github, "");
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        // No MCP servers for these tests; the @AuthenticationPrincipal Jwt resolves to null in
+        // standalone MockMvc, so the controller falls back to the "global" owner.
+        when(mcp.listDtos(anyString())).thenReturn(List.of());
+        IntegrationsController controller = new IntegrationsController(google, github, mcp, "");
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .build();
     }
 
     @Test

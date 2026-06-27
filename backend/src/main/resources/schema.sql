@@ -140,3 +140,66 @@ create table if not exists sandbox_sessions (
 
 create index if not exists idx_sandbox_sessions_chat on sandbox_sessions(chat_session_id);
 create index if not exists idx_sandbox_sessions_expires on sandbox_sessions(expires_at);
+
+-- A user-connected Model Context Protocol (MCP) server. Connections are strictly per-user: every
+-- query is scoped by owner_username, so one user can never see or use another user's servers. The
+-- bearer token (when the server uses BEARER_TOKEN auth) is stored encrypted at rest via
+-- McpSecretEncryptionService / CredentialCipher and is never returned to clients.
+-- Phase 1 supports only the STREAMABLE_HTTP transport and NONE / BEARER_TOKEN auth; the transport and
+-- auth_type columns are kept as free-form varchars so future transports (stdio) and auth modes
+-- (OAuth) can be added without a schema change.
+create table if not exists mcp_servers (
+    id varchar(36) primary key,
+    owner_username varchar(100) not null references app_users(username) on delete cascade,
+    name varchar(100) not null,
+    display_name varchar(200) not null,
+    transport varchar(32) not null default 'STREAMABLE_HTTP',
+    endpoint_url text not null,
+    auth_type varchar(32) not null default 'NONE',
+    access_token_encrypted text,
+    enabled boolean not null default true,
+    created_at timestamp with time zone not null default current_timestamp,
+    updated_at timestamp with time zone not null default current_timestamp,
+    constraint mcp_servers_owner_name_unique unique (owner_username, name)
+);
+
+create index if not exists idx_mcp_servers_owner on mcp_servers(owner_username);
+
+-- Tools discovered from an MCP server via tools/list. hugin_tool_name is the collision-free,
+-- sanitized name advertised to the model (mcp_<server>_<tool>) and is globally unique. tool_name is
+-- the original name the upstream server uses for tools/call. When a tool disappears from a later
+-- discovery it is marked stale rather than deleted, preserving the user's enabled choice if it
+-- reappears.
+create table if not exists mcp_server_tools (
+    id varchar(36) primary key,
+    server_id varchar(36) not null references mcp_servers(id) on delete cascade,
+    tool_name varchar(255) not null,
+    hugin_tool_name varchar(255) not null,
+    description text,
+    input_schema_json text,
+    enabled boolean not null default true,
+    stale boolean not null default false,
+    last_seen_at timestamp with time zone,
+    constraint mcp_server_tools_server_tool_unique unique (server_id, tool_name),
+    constraint mcp_server_tools_hugin_name_unique unique (hugin_tool_name)
+);
+
+create index if not exists idx_mcp_server_tools_server on mcp_server_tools(server_id);
+
+-- Append-only audit trail of every MCP tool invocation, scoped by owner. Records who ran what
+-- against which server, a preview of the arguments and result (never full secrets), and the status
+-- (success / error). Used for the MCP auditing requirement.
+create table if not exists mcp_audit_log (
+    id varchar(36) primary key,
+    owner_username varchar(100) not null,
+    agent_id varchar(36),
+    session_id varchar(255),
+    server_id varchar(36),
+    tool_name varchar(255),
+    arguments_json text,
+    result_preview text,
+    status varchar(32) not null,
+    created_at timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists idx_mcp_audit_log_owner on mcp_audit_log(owner_username, created_at);

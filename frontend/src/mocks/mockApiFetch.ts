@@ -99,6 +99,44 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
 
   // --- Integrations ---------------------------------------------------------
   if (route === "GET /api/integrations") return ok(mockIntegrations) as Promise<T>;
+
+  // --- MCP servers (no servers connected in the mock environment) -----------
+  if (route === "GET /api/mcp/servers") return ok([]) as Promise<T>;
+  if (route === "POST /api/mcp/servers") {
+    const body = parseBody(init.body) as Record<string, unknown>;
+    return ok({
+      id: "mock-mcp-1",
+      name: body.name ?? "mock",
+      displayName: body.displayName ?? "Mock",
+      transport: "STREAMABLE_HTTP",
+      endpointUrl: body.endpointUrl ?? "https://example.com/mcp",
+      authType: body.authType ?? "NONE",
+      enabled: true,
+      hasToken: body.authType === "BEARER_TOKEN",
+      toolCount: 0,
+      enabledToolCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tools: []
+    }) as Promise<T>;
+  }
+  if (method === "POST" && /\/api\/mcp\/servers\/[^/]+\/test$/.test(path)) {
+    return ok({ success: false, message: "Mock mode does not reach external MCP servers.", serverName: null, serverVersion: null, protocolVersion: null }) as Promise<T>;
+  }
+  if (method === "POST" && /\/api\/mcp\/servers\/[^/]+\/discover$/.test(path)) {
+    return ok({ success: true, message: "Discovered 0 tool(s).", discoveredCount: 0, tools: [] }) as Promise<T>;
+  }
+  if (method === "PATCH" && /\/api\/mcp\/servers\/[^/]+\/tools\/[^/]+$/.test(path)) {
+    const body = parseBody(init.body) as Record<string, unknown>;
+    return ok({ id: "mock-tool", toolName: "mock", huginToolName: "mcp_mock", description: null, enabled: Boolean(body.enabled), stale: false, lastSeenAt: null }) as Promise<T>;
+  }
+  if (method === "PATCH" && /\/api\/mcp\/servers\/[^/]+$/.test(path)) {
+    return ok({ id: "mock-mcp-1", name: "mock", displayName: "Mock", transport: "STREAMABLE_HTTP", endpointUrl: "https://example.com/mcp", authType: "NONE", enabled: true, hasToken: false, toolCount: 0, enabledToolCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), tools: [] }) as Promise<T>;
+  }
+  if (method === "DELETE" && /\/api\/mcp\/servers\/[^/]+$/.test(path)) {
+    return ok({}) as Promise<T>;
+  }
+
   if (route === "POST /api/google/reconnect") return ok({ status: {}, authUrl: null }) as Promise<T>;
   if (route === "POST /api/google/disconnect") return ok({}) as Promise<T>;
 

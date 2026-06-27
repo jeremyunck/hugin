@@ -5,7 +5,11 @@ import com.example.integration.github.GitHubAppService;
 import com.example.integration.github.GitHubStatus;
 import com.example.integration.google.GoogleWorkspaceClientFactory;
 import com.example.integration.google.GoogleWorkspaceStatus;
+import com.example.integration.mcp.McpConnectionService;
+import com.example.integration.mcp.McpServerDto;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,23 +42,72 @@ public class IntegrationsController {
 
     private final GoogleWorkspaceClientFactory google;
     private final GitHubAppService github;
+    private final McpConnectionService mcp;
     private final String webSearchApiKey;
 
     public IntegrationsController(GoogleWorkspaceClientFactory google,
                                  GitHubAppService github,
+                                 McpConnectionService mcp,
                                  @Value("${OPEN_ROUTER_API_KEY:}") String webSearchApiKey) {
         this.google = google;
         this.github = github;
+        this.mcp = mcp;
         this.webSearchApiKey = webSearchApiKey;
     }
 
     @GetMapping
-    public List<IntegrationStatus> list() {
+    public List<IntegrationStatus> list(@AuthenticationPrincipal Jwt jwt) {
         List<IntegrationStatus> integrations = new ArrayList<>();
         integrations.add(googleStatus());
         integrations.add(githubStatus());
         integrations.add(webSearchStatus());
+        integrations.add(mcpStatus(owner(jwt)));
         return integrations;
+    }
+
+    /**
+     * Aggregate status for a user's MCP connections. "Connected" means the user has at least one
+     * enabled server AND at least one enabled, non-stale tool — i.e. the agent would actually advertise
+     * something. The tool list is scoped to this user only; another user's tools are never included.
+     */
+    private IntegrationStatus mcpStatus(String owner) {
+        List<McpServerDto> servers = mcp.listDtos(owner);
+        boolean hasEnabledServer = servers.stream().anyMatch(McpServerDto::enabled);
+        List<String> enabledTools = new ArrayList<>();
+        for (McpServerDto server : servers) {
+            if (!server.enabled()) {
+                continue;
+            }
+            server.tools().stream()
+                    .filter(tool -> tool.enabled() && !tool.stale())
+                    .forEach(tool -> enabledTools.add(tool.huginToolName()));
+        }
+        boolean connected = hasEnabledServer && !enabledTools.isEmpty();
+        String message;
+        if (servers.isEmpty()) {
+            message = "No MCP servers connected yet. Add one to expose its tools to Hugin.";
+        } else if (connected) {
+            message = enabledTools.size() + " MCP tool(s) available across "
+                    + servers.size() + " server(s).";
+        } else {
+            message = "Connected server(s) have no enabled tools yet. Discover and enable tools to use them.";
+        }
+        return new IntegrationStatus(
+                "mcp",
+                "MCP Servers",
+                "Connect custom Model Context Protocol servers to expand what Hugin can do",
+                connected,
+                false,
+                "mcp",
+                enabledTools,
+                message);
+    }
+
+    private static String owner(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null || jwt.getSubject().isBlank()) {
+            return "global";
+        }
+        return jwt.getSubject();
     }
 
     private IntegrationStatus githubStatus() {
