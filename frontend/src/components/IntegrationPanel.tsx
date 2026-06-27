@@ -127,7 +127,7 @@ export function IntegrationPanel(props: {
       <div className="screen-content">
         <div className="screen-pad">
           <p className="integration-subtitle">
-            Hugin can use these tools to find information, take action, and get things done for you.
+            Bouw can use these tools to find information, take action, and get things done for you.
           </p>
         </div>
 
@@ -173,7 +173,7 @@ export function IntegrationPanel(props: {
             <div className="integrations-section-head">
               <div>
                 <div className="integrations-section-label">Connected tools</div>
-                <div className="integrations-section-sub">Tools Hugin can use right now</div>
+                <div className="integrations-section-sub">Tools Bouw can use right now</div>
               </div>
               {allHealthy ? (
                 <span className="integrations-health">
@@ -208,7 +208,7 @@ export function IntegrationPanel(props: {
               <div>
                 <div className="integrations-section-label">Available tools</div>
                 <div className="integrations-section-sub">
-                  Connect more tools to expand what Hugin can do
+                  Connect more tools to expand what Bouw can do
                 </div>
               </div>
             </div>

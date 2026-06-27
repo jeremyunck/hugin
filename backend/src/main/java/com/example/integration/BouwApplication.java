@@ -24,9 +24,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         CloudAgentProperties.class, SchedulerProperties.class, GoogleWorkspaceProperties.class,
         GitHubProperties.class, AuthJwtProperties.class, SandboxProperties.class,
         ProjectSandboxProperties.class})
-public class HuginApplication {
+public class BouwApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(HuginApplication.class, args);
+        SpringApplication.run(BouwApplication.class, args);
     }
 }

@@ -1,8 +1,8 @@
-// Helpers for the one-shot launch parameters Hugin reads from the URL (e.g. ?screen=integrations
+// Helpers for the one-shot launch parameters Bouw reads from the URL (e.g. ?screen=integrations
 // after a GitHub App install redirect) and the lightweight "last active thread" restore hint. These
 // are UI-convenience values only — the backend remains the source of truth for chat history.
 
-const ACTIVE_THREAD_STORAGE_KEY = "hugin-active-thread-v1";
+const ACTIVE_THREAD_STORAGE_KEY = "bouw-active-thread-v1";
 
 export function readLaunchScreen() {
   if (typeof window === "undefined") return null;

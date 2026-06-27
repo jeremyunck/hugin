@@ -2,10 +2,10 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${HUGIN_DEV_ENV_FILE:-$HOME/.config/hugin-dev/env}"
-LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
-DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
-DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
+ENV_FILE="${BOUW_DEV_ENV_FILE:-$HOME/.config/bouw-dev/env}"
+LOG_DIR="${BOUW_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
+DEV_HOME="${BOUW_DEV_HOME:-$HOME/.local/share/bouw-dev}"
+DEPLOY_REPO_DIR="${BOUW_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
 
 prepend_path() {
   local dir="$1"
@@ -25,8 +25,8 @@ fi
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
 prepend_path "$HOME/.docker/bin"
 prepend_path "/Applications/Docker.app/Contents/Resources/bin"
-if [[ -n "${HUGIN_SANDBOX_DOCKER_BIN:-}" ]]; then
-  prepend_path "$(dirname "$HUGIN_SANDBOX_DOCKER_BIN")"
+if [[ -n "${BOUW_SANDBOX_DOCKER_BIN:-}" ]]; then
+  prepend_path "$(dirname "$BOUW_SANDBOX_DOCKER_BIN")"
 fi
 if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
   export AGENT_HOME="$DEV_HOME"
@@ -38,16 +38,16 @@ if [[ -x /opt/homebrew/opt/openjdk@21/bin/java ]]; then
 elif [[ -x /usr/local/opt/openjdk@21/bin/java ]]; then
   export JAVA_HOME="/usr/local/opt/openjdk@21"
 else
-  printf '[hugin-run] Java 21 was not found in the expected Homebrew locations.\n' >&2
+  printf '[bouw-run] Java 21 was not found in the expected Homebrew locations.\n' >&2
   exit 1
 fi
 export PATH="$JAVA_HOME/bin:$PATH"
 
 cd "$DEPLOY_REPO_DIR"
 
-jar_path="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
+jar_path="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'bouw-backend-*.jar' ! -name '*.original' | head -n 1)"
 if [[ -z "$jar_path" ]]; then
-  printf '[hugin-run] Built backend jar not found under %s/backend/target\n' "$DEPLOY_REPO_DIR" >&2
+  printf '[bouw-run] Built backend jar not found under %s/backend/target\n' "$DEPLOY_REPO_DIR" >&2
   exit 1
 fi
 

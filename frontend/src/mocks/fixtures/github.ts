@@ -19,12 +19,12 @@ export const mockGitHubStatus: GitHubStatus = {
 /** Public, illustrative repositories only — no private repos and nothing real. */
 export const mockRepositories: GitHubRepository[] = [
   {
-    fullName: "ada-lovelace/hugin-demo",
-    name: "hugin-demo",
+    fullName: "ada-lovelace/bouw-demo",
+    name: "bouw-demo",
     owner: "ada-lovelace",
     privateRepo: false,
     defaultBranch: "main",
-    description: "Example application used to demo Hugin's project mode."
+    description: "Example application used to demo Bouw's project mode."
   },
   {
     fullName: "ada-lovelace/analytical-engine",
@@ -45,7 +45,7 @@ export const mockRepositories: GitHubRepository[] = [
 ];
 
 const BRANCHES_BY_REPO: Record<string, GitHubBranch[]> = {
-  "ada-lovelace/hugin-demo": [{ name: "main" }, { name: "develop" }, { name: "feature/onboarding" }],
+  "ada-lovelace/bouw-demo": [{ name: "main" }, { name: "develop" }, { name: "feature/onboarding" }],
   "ada-lovelace/analytical-engine": [{ name: "main" }, { name: "release/1.x" }],
   "ada-lovelace/notebook-site": [{ name: "develop" }, { name: "main" }, { name: "draft/essays" }]
 };
@@ -55,18 +55,18 @@ export function mockBranchesFor(repoFullName: string): GitHubBranch[] {
 }
 
 const DETAIL_BY_REPO: Record<string, GitHubRepositoryDetail> = {
-  "ada-lovelace/hugin-demo": {
-    fullName: "ada-lovelace/hugin-demo",
-    name: "hugin-demo",
+  "ada-lovelace/bouw-demo": {
+    fullName: "ada-lovelace/bouw-demo",
+    name: "bouw-demo",
     owner: "ada-lovelace",
     privateRepo: false,
     defaultBranch: "main",
-    description: "Example application used to demo Hugin's project mode.",
+    description: "Example application used to demo Bouw's project mode.",
     language: "TypeScript",
     stargazers: 128,
     forks: 14,
     openIssues: 3,
-    htmlUrl: "https://github.com/ada-lovelace/hugin-demo",
+    htmlUrl: "https://github.com/ada-lovelace/bouw-demo",
     pushedAt: daysAgo(1)
   }
 };

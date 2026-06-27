@@ -43,7 +43,7 @@ public class BugReportService {
     public BugReportService(ObjectMapper objectMapper,
                             BugReportCatalogService bugReportCatalog,
                             Workspace defaultWorkspace,
-                            @Value("${agent.home:${user.home}/.hugin}") String agentHome) {
+                            @Value("${agent.home:${user.home}/.bouw}") String agentHome) {
         this(objectMapper, bugReportCatalog, defaultWorkspace, Path.of(agentHome), Clock.systemDefaultZone());
     }
 
@@ -76,7 +76,7 @@ public class BugReportService {
         List<LogAttachment> logs = collectLogs(workspace);
 
         StringBuilder out = new StringBuilder();
-        out.append("Hugin Bug Report\n");
+        out.append("Bouw Bug Report\n");
         out.append("================\n\n");
         out.append("Generated at: ").append(now).append('\n');
         out.append("Title: ").append(blankFallback(title, "Untitled chat")).append('\n');
@@ -147,7 +147,7 @@ public class BugReportService {
 
     private List<LogAttachment> collectLogs(Workspace workspace) {
         Set<Path> candidates = new LinkedHashSet<>();
-        candidates.add(agentHome.resolve("logs/hugin.log"));
+        candidates.add(agentHome.resolve("logs/bouw.log"));
         candidates.add(workspace.root().resolve(".data/logs/server.out.log"));
         candidates.add(workspace.root().resolve(".data/logs/server.err.log"));
         candidates.add(workspace.root().resolve(".data/logs/update.out.log"));

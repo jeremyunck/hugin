@@ -9,33 +9,33 @@ const os = require('os');
 const path = require('path');
 const { version } = require('../../package.json');
 
-const AGENT_HOME  = process.env.AGENT_HOME ?? path.join(os.homedir(), '.hugin');
-const SERVER_JAR  = path.join(AGENT_HOME, 'bin', 'hugin-server.jar');
+const AGENT_HOME  = process.env.AGENT_HOME ?? path.join(os.homedir(), '.bouw');
+const SERVER_JAR  = path.join(AGENT_HOME, 'bin', 'bouw-server.jar');
 const CONFIG_YML  = path.join(AGENT_HOME, 'config', 'application.yml');
-const LOG_FILE    = path.join(AGENT_HOME, 'logs', 'hugin.log');
+const LOG_FILE    = path.join(AGENT_HOME, 'logs', 'bouw.log');
 
 const IS_MACOS    = process.platform === 'darwin';
-const PLIST_LABEL = 'com.hugin.agent';
+const PLIST_LABEL = 'com.bouw.agent';
 const PLIST_PATH  = path.join(os.homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
 
 const installed       = () => existsSync(SERVER_JAR);
 const hasSystemd      = () => spawnSync('systemctl', ['--version'], { stdio: 'ignore' }).status === 0;
 const hasPlist        = () => existsSync(PLIST_PATH);
-const hasHuginLauncher = () => spawnSync('which', ['hugin'], { stdio: 'ignore' }).status === 0;
+const hasBouwLauncher = () => spawnSync('which', ['bouw'], { stdio: 'ignore' }).status === 0;
 
 function resolveInstalledLauncher() {
   const candidates = [
-    process.env.HUGIN_LAUNCHER_PATH,
-    path.join(os.homedir(), '.hugin', 'hugin.env'),
-    IS_MACOS ? '/opt/homebrew/bin/hugin' : '/usr/local/bin/hugin',
+    process.env.BOUW_LAUNCHER_PATH,
+    path.join(os.homedir(), '.bouw', 'bouw.env'),
+    IS_MACOS ? '/opt/homebrew/bin/bouw' : '/usr/local/bin/bouw',
   ];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
-    if (candidate.endsWith('hugin.env')) {
+    if (candidate.endsWith('bouw.env')) {
       if (!existsSync(candidate)) continue;
       const env = readFileSync(candidate, 'utf8');
-      const match = env.match(/^HUGIN_LAUNCHER_PATH=(.+)$/m);
+      const match = env.match(/^BOUW_LAUNCHER_PATH=(.+)$/m);
       if (match && match[1]) {
         const resolved = match[1].trim();
         if (resolved && resolved !== __filename) return resolved;
@@ -47,20 +47,20 @@ function resolveInstalledLauncher() {
     }
   }
 
-  return IS_MACOS ? '/usr/local/bin/hugin' : '/usr/local/bin/hugin';
+  return IS_MACOS ? '/usr/local/bin/bouw' : '/usr/local/bin/bouw';
 }
 
 function die(msg) {
-  process.stderr.write(`\x1b[31m[hugin]\x1b[0m ${msg}\n`);
+  process.stderr.write(`\x1b[31m[bouw]\x1b[0m ${msg}\n`);
   process.exit(1);
 }
 
 function info(msg) {
-  process.stdout.write(`\x1b[34m[hugin]\x1b[0m ${msg}\n`);
+  process.stdout.write(`\x1b[34m[bouw]\x1b[0m ${msg}\n`);
 }
 
 function success(msg) {
-  process.stdout.write(`\x1b[32m[hugin]\x1b[0m ${msg}\n`);
+  process.stdout.write(`\x1b[32m[bouw]\x1b[0m ${msg}\n`);
 }
 
 // Run a command, inheriting stdio, and exit with its status code.
@@ -79,7 +79,7 @@ function requireInstalled() {
   if (!installed()) {
     die(
       `No installed jars found in ${AGENT_HOME}.\n` +
-      '  Run "hugin onboard" to build and install, or set AGENT_HOME.'
+      '  Run "bouw onboard" to build and install, or set AGENT_HOME.'
     );
   }
 }
@@ -106,12 +106,12 @@ function waitForHealth(timeoutSecs = 30) {
 
 function svcStart() {
   if (IS_MACOS) {
-    if (!hasPlist()) die(`LaunchAgent plist not found at ${PLIST_PATH}.\n  Run "hugin onboard" first.`);
+    if (!hasPlist()) die(`LaunchAgent plist not found at ${PLIST_PATH}.\n  Run "bouw onboard" first.`);
     sh('launchctl', ['start', PLIST_LABEL]);
   } else {
-    if (!hasSystemd()) die('systemd not found. Use "hugin server run" to start in the foreground.');
-    if (!hasHuginLauncher()) die('hugin launcher not found. Run "hugin onboard" first.');
-    sh('sudo', ['systemctl', 'start', 'hugin']);
+    if (!hasSystemd()) die('systemd not found. Use "bouw server run" to start in the foreground.');
+    if (!hasBouwLauncher()) die('bouw launcher not found. Run "bouw onboard" first.');
+    sh('sudo', ['systemctl', 'start', 'bouw']);
   }
 }
 
@@ -121,19 +121,19 @@ function svcStop() {
     process.exit(0);
   } else {
     if (!hasSystemd()) die('systemd not found.');
-    sh('sudo', ['systemctl', 'stop', 'hugin']);
+    sh('sudo', ['systemctl', 'stop', 'bouw']);
   }
 }
 
 function svcRestart() {
   if (IS_MACOS) {
-    if (!hasPlist()) die(`LaunchAgent plist not found at ${PLIST_PATH}.\n  Run "hugin onboard" first.`);
+    if (!hasPlist()) die(`LaunchAgent plist not found at ${PLIST_PATH}.\n  Run "bouw onboard" first.`);
     spawnSync('launchctl', ['stop', PLIST_LABEL], { stdio: 'inherit' });
     spawnSync('sleep', ['1']);
     sh('launchctl', ['start', PLIST_LABEL]);
   } else {
     if (!hasSystemd()) die('systemd not found.');
-    sh('sudo', ['systemctl', 'restart', 'hugin']);
+    sh('sudo', ['systemctl', 'restart', 'bouw']);
   }
 }
 
@@ -142,7 +142,7 @@ function svcStatus() {
     sh('launchctl', ['list', PLIST_LABEL]);
   } else {
     if (!hasSystemd()) die('systemd not found.');
-    sh('systemctl', ['status', 'hugin']);
+    sh('systemctl', ['status', 'bouw']);
   }
 }
 
@@ -151,7 +151,7 @@ function svcLogs() {
     exec('tail', ['-f', LOG_FILE]);
   } else {
     if (!hasSystemd()) die('systemd not found. Check your log file manually.');
-    exec('journalctl', ['-u', 'hugin', '-f']);
+    exec('journalctl', ['-u', 'bouw', '-f']);
   }
 }
 
@@ -159,7 +159,7 @@ function svcIsActive() {
   if (IS_MACOS) {
     return spawnSync('launchctl', ['list', PLIST_LABEL], { stdio: 'pipe' }).status === 0;
   } else {
-    return spawnSync('systemctl', ['is-active', '--quiet', 'hugin'], { stdio: 'ignore' }).status === 0;
+    return spawnSync('systemctl', ['is-active', '--quiet', 'bouw'], { stdio: 'ignore' }).status === 0;
   }
 }
 
@@ -168,8 +168,8 @@ function svcIsActive() {
 const program = new Command();
 
 program
-  .name('hugin')
-  .description('Hugin AI personal assistant CLI')
+  .name('bouw')
+  .description('Bouw AI personal assistant CLI')
   .version(version);
 
 // ── onboard ───────────────────────────────────────────────────────────────────
@@ -247,30 +247,30 @@ program
   .action(() => svcLogs());
 
 // ── default: smart start ──────────────────────────────────────────────────────
-// "hugin" with no subcommand: ensure the server is up.
+// "bouw" with no subcommand: ensure the server is up.
 
 program.action(async () => {
   requireInstalled();
 
   const alreadyUp = await waitForHealth(2);
   if (!alreadyUp) {
-    const canStart = IS_MACOS ? hasPlist() : (hasHuginLauncher() && hasSystemd());
+    const canStart = IS_MACOS ? hasPlist() : (hasBouwLauncher() && hasSystemd());
     if (canStart) {
-      info('Server not running — starting hugin service...');
+      info('Server not running — starting bouw service...');
       if (IS_MACOS) {
         spawnSync('launchctl', ['start', PLIST_LABEL], { stdio: 'inherit' });
       } else {
-        spawnSync('sudo', ['systemctl', 'start', 'hugin'], { stdio: 'inherit' });
+        spawnSync('sudo', ['systemctl', 'start', 'bouw'], { stdio: 'inherit' });
       }
     } else {
-      info('Server not responding. Start it with:\n  hugin server run');
+      info('Server not responding. Start it with:\n  bouw server run');
       process.exit(1);
     }
 
     info('Waiting for server to become healthy...');
     const healthy = await waitForHealth(30);
     if (!healthy) {
-      die('Server did not become healthy within 30 s. Check: hugin server logs');
+      die('Server did not become healthy within 30 s. Check: bouw server logs');
     }
     success('Server is ready on http://localhost:8080');
   }

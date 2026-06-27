@@ -8,8 +8,8 @@ All state lives in `frontend/src/App.tsx` (~2658 lines) as React `useState` + `u
 
 | State | Type | Owner | Persisted |
 |---|---|---|---|
-| `state` | `AppState` (`{ threads: ChatThread[] }`) | `useState` in App.tsx | localStorage `hugin-minimal-ui-state-v1` |
-| `thread` | `ChatThread` (current active thread) | `useState` in App.tsx | localStorage `hugin-active-thread-v1` (id only) |
+| `state` | `AppState` (`{ threads: ChatThread[] }`) | `useState` in App.tsx | localStorage `bouw-minimal-ui-state-v1` |
+| `thread` | `ChatThread` (current active thread) | `useState` in App.tsx | localStorage `bouw-active-thread-v1` (id only) |
 | `busy` | `boolean` (global busy flag) | `useState` in App.tsx | No |
 | `models` | `ModelOption[]` | `useState` in App.tsx | No |
 | `files` | `FileNode[]` (sandbox file tree) | `useState` in App.tsx | No |
@@ -51,9 +51,9 @@ There is no `stores/` directory. No Zustand, Redux, or context-based state manag
 
 | Key | Content | Purpose |
 |---|---|---|
-| `hugin-minimal-ui-state-v1` | Full `AppState` (all threads, all entries, all activities) | Persist entire UI state across refreshes |
-| `hugin-active-thread-v1` | `{ threadId, screen }` | Restore the last active thread on reload |
-| `hugin-auth-session-v1` (localStorage) | Auth token + user info | Login session |
+| `bouw-minimal-ui-state-v1` | Full `AppState` (all threads, all entries, all activities) | Persist entire UI state across refreshes |
+| `bouw-active-thread-v1` | `{ threadId, screen }` | Restore the last active thread on reload |
+| `bouw-auth-session-v1` (localStorage) | Auth token + user info | Login session |
 
 ### Tool/Activity Output in Main Chat
 
@@ -226,9 +226,9 @@ workaround belongs.
 ## localStorage
 
 - Transcripts are no longer the state of record. The store persists only lightweight thread metadata
-  (`hugin-ui-thread-index-v1`) and the active thread id (`hugin-active-thread-v1`). On load the
+  (`bouw-ui-thread-index-v1`) and the active thread id (`bouw-active-thread-v1`). On load the
   transcript is rebuilt from backend events. `loadAppState`/`saveAppState` are deprecated and kept
-  only for a one-time migration of the legacy `hugin-minimal-ui-state-v1` blob into metadata.
+  only for a one-time migration of the legacy `bouw-minimal-ui-state-v1` blob into metadata.
 
 ---
 

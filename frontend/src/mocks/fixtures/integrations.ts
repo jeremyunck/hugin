@@ -23,7 +23,7 @@ export const mockIntegrations: Integration[] = [
     reconnectable: true,
     authMode: "oauth",
     tools: ["gmail_search", "gmail_read", "gmail_trash", "calendar_list_events"],
-    message: "Connected as ada@hugin.dev."
+    message: "Connected as ada@bouw.dev."
   },
   {
     id: "slack",

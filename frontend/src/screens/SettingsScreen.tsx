@@ -154,7 +154,7 @@ export function SettingsScreen(props: {
       <AppHeader backAction={{ onClick: onBack }} title="Settings" />
 
       <div className="screen-pad">
-        <p className="integration-subtitle">Personalize how Hugin looks and how the agent runs. Changes apply when you press Save.</p>
+        <p className="integration-subtitle">Personalize how Bouw looks and how the agent runs. Changes apply when you press Save.</p>
       </div>
 
       <div className="settings-section">

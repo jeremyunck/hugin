@@ -49,13 +49,13 @@ class DockerSandboxManagerProjectTest {
 
     private SandboxProperties props() {
         return new SandboxProperties(true, "ubuntu:24.04", "/missing/docker",
-                Duration.ofSeconds(10), Duration.ofSeconds(10), "", "hugin-sbx-", 25);
+                Duration.ofSeconds(10), Duration.ofSeconds(10), "", "bouw-sbx-", 25);
     }
 
     private SandboxSession session(String repoPath) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
-        return new SandboxSession(id, null, "container-id", "hugin-agent-" + id, "hugin-agent-" + id + "-workspace",
+        return new SandboxSession(id, null, "container-id", "bouw-agent-" + id, "bouw-agent-" + id + "-workspace",
                 CLONE_URL, "main", repoPath, SandboxStatus.READY, now, now, now.plus(Duration.ofHours(72)));
     }
 
@@ -105,11 +105,11 @@ class DockerSandboxManagerProjectTest {
 
         var bugReport = new BugReportCatalogService.StoredBugReport(
                 "bug-1", "Hung chat", "session-1", null, null,
-                "bug-reports/2026-06-18/hung-chat.txt", "Hugin Bug Report\n\nBody", "2026-06-18T14:05:06Z");
+                "bug-reports/2026-06-18/hung-chat.txt", "Bouw Bug Report\n\nBody", "2026-06-18T14:05:06Z");
 
         manager.createGitHubRepoSandbox(null, CLONE_URL, "octo/origin", "main", "tok", bugReport);
 
-        verify(runtime).writeFile(session.sandboxId(), "bug-reports/2026-06-18/hung-chat.txt", "Hugin Bug Report\n\nBody");
+        verify(runtime).writeFile(session.sandboxId(), "bug-reports/2026-06-18/hung-chat.txt", "Bouw Bug Report\n\nBody");
     }
 
     @Test

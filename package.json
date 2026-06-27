@@ -1,12 +1,12 @@
 {
-  "name": "hugin-agent",
+  "name": "bouw-agent",
   "version": "0.1.18",
-  "description": "Hugin — AI personal assistant powered by any OpenAI-compatible LLM",
+  "description": "Bouw — AI personal assistant powered by any OpenAI-compatible LLM",
   "bin": {
-    "hugin": "./hugin/bin/hugin.js"
+    "bouw": "./bouw/bin/bouw.js"
   },
   "files": [
-    "hugin/bin/",
+    "bouw/bin/",
     "install.sh",
     "pom.xml",
     "backend/src/main/java",
@@ -25,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jeremyunck/hugin.git"
+    "url": "git+https://github.com/jeremyunck/bouw.git"
   },
   "keywords": [
     "ai",

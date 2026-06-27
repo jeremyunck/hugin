@@ -80,12 +80,12 @@ public class IntegrationsController {
             }
             server.tools().stream()
                     .filter(tool -> tool.enabled() && !tool.stale())
-                    .forEach(tool -> enabledTools.add(tool.huginToolName()));
+                    .forEach(tool -> enabledTools.add(tool.bouwToolName()));
         }
         boolean connected = hasEnabledServer && !enabledTools.isEmpty();
         String message;
         if (servers.isEmpty()) {
-            message = "No MCP servers connected yet. Add one to expose its tools to Hugin.";
+            message = "No MCP servers connected yet. Add one to expose its tools to Bouw.";
         } else if (connected) {
             message = enabledTools.size() + " MCP tool(s) available across "
                     + servers.size() + " server(s).";
@@ -95,7 +95,7 @@ public class IntegrationsController {
         return new IntegrationStatus(
                 "mcp",
                 "MCP Servers",
-                "Connect custom Model Context Protocol servers to expand what Hugin can do",
+                "Connect custom Model Context Protocol servers to expand what Bouw can do",
                 connected,
                 false,
                 "mcp",

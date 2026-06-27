@@ -176,7 +176,7 @@ public class RepoIndexTool implements LocalTool {
     }
 
     private Path indexPath(Workspace workspace) {
-        return workspace.root().resolve(".hugin").resolve("repo-index.json");
+        return workspace.root().resolve(".bouw").resolve("repo-index.json");
     }
 
     private static String mimeHint(String path) {

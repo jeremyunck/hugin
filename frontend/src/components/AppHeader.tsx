@@ -1,6 +1,6 @@
 import { ArrowLeft, Bug, Menu } from "lucide-react";
 
-const LOGO = "/hugin-bird.jpg";
+const LOGO = "/bouw-bird.jpg";
 
 /**
  * Branded top bar. In primary mode (no backAction) shows the logo and hamburger menu.
@@ -43,7 +43,7 @@ export function AppHeader({
   return (
     <div className="app-header">
       <div className="brand">
-        <img src={LOGO} alt="Hugin" className="brand-logo" />
+        <img src={LOGO} alt="Bouw" className="brand-logo" />
       </div>
       <div className="header-actions">
         {reportAction ? (

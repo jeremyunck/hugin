@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
-# install.sh — single-script installer for Hugin
+# install.sh — single-script installer for Bouw
 #
 # Usage:
 #   ./install.sh             interactive install / reconfigure
-#   ./install.sh --uninstall remove service, launcher, and optionally ~/.hugin
+#   ./install.sh --uninstall remove service, launcher, and optionally ~/.bouw
 #
-# All files go under HUGIN_HOME (default ~/.hugin).
-# Environment variables collected during install are stored in ~/.hugin/hugin.env (chmod 600).
-# The agent workspace (file/shell operations) lives at ~/.hugin/workspace.
+# All files go under BOUW_HOME (default ~/.bouw).
+# Environment variables collected during install are stored in ~/.bouw/bouw.env (chmod 600).
+# The agent workspace (file/shell operations) lives at ~/.bouw/workspace.
 set -euo pipefail
 
 # ── constants ─────────────────────────────────────────────────────────────────
-HUGIN_HOME="${HUGIN_HOME:-$HOME/.hugin}"
-SERVICE_NAME="hugin"
-LAUNCHER_NAME="hugin"
+BOUW_HOME="${BOUW_HOME:-$HOME/.bouw}"
+SERVICE_NAME="bouw"
+LAUNCHER_NAME="bouw"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_USER="$(id -un)"
-ENV_FILE="$HUGIN_HOME/hugin.env"
-CONFIG_YML="$HUGIN_HOME/config/application.yml"
-AUTO_UPDATE_SCRIPT="$HUGIN_HOME/bin/hugin-auto-update.sh"
-AUTO_UPDATE_INTERVAL_SECS="${HUGIN_AUTO_UPDATE_INTERVAL_SECS:-300}"
+ENV_FILE="$BOUW_HOME/bouw.env"
+CONFIG_YML="$BOUW_HOME/config/application.yml"
+AUTO_UPDATE_SCRIPT="$BOUW_HOME/bin/bouw-auto-update.sh"
+AUTO_UPDATE_INTERVAL_SECS="${BOUW_AUTO_UPDATE_INTERVAL_SECS:-300}"
 
 # ── colours ───────────────────────────────────────────────────────────────────
-info()    { printf '\033[1;34m[hugin]\033[0m %s\n' "$*"; }
-success() { printf '\033[1;32m[hugin]\033[0m %s\n' "$*"; }
-warn()    { printf '\033[1;33m[hugin]\033[0m %s\n' "$*"; }
-die()     { printf '\033[1;31m[hugin]\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\033[1;34m[bouw]\033[0m %s\n' "$*"; }
+success() { printf '\033[1;32m[bouw]\033[0m %s\n' "$*"; }
+warn()    { printf '\033[1;33m[bouw]\033[0m %s\n' "$*"; }
+die()     { printf '\033[1;31m[bouw]\033[0m %s\n' "$*" >&2; exit 1; }
 ask()     { printf '\033[1;35m   >\033[0m %s' "$*"; }
 
 require_cmd() { command -v "$1" >/dev/null 2>&1; }
@@ -33,7 +33,7 @@ require_cmd() { command -v "$1" >/dev/null 2>&1; }
 resolve_docker_bin() {
   local candidate
   for candidate in \
-    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "${BOUW_SANDBOX_DOCKER_BIN:-}" \
     "${SANDBOX_DOCKER_BIN:-}" \
     "$(command -v docker 2>/dev/null || true)" \
     "$HOME/.docker/bin/docker" \
@@ -47,7 +47,7 @@ resolve_docker_bin() {
   return 1
 }
 
-resolve_hugin_version() {
+resolve_bouw_version() {
   local package_json="$REPO_DIR/package.json"
   local version=""
   if [[ -f "$package_json" ]]; then
@@ -56,7 +56,7 @@ resolve_hugin_version() {
   [[ -n "$version" ]] && echo "$version" || echo "unknown"
 }
 
-resolve_hugin_source_sha() {
+resolve_bouw_source_sha() {
   if [[ -d "$REPO_DIR/.git" ]]; then
     git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown
   else
@@ -128,8 +128,8 @@ process.stdout.write(asset.browser_download_url);
 }
 
 download_release_bundle() {
-  local slug="${HUGIN_RELEASE_REPO_SLUG:-}"
-  local release_url="${HUGIN_RELEASE_API_URL:-}"
+  local slug="${BOUW_RELEASE_REPO_SLUG:-}"
+  local release_url="${BOUW_RELEASE_API_URL:-}"
   local release_json manifest_url manifest_json bundle_url sha_url source_sha bundle_tmp bundle_dir actual_sha expected_sha
   if [[ -z "$slug" ]]; then
     slug="$(repo_slug_from_origin)" || return 1
@@ -139,29 +139,29 @@ download_release_bundle() {
   fi
 
   release_json="$(github_api_get "$release_url")" || return 1
-  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-manifest.json")" || return 1
+  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-manifest.json")" || return 1
   manifest_json="$(github_api_get "$manifest_url")" || return 1
   source_sha="$(printf '%s' "$manifest_json" | json_get_field "source_sha")" || return 1
-  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz")" || return 1
-  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz.sha256" 2>/dev/null || true)"
+  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-runtime.tar.gz")" || return 1
+  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-runtime.tar.gz.sha256" 2>/dev/null || true)"
 
   bundle_tmp="$(mktemp -d)"
   bundle_dir="$bundle_tmp/bundle"
   mkdir -p "$bundle_dir"
-  curl -fsSL "$bundle_url" -o "$bundle_tmp/hugin-runtime.tar.gz"
+  curl -fsSL "$bundle_url" -o "$bundle_tmp/bouw-runtime.tar.gz"
   if [[ -n "$sha_url" ]]; then
     expected_sha="$(github_api_get "$sha_url" | awk '{print $1}')"
     if command -v sha256sum >/dev/null 2>&1; then
-      actual_sha="$(sha256sum "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+      actual_sha="$(sha256sum "$bundle_tmp/bouw-runtime.tar.gz" | awk '{print $1}')"
     else
-      actual_sha="$(shasum -a 256 "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+      actual_sha="$(shasum -a 256 "$bundle_tmp/bouw-runtime.tar.gz" | awk '{print $1}')"
     fi
     if [[ "$expected_sha" != "$actual_sha" ]]; then
       rm -rf "$bundle_tmp"
       die "Release bundle checksum mismatch."
     fi
   fi
-  tar -xzf "$bundle_tmp/hugin-runtime.tar.gz" -C "$bundle_dir"
+  tar -xzf "$bundle_tmp/bouw-runtime.tar.gz" -C "$bundle_dir"
 
   RELEASE_BUNDLE_SOURCE_SHA="$source_sha"
   RELEASE_BUNDLE_TMP="$bundle_tmp"
@@ -172,9 +172,9 @@ download_release_bundle() {
 
 install_release_bundle() {
   local bundle_dir="$1"
-  cp "$bundle_dir"/hugin-server.jar "$HUGIN_HOME/bin/hugin-server.jar"
+  cp "$bundle_dir"/bouw-server.jar "$BOUW_HOME/bin/bouw-server.jar"
   if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
-    cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
+    cp "$bundle_dir/agent-discord.jar" "$BOUW_HOME/bin/agent-discord.jar"
   fi
 }
 
@@ -214,12 +214,12 @@ fi
 # remind the user that interactive `docker` use needs a fresh login to pick up the group.
 DOCKER_GROUP_PENDING=false
 
-if [[ -n "${HUGIN_LAUNCHER_PATH:-}" ]]; then
-  LAUNCHER_PATH="${HUGIN_LAUNCHER_PATH}"
+if [[ -n "${BOUW_LAUNCHER_PATH:-}" ]]; then
+  LAUNCHER_PATH="${BOUW_LAUNCHER_PATH}"
 else
-  existing_hugin="$(command -v hugin 2>/dev/null || true)"
-  if [[ -n "$existing_hugin" && "$existing_hugin" != "$REPO_DIR/hugin/bin/hugin.js" && "$existing_hugin" != "$REPO_DIR/install.sh" ]]; then
-    LAUNCHER_PATH="$existing_hugin"
+  existing_bouw="$(command -v bouw 2>/dev/null || true)"
+  if [[ -n "$existing_bouw" && "$existing_bouw" != "$REPO_DIR/bouw/bin/bouw.js" && "$existing_bouw" != "$REPO_DIR/install.sh" ]]; then
+    LAUNCHER_PATH="$existing_bouw"
   elif [[ "$OS_TYPE" == "macos" ]]; then
     LAUNCHER_PATH="/opt/homebrew/bin/${LAUNCHER_NAME}"
   else
@@ -228,7 +228,7 @@ else
 fi
 
 if [[ "$OS_TYPE" == "macos" ]]; then
-  PLIST_LABEL="com.hugin.agent"
+  PLIST_LABEL="com.bouw.agent"
   PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
   pkg_update()          { brew update -q; }
@@ -286,18 +286,18 @@ if [[ "$OS_TYPE" == "macos" ]]; then
   <key>UserName</key>          <string>${INSTALL_USER}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HUGIN_HOME</key>  <string>${HUGIN_HOME}</string>
-    <key>AGENT_HOME</key>  <string>${HUGIN_HOME}</string>
+    <key>BOUW_HOME</key>  <string>${BOUW_HOME}</string>
+    <key>AGENT_HOME</key>  <string>${BOUW_HOME}</string>
   </dict>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec /usr/bin/java -jar ${HUGIN_HOME}/bin/hugin-server.jar --spring.config.additional-location=file:${CONFIG_YML}</string>
+    <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec /usr/bin/java -jar ${BOUW_HOME}/bin/bouw-server.jar --spring.config.additional-location=file:${CONFIG_YML}</string>
   </array>
-  <key>WorkingDirectory</key>  <string>${HUGIN_HOME}</string>
-  <key>StandardOutPath</key>   <string>${HUGIN_HOME}/logs/hugin.log</string>
-  <key>StandardErrorPath</key> <string>${HUGIN_HOME}/logs/hugin.log</string>
+  <key>WorkingDirectory</key>  <string>${BOUW_HOME}</string>
+  <key>StandardOutPath</key>   <string>${BOUW_HOME}/logs/bouw.log</string>
+  <key>StandardErrorPath</key> <string>${BOUW_HOME}/logs/bouw.log</string>
   <key>RunAtLoad</key>         <true/>
   <key>KeepAlive</key>
   <dict><key>SuccessfulExit</key><false/></dict>
@@ -317,13 +317,13 @@ PLIST
   svc_stop()      { launchctl stop  "$PLIST_LABEL" 2>/dev/null || true; }
   svc_restart()   { svc_stop; sleep 1; svc_start; }
   svc_status()    { launchctl list "$PLIST_LABEL" 2>/dev/null || echo "not loaded"; }
-  svc_logs()      { exec tail -f "$HUGIN_HOME/logs/hugin.log"; }
+  svc_logs()      { exec tail -f "$BOUW_HOME/logs/bouw.log"; }
   svc_is_active() { launchctl list 2>/dev/null | grep -q "$PLIST_LABEL"; }
   svc_is_enabled(){ [[ -f "$PLIST_PATH" ]]; }
   svc_enable()    { launchctl load -w "$PLIST_PATH" 2>/dev/null || true; }
   svc_daemon_reload() { :; }  # no-op on macOS
 
-  UPDATE_PLIST_LABEL="com.hugin.autoupdate"
+  UPDATE_PLIST_LABEL="com.bouw.autoupdate"
   UPDATE_PLIST_PATH="$HOME/Library/LaunchAgents/${UPDATE_PLIST_LABEL}.plist"
 
   update_svc_install() {
@@ -338,7 +338,7 @@ PLIST
   <key>UserName</key>          <string>${INSTALL_USER}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HUGIN_HOME</key>  <string>${HUGIN_HOME}</string>
+    <key>BOUW_HOME</key>  <string>${BOUW_HOME}</string>
   </dict>
   <key>ProgramArguments</key>
   <array>
@@ -346,9 +346,9 @@ PLIST
     <string>-c</string>
     <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec ${AUTO_UPDATE_SCRIPT}</string>
   </array>
-  <key>WorkingDirectory</key>  <string>${HUGIN_HOME}</string>
-  <key>StandardOutPath</key>   <string>${HUGIN_HOME}/logs/hugin-update.log</string>
-  <key>StandardErrorPath</key> <string>${HUGIN_HOME}/logs/hugin-update.log</string>
+  <key>WorkingDirectory</key>  <string>${BOUW_HOME}</string>
+  <key>StandardOutPath</key>   <string>${BOUW_HOME}/logs/bouw-update.log</string>
+  <key>StandardErrorPath</key> <string>${BOUW_HOME}/logs/bouw-update.log</string>
   <key>StartInterval</key>     <integer>${AUTO_UPDATE_INTERVAL_SECS}</integer>
 </dict>
 </plist>
@@ -362,17 +362,17 @@ UPDATE_PLIST
     rm -f "$UPDATE_PLIST_PATH"
   }
 
-  DISCORD_PLIST_LABEL="com.hugin.discord"
+  DISCORD_PLIST_LABEL="com.bouw.discord"
   DISCORD_PLIST_PATH="$HOME/Library/LaunchAgents/${DISCORD_PLIST_LABEL}.plist"
 
-  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$HUGIN_HOME/hugin.env}" 2>/dev/null; }
+  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$BOUW_HOME/bouw.env}" 2>/dev/null; }
 
   discord_svc_install() {
     if ! discord_has_token; then
       info "DISCORD_BOT_TOKEN not set in $ENV_FILE — skipping Discord bot service."
       return
     fi
-    if [[ ! -f "$HUGIN_HOME/bin/agent-discord.jar" ]]; then
+    if [[ ! -f "$BOUW_HOME/bin/agent-discord.jar" ]]; then
       info "agent-discord.jar not found — skipping Discord bot service."
       return
     fi
@@ -387,17 +387,17 @@ UPDATE_PLIST
   <key>UserName</key>          <string>${INSTALL_USER}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HUGIN_HOME</key>  <string>${HUGIN_HOME}</string>
+    <key>BOUW_HOME</key>  <string>${BOUW_HOME}</string>
   </dict>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec /usr/bin/java -jar ${HUGIN_HOME}/bin/agent-discord.jar</string>
+    <string>set -a; source ${ENV_FILE}; set +a; export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin; exec /usr/bin/java -jar ${BOUW_HOME}/bin/agent-discord.jar</string>
   </array>
-  <key>WorkingDirectory</key>  <string>${HUGIN_HOME}</string>
-  <key>StandardOutPath</key>   <string>${HUGIN_HOME}/logs/discord.log</string>
-  <key>StandardErrorPath</key> <string>${HUGIN_HOME}/logs/discord.log</string>
+  <key>WorkingDirectory</key>  <string>${BOUW_HOME}</string>
+  <key>StandardOutPath</key>   <string>${BOUW_HOME}/logs/discord.log</string>
+  <key>StandardErrorPath</key> <string>${BOUW_HOME}/logs/discord.log</string>
   <key>RunAtLoad</key>         <true/>
   <key>KeepAlive</key>
   <dict><key>SuccessfulExit</key><false/></dict>
@@ -442,35 +442,35 @@ https://packages.adoptium.net/artifactory/deb ${VERSION_CODENAME} main" \
     sudo apt-get update -qq
     sudo apt-get install -y temurin-21-jdk
   }
-  DISCORD_SERVICE_FILE="/etc/systemd/system/hugin-discord.service"
+  DISCORD_SERVICE_FILE="/etc/systemd/system/bouw-discord.service"
 
-  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$HUGIN_HOME/hugin.env}" 2>/dev/null; }
+  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$BOUW_HOME/bouw.env}" 2>/dev/null; }
 
   discord_svc_install() {
     if ! discord_has_token; then
       info "DISCORD_BOT_TOKEN not set in $ENV_FILE — skipping Discord bot service."
       return
     fi
-    if [[ ! -f "$HUGIN_HOME/bin/agent-discord.jar" ]]; then
+    if [[ ! -f "$BOUW_HOME/bin/agent-discord.jar" ]]; then
       info "agent-discord.jar not found — skipping Discord bot service."
       return
     fi
     sudo_retry --reason "write Discord systemd service file" tee "$DISCORD_SERVICE_FILE" > /dev/null <<DISCORD_SERVICE
-# Hugin Discord bot service — managed by install.sh
+# Bouw Discord bot service — managed by install.sh
 [Unit]
-Description=Hugin Discord Bot
-After=network-online.target hugin.service
+Description=Bouw Discord Bot
+After=network-online.target bouw.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=${INSTALL_USER}
-Environment=HUGIN_HOME=${HUGIN_HOME}
+Environment=BOUW_HOME=${BOUW_HOME}
 EnvironmentFile=${ENV_FILE}
-WorkingDirectory=${HUGIN_HOME}
-ExecStart=/usr/bin/java -jar ${HUGIN_HOME}/bin/agent-discord.jar
-StandardOutput=append:${HUGIN_HOME}/logs/discord.log
-StandardError=append:${HUGIN_HOME}/logs/discord.log
+WorkingDirectory=${BOUW_HOME}
+ExecStart=/usr/bin/java -jar ${BOUW_HOME}/bin/agent-discord.jar
+StandardOutput=append:${BOUW_HOME}/logs/discord.log
+StandardError=append:${BOUW_HOME}/logs/discord.log
 Restart=on-failure
 RestartSec=5
 
@@ -478,20 +478,20 @@ RestartSec=5
 WantedBy=multi-user.target
 DISCORD_SERVICE
     sudo_retry --reason "reload systemd for Discord service" systemctl daemon-reload
-    sudo systemctl enable hugin-discord
+    sudo systemctl enable bouw-discord
     success "Discord bot service installed."
   }
 
   discord_svc_uninstall() {
-    sudo systemctl disable --now hugin-discord 2>/dev/null || true
+    sudo systemctl disable --now bouw-discord 2>/dev/null || true
     sudo rm -f "$DISCORD_SERVICE_FILE"
     sudo systemctl daemon-reload
   }
 
-  discord_svc_start()     { discord_has_token && sudo systemctl start hugin-discord 2>/dev/null || true; }
-  discord_svc_stop()      { sudo systemctl stop hugin-discord 2>/dev/null || true; }
-  discord_svc_restart()   { sudo systemctl restart hugin-discord 2>/dev/null || true; }
-  discord_svc_is_active() { systemctl is-active --quiet hugin-discord 2>/dev/null; }
+  discord_svc_start()     { discord_has_token && sudo systemctl start bouw-discord 2>/dev/null || true; }
+  discord_svc_stop()      { sudo systemctl stop bouw-discord 2>/dev/null || true; }
+  discord_svc_restart()   { sudo systemctl restart bouw-discord 2>/dev/null || true; }
+  discord_svc_is_active() { systemctl is-active --quiet bouw-discord 2>/dev/null; }
 
   pkg_install_redis()   { sudo apt-get install -y redis-server; }
 
@@ -507,7 +507,7 @@ DISCORD_SERVICE
     fi
     # Run the daemon now and on boot; project-chat sandboxes need it.
     sudo systemctl enable --now docker 2>/dev/null || true
-    # Let the install user (and the hugin systemd service) reach the daemon without sudo.
+    # Let the install user (and the bouw systemd service) reach the daemon without sudo.
     # systemd re-reads supplementary groups when the service (re)starts later in this script.
     if ! id -nG "$INSTALL_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
       sudo usermod -aG docker "$INSTALL_USER" 2>/dev/null || true
@@ -520,29 +520,29 @@ DISCORD_SERVICE
     docker_daemon_ok
   }
   # During install the current shell is not yet in the docker group, so build via sudo; the
-  # image lives in the shared daemon and is visible to the hugin service user once it restarts.
+  # image lives in the shared daemon and is visible to the bouw service user once it restarts.
   docker_build_sandbox_image() { sudo docker build -t "$1" "$2"; }
 
   svc_install() {
     sudo_retry --reason "write systemd service file to /etc/systemd/system/" tee "$SERVICE_FILE" > /dev/null <<SERVICE
-# Hugin agent service — managed by install.sh
+# Bouw agent service — managed by install.sh
 [Unit]
-Description=Hugin Agent Server
+Description=Bouw Agent Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=${INSTALL_USER}
-Environment=HUGIN_HOME=${HUGIN_HOME}
-Environment=AGENT_HOME=${HUGIN_HOME}
+Environment=BOUW_HOME=${BOUW_HOME}
+Environment=AGENT_HOME=${BOUW_HOME}
 EnvironmentFile=${ENV_FILE}
 Environment=PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=${HUGIN_HOME}
-ExecStart=/usr/bin/java -jar ${HUGIN_HOME}/bin/hugin-server.jar \
-  --spring.config.additional-location=file:${HUGIN_HOME}/config/application.yml
-StandardOutput=append:${HUGIN_HOME}/logs/hugin.log
-StandardError=append:${HUGIN_HOME}/logs/hugin.log
+WorkingDirectory=${BOUW_HOME}
+ExecStart=/usr/bin/java -jar ${BOUW_HOME}/bin/bouw-server.jar \
+  --spring.config.additional-location=file:${BOUW_HOME}/config/application.yml
+StandardOutput=append:${BOUW_HOME}/logs/bouw.log
+StandardError=append:${BOUW_HOME}/logs/bouw.log
 Restart=on-failure
 RestartSec=5
 
@@ -568,47 +568,47 @@ SERVICE
   svc_enable()    { sudo systemctl enable "$SERVICE_NAME"; }
   svc_daemon_reload() { sudo systemctl daemon-reload; }
 
-  UPDATE_SERVICE_FILE="/etc/systemd/system/hugin-autoupdate.service"
-  UPDATE_TIMER_FILE="/etc/systemd/system/hugin-autoupdate.timer"
+  UPDATE_SERVICE_FILE="/etc/systemd/system/bouw-autoupdate.service"
+  UPDATE_TIMER_FILE="/etc/systemd/system/bouw-autoupdate.timer"
 
   update_svc_install() {
     sudo_retry --reason "write autoupdate systemd service file" tee "$UPDATE_SERVICE_FILE" > /dev/null <<UPDATE_SERVICE
-# Hugin auto-update service — managed by install.sh
+# Bouw auto-update service — managed by install.sh
 [Unit]
-Description=Hugin Auto Update
+Description=Bouw Auto Update
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=${INSTALL_USER}
-Environment=HUGIN_HOME=${HUGIN_HOME}
+Environment=BOUW_HOME=${BOUW_HOME}
 Environment=PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=${HUGIN_HOME}
+WorkingDirectory=${BOUW_HOME}
 ExecStart=${AUTO_UPDATE_SCRIPT}
-StandardOutput=append:${HUGIN_HOME}/logs/hugin-update.log
-StandardError=append:${HUGIN_HOME}/logs/hugin-update.log
+StandardOutput=append:${BOUW_HOME}/logs/bouw-update.log
+StandardError=append:${BOUW_HOME}/logs/bouw-update.log
 UPDATE_SERVICE
     sudo_retry --reason "write autoupdate systemd timer file" tee "$UPDATE_TIMER_FILE" > /dev/null <<UPDATE_TIMER
-# Hugin auto-update timer — managed by install.sh
+# Bouw auto-update timer — managed by install.sh
 [Unit]
-Description=Run Hugin auto-update periodically
+Description=Run Bouw auto-update periodically
 
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=${AUTO_UPDATE_INTERVAL_SECS}s
 Persistent=true
-Unit=hugin-autoupdate.service
+Unit=bouw-autoupdate.service
 
 [Install]
 WantedBy=timers.target
 UPDATE_TIMER
     sudo_retry --reason "reload systemd for autoupdate service" systemctl daemon-reload
-    sudo systemctl enable --now hugin-autoupdate.timer
+    sudo systemctl enable --now bouw-autoupdate.timer
   }
 
   update_svc_uninstall() {
-    sudo systemctl disable --now hugin-autoupdate.timer 2>/dev/null || true
+    sudo systemctl disable --now bouw-autoupdate.timer 2>/dev/null || true
     sudo rm -f "$UPDATE_SERVICE_FILE" "$UPDATE_TIMER_FILE"
     sudo systemctl daemon-reload
   }
@@ -629,7 +629,7 @@ wait_for_health() {
     elapsed=$((elapsed + 1))
     if [[ $elapsed -ge $max ]]; then
       warn "Server did not become healthy within ${max}s."
-      warn "Inspect logs:  hugin logs"
+      warn "Inspect logs:  bouw logs"
       return 1
     fi
     if (( elapsed % 5 == 0 )); then
@@ -654,13 +654,13 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   update_svc_uninstall
   success "Service and launcher removed."
 
-  if [[ -d "$HUGIN_HOME" ]]; then
-    ask "Delete $HUGIN_HOME (config + workspace + logs)? [y/N] "; read -r _confirm; echo
+  if [[ -d "$BOUW_HOME" ]]; then
+    ask "Delete $BOUW_HOME (config + workspace + logs)? [y/N] "; read -r _confirm; echo
     if [[ "$(echo "$_confirm" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-      rm -rf "$HUGIN_HOME"
-      success "$HUGIN_HOME deleted."
+      rm -rf "$BOUW_HOME"
+      success "$BOUW_HOME deleted."
     else
-      info "Kept $HUGIN_HOME."
+      info "Kept $BOUW_HOME."
     fi
   fi
   exit 0
@@ -671,13 +671,13 @@ ALREADY_INSTALLED=false
 SKIP_BUILD=false
 SKIP_CREDENTIALS=false
 
-if [[ -f "$HUGIN_HOME/bin/hugin-server.jar" ]]; then
+if [[ -f "$BOUW_HOME/bin/bouw-server.jar" ]]; then
   ALREADY_INSTALLED=true
   if [[ "$_force_reinstall" == "true" ]]; then
     SKIP_CREDENTIALS=true
     info "Reinstall mode — jars will be rebuilt using existing credentials."
   else
-    warn "Existing Hugin installation detected at $HUGIN_HOME."
+    warn "Existing Bouw installation detected at $BOUW_HOME."
     echo
     echo "  1) Reconfigure only            (keep existing jars, update env + config, restart service)"
     echo "  2) Full reinstall              (rebuild jars from source, update everything)"
@@ -698,17 +698,17 @@ if [[ -f "$HUGIN_HOME/bin/hugin-server.jar" ]]; then
 fi
 
 echo
-info "Hugin home : $HUGIN_HOME"
+info "Bouw home : $BOUW_HOME"
 info "Repo root  : $REPO_DIR"
 echo
 
 # ── 1. directory tree ─────────────────────────────────────────────────────────
 mkdir -p \
-  "$HUGIN_HOME/bin" \
-  "$HUGIN_HOME/config" \
-  "$HUGIN_HOME/workspace" \
-  "$HUGIN_HOME/logs"
-info "Directory tree ready at $HUGIN_HOME"
+  "$BOUW_HOME/bin" \
+  "$BOUW_HOME/config" \
+  "$BOUW_HOME/workspace" \
+  "$BOUW_HOME/logs"
+info "Directory tree ready at $BOUW_HOME"
 
 # ── 2. system dependencies ────────────────────────────────────────────────────
 if [[ "$OS_TYPE" == "macos" ]]; then
@@ -766,11 +766,11 @@ fi
 
 # Incrementally persist collected values so a mid-run failure doesn't lose them.
 save_env() {
-  mkdir -p "$HUGIN_HOME/db"
-  local current_hugin_version="${HUGIN_VERSION:-$(resolve_hugin_version)}"
-  local current_hugin_source_sha="${HUGIN_UPDATE_SOURCE_SHA:-$(resolve_hugin_source_sha)}"
+  mkdir -p "$BOUW_HOME/db"
+  local current_bouw_version="${BOUW_VERSION:-$(resolve_bouw_version)}"
+  local current_bouw_source_sha="${BOUW_UPDATE_SOURCE_SHA:-$(resolve_bouw_source_sha)}"
   cat > "$ENV_FILE" <<EOF
-# Hugin environment — sourced by the service and the hugin launcher.
+# Bouw environment — sourced by the service and the bouw launcher.
 # Permissions: 600 (owner-read-only).  Do not commit this file.
 
 OPEN_ROUTER_API_KEY=${OPENROUTER_KEY:-}
@@ -800,18 +800,18 @@ NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
 GOOGLE_OAUTH_CLIENT_SECRETS_FILE=${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:-}
 GOOGLE_OAUTH_TOKEN_DIR=${GOOGLE_OAUTH_TOKEN_DIR:-}
 
-# Hugin home directory (workspace root is $HUGIN_HOME/workspace)
-AGENT_HOME=${HUGIN_HOME}
-HUGIN_HOME=${HUGIN_HOME}
-HUGIN_SANDBOX_DOCKER_BIN=$(resolve_docker_bin || true)
+# Bouw home directory (workspace root is $BOUW_HOME/workspace)
+AGENT_HOME=${BOUW_HOME}
+BOUW_HOME=${BOUW_HOME}
+BOUW_SANDBOX_DOCKER_BIN=$(resolve_docker_bin || true)
 SANDBOX_DOCKER_BIN=$(resolve_docker_bin || true)
-HUGIN_VERSION=${current_hugin_version}
-HUGIN_UPDATE_SOURCE_SHA=${current_hugin_source_sha}
-HUGIN_REPO_DIR=${REPO_DIR}
-HUGIN_LAUNCHER_PATH=${LAUNCHER_PATH}
+BOUW_VERSION=${current_bouw_version}
+BOUW_UPDATE_SOURCE_SHA=${current_bouw_source_sha}
+BOUW_REPO_DIR=${REPO_DIR}
+BOUW_LAUNCHER_PATH=${LAUNCHER_PATH}
 
 # H2 database for user accounts (dashboard login)
-DB_URL=jdbc:h2:file:${HUGIN_HOME}/db/hugin
+DB_URL=jdbc:h2:file:${BOUW_HOME}/db/bouw
 
 # Dashboard admin account — used only on first startup to create the admin user.
 # After the user is created the password is stored hashed in the database.
@@ -1089,7 +1089,7 @@ save_env
 echo
 printf '\033[1;34m─── Dashboard Admin Account ───────────────────────────────────────────\033[0m\n'
 echo
-info "These credentials are used to log in to the Hugin web dashboard."
+info "These credentials are used to log in to the Bouw web dashboard."
 
 _existing_admin_user=$(grep -E '^ADMIN_USERNAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
 _existing_admin_pw=$(grep -E '^ADMIN_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
@@ -1161,7 +1161,7 @@ case "$_jwt_choice" in
 esac
 fi  # end SKIP_CREDENTIALS check
 
-# ── 4. write hugin.env ────────────────────────────────────────────────────────
+# ── 4. write bouw.env ────────────────────────────────────────────────────────
 save_env
 success "Wrote $ENV_FILE (chmod 600)"
 
@@ -1173,9 +1173,9 @@ llm:
 
 agent:
   api-key: \${AGENT_API_KEY:}
-  home: ${HUGIN_HOME}
+  home: ${BOUW_HOME}
   tools:
-    workspace-root: ${HUGIN_HOME}/workspace
+    workspace-root: ${BOUW_HOME}/workspace
   cloud:
     enabled: \${CLOUD_AGENTS_ENABLED:false}
     github-token: \${GITHUB_TOKEN:}
@@ -1183,10 +1183,10 @@ agent:
 
 logging:
   file:
-    name: ${HUGIN_HOME}/logs/hugin.log
+    name: ${BOUW_HOME}/logs/bouw.log
 
 # Environment variables DB_URL, ADMIN_USERNAME, ADMIN_PASSWORD, JWT_SECRET
-# are sourced from hugin.env and picked up by application.yml property placeholders.
+# are sourced from bouw.env and picked up by application.yml property placeholders.
 EOF
 info "Wrote $CONFIG_YML"
 
@@ -1198,8 +1198,8 @@ else
   MAVEN_OPTS="${MAVEN_OPTS:--Xmx512m}" \
     mvn -f "$REPO_DIR/pom.xml" \
         clean package -DskipTests -q
-  cp "$REPO_DIR"/backend/target/hugin-backend-*.jar  "$HUGIN_HOME/bin/hugin-server.jar"
-  success "Jars built and copied to $HUGIN_HOME/bin/"
+  cp "$REPO_DIR"/backend/target/bouw-backend-*.jar  "$BOUW_HOME/bin/bouw-server.jar"
+  success "Jars built and copied to $BOUW_HOME/bin/"
 fi
 
 # ── 7. build the project-chat sandbox image ──────────────────────────────────
@@ -1207,15 +1207,15 @@ fi
 # docker/sandbox/Dockerfile. Without a running Docker daemon and this image, the dashboard
 # reports "the Docker CLI is unavailable" when opening a project. Built regardless of
 # SKIP_BUILD since it is independent of the Maven jar build.
-HUGIN_SANDBOX_IMAGE="${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}"
+BOUW_SANDBOX_IMAGE="${BOUW_SANDBOX_IMAGE:-bouw-agent-sandbox:latest}"
 if require_cmd docker; then
   if docker_start_daemon; then
-    info "Building project-chat sandbox image ($HUGIN_SANDBOX_IMAGE) — this may take a minute..."
-    if docker_build_sandbox_image "$HUGIN_SANDBOX_IMAGE" "$REPO_DIR/docker/sandbox"; then
-      success "Sandbox image ready: $HUGIN_SANDBOX_IMAGE"
+    info "Building project-chat sandbox image ($BOUW_SANDBOX_IMAGE) — this may take a minute..."
+    if docker_build_sandbox_image "$BOUW_SANDBOX_IMAGE" "$REPO_DIR/docker/sandbox"; then
+      success "Sandbox image ready: $BOUW_SANDBOX_IMAGE"
     else
       warn "Failed to build the sandbox image. Project chats will not work until it is built:"
-      warn "  docker build -t $HUGIN_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
+      warn "  docker build -t $BOUW_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
     fi
   else
     warn "Docker is installed but the daemon is not reachable — skipping sandbox image build."
@@ -1224,44 +1224,44 @@ if require_cmd docker; then
     else
       warn "Start it with 'sudo systemctl enable --now docker', then run:"
     fi
-    warn "  docker build -t $HUGIN_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
+    warn "  docker build -t $BOUW_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
   fi
 else
   warn "Docker CLI not found — project (GitHub repository) chats require Docker."
   warn "Install Docker, then build the sandbox image:"
-  warn "  docker build -t $HUGIN_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
+  warn "  docker build -t $BOUW_SANDBOX_IMAGE $REPO_DIR/docker/sandbox"
 fi
 
-# ── 8. install the hugin launcher ────────────────────────────────────────────
+# ── 8. install the bouw launcher ────────────────────────────────────────────
 info "Installing $LAUNCHER_NAME launcher to $LAUNCHER_PATH..."
-HUGIN_VERSION="$(resolve_hugin_version)"
+BOUW_VERSION="$(resolve_bouw_version)"
 _launcher_tmp=$(mktemp)
 cat > "$_launcher_tmp" <<'LAUNCHER_EOF'
 #!/usr/bin/env bash
-# hugin — Hugin agent launcher (installed by install.sh)
+# bouw — Bouw agent launcher (installed by install.sh)
 #
 # Commands:
-#   hugin [run]    start service if needed
-#   hugin serve    run server in the foreground (no service manager)
-#   hugin start / stop / restart / status / logs
-#   hugin version  print the installed Hugin version
-#   hugin config   re-prompt for credentials, restart service
-#   hugin doctor   health-check every subsystem; auto-fix what it can
-#   hugin uninstall
+#   bouw [run]    start service if needed
+#   bouw serve    run server in the foreground (no service manager)
+#   bouw start / stop / restart / status / logs
+#   bouw version  print the installed Bouw version
+#   bouw config   re-prompt for credentials, restart service
+#   bouw doctor   health-check every subsystem; auto-fix what it can
+#   bouw uninstall
 set -euo pipefail
 
-HUGIN_HOME="${HUGIN_HOME:-__HUGIN_HOME__}"
-ENV_FILE="$HUGIN_HOME/hugin.env"
-CONFIG_YML="$HUGIN_HOME/config/application.yml"
+BOUW_HOME="${BOUW_HOME:-__BOUW_HOME__}"
+ENV_FILE="$BOUW_HOME/bouw.env"
+CONFIG_YML="$BOUW_HOME/config/application.yml"
 SERVICE_NAME="__SERVICE_NAME__"
 LAUNCHER_PATH="__LAUNCHER_PATH__"
 REPO_DIR="__REPO_DIR__"
-HUGIN_VERSION="__HUGIN_VERSION__"
+BOUW_VERSION="__BOUW_VERSION__"
 
-info()    { printf '\033[1;34m[hugin]\033[0m %s\n' "$*"; }
-success() { printf '\033[1;32m[hugin]\033[0m %s\n' "$*"; }
-warn()    { printf '\033[1;33m[hugin]\033[0m %s\n' "$*"; }
-die()     { printf '\033[1;31m[hugin]\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\033[1;34m[bouw]\033[0m %s\n' "$*"; }
+success() { printf '\033[1;32m[bouw]\033[0m %s\n' "$*"; }
+warn()    { printf '\033[1;33m[bouw]\033[0m %s\n' "$*"; }
+die()     { printf '\033[1;31m[bouw]\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ── OS detection + service helpers ───────────────────────────────────────────
 OS_TYPE="linux"
@@ -1270,14 +1270,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 if [[ "$OS_TYPE" == "macos" ]]; then
-  PLIST_LABEL="com.hugin.agent"
+  PLIST_LABEL="com.bouw.agent"
   PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
   svc_start()     { launchctl start "$PLIST_LABEL"; }
   svc_stop()      { launchctl stop  "$PLIST_LABEL" 2>/dev/null || true; }
   svc_restart()   { svc_stop; sleep 1; svc_start; }
   svc_status()    { launchctl list "$PLIST_LABEL" 2>/dev/null || echo "not loaded"; }
-  svc_logs()      { exec tail -f "$HUGIN_HOME/logs/hugin.log"; }
+  svc_logs()      { exec tail -f "$BOUW_HOME/logs/bouw.log"; }
   svc_is_active() { launchctl list 2>/dev/null | grep -q "$PLIST_LABEL"; }
   svc_is_enabled(){ [[ -f "$PLIST_PATH" ]]; }
   svc_enable()    { launchctl load -w "$PLIST_PATH" 2>/dev/null || true; }
@@ -1287,10 +1287,10 @@ if [[ "$OS_TYPE" == "macos" ]]; then
     rm -f "$PLIST_PATH"
   }
 
-  DISCORD_PLIST_LABEL="com.hugin.discord"
+  DISCORD_PLIST_LABEL="com.bouw.discord"
   DISCORD_PLIST_PATH="$HOME/Library/LaunchAgents/${DISCORD_PLIST_LABEL}.plist"
 
-  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$HUGIN_HOME/hugin.env}" 2>/dev/null; }
+  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$BOUW_HOME/bouw.env}" 2>/dev/null; }
   discord_svc_is_active() { launchctl list 2>/dev/null | grep -q "$DISCORD_PLIST_LABEL"; }
   discord_svc_stop()      { launchctl stop "$DISCORD_PLIST_LABEL" 2>/dev/null || true; }
   discord_svc_start()     { discord_has_token && launchctl start "$DISCORD_PLIST_LABEL" 2>/dev/null || true; }
@@ -1316,11 +1316,11 @@ else
     sudo systemctl daemon-reload
   }
 
-  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$HUGIN_HOME/hugin.env}" 2>/dev/null; }
-  discord_svc_is_active() { systemctl is-active --quiet hugin-discord 2>/dev/null; }
-  discord_svc_stop()      { sudo systemctl stop hugin-discord 2>/dev/null || true; }
-  discord_svc_start()     { discord_has_token && sudo systemctl start hugin-discord 2>/dev/null || true; }
-  discord_svc_restart()   { sudo systemctl restart hugin-discord 2>/dev/null || true; }
+  discord_has_token() { grep -qE '^DISCORD_BOT_TOKEN=.+' "${ENV_FILE:-$BOUW_HOME/bouw.env}" 2>/dev/null; }
+  discord_svc_is_active() { systemctl is-active --quiet bouw-discord 2>/dev/null; }
+  discord_svc_stop()      { sudo systemctl stop bouw-discord 2>/dev/null || true; }
+  discord_svc_start()     { discord_has_token && sudo systemctl start bouw-discord 2>/dev/null || true; }
+  discord_svc_restart()   { sudo systemctl restart bouw-discord 2>/dev/null || true; }
 
   pkg_install_redis()  { sudo apt-get install -y redis-server; }
   svc_start_redis()    { sudo systemctl enable --now redis-server; }
@@ -1337,7 +1337,7 @@ wait_for_health() {
   local max="${1:-45}" elapsed=0
   until curl -sf http://localhost:8080/actuator/health >/dev/null 2>&1; do
     elapsed=$((elapsed + 1))
-    [[ $elapsed -ge $max ]] && { warn "Server did not respond within ${max}s. Try: hugin logs"; return 1; }
+    [[ $elapsed -ge $max ]] && { warn "Server did not respond within ${max}s. Try: bouw logs"; return 1; }
     sleep 1
   done
 }
@@ -1356,7 +1356,7 @@ cmd_run() {
 
 cmd_serve() {
   load_env
-  exec java -jar "$HUGIN_HOME/bin/hugin-server.jar" \
+  exec java -jar "$BOUW_HOME/bin/bouw-server.jar" \
     "--spring.config.additional-location=file:${CONFIG_YML}"
 }
 
@@ -1371,7 +1371,7 @@ resolve_installed_version() {
   if [[ -f "$package_json" ]]; then
     version=$(grep -m1 '"version"' "$package_json" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)
   fi
-  [[ -n "$version" ]] && echo "$version" || echo "$HUGIN_VERSION"
+  [[ -n "$version" ]] && echo "$version" || echo "$BOUW_VERSION"
 }
 cmd_version() { resolve_installed_version; }
 
@@ -1439,8 +1439,8 @@ process.stdout.write(asset.browser_download_url);
 }
 
 download_release_bundle() {
-  local slug="${HUGIN_RELEASE_REPO_SLUG:-}"
-  local release_url="${HUGIN_RELEASE_API_URL:-}"
+  local slug="${BOUW_RELEASE_REPO_SLUG:-}"
+  local release_url="${BOUW_RELEASE_API_URL:-}"
   local release_json manifest_url manifest_json bundle_url sha_url source_sha bundle_tmp bundle_dir actual_sha expected_sha
   if [[ -z "$slug" ]]; then
     slug="$(repo_slug_from_origin)" || return 1
@@ -1450,29 +1450,29 @@ download_release_bundle() {
   fi
 
   release_json="$(github_api_get "$release_url")" || return 1
-  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-manifest.json")" || return 1
+  manifest_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-manifest.json")" || return 1
   manifest_json="$(github_api_get "$manifest_url")" || return 1
   source_sha="$(printf '%s' "$manifest_json" | json_get_field "source_sha")" || return 1
-  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz")" || return 1
-  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "hugin-runtime.tar.gz.sha256" 2>/dev/null || true)"
+  bundle_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-runtime.tar.gz")" || return 1
+  sha_url="$(printf '%s' "$release_json" | json_find_asset_url "bouw-runtime.tar.gz.sha256" 2>/dev/null || true)"
 
   bundle_tmp="$(mktemp -d)"
   bundle_dir="$bundle_tmp/bundle"
   mkdir -p "$bundle_dir"
-  curl -fsSL "$bundle_url" -o "$bundle_tmp/hugin-runtime.tar.gz"
+  curl -fsSL "$bundle_url" -o "$bundle_tmp/bouw-runtime.tar.gz"
   if [[ -n "$sha_url" ]]; then
     expected_sha="$(github_api_get "$sha_url" | awk '{print $1}')"
     if command -v sha256sum >/dev/null 2>&1; then
-      actual_sha="$(sha256sum "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+      actual_sha="$(sha256sum "$bundle_tmp/bouw-runtime.tar.gz" | awk '{print $1}')"
     else
-      actual_sha="$(shasum -a 256 "$bundle_tmp/hugin-runtime.tar.gz" | awk '{print $1}')"
+      actual_sha="$(shasum -a 256 "$bundle_tmp/bouw-runtime.tar.gz" | awk '{print $1}')"
     fi
     if [[ "$expected_sha" != "$actual_sha" ]]; then
       rm -rf "$bundle_tmp"
       die "Release bundle checksum mismatch."
     fi
   fi
-  tar -xzf "$bundle_tmp/hugin-runtime.tar.gz" -C "$bundle_dir"
+  tar -xzf "$bundle_tmp/bouw-runtime.tar.gz" -C "$bundle_dir"
 
   RELEASE_BUNDLE_SOURCE_SHA="$source_sha"
   RELEASE_BUNDLE_TMP="$bundle_tmp"
@@ -1483,9 +1483,9 @@ download_release_bundle() {
 
 install_release_bundle() {
   local bundle_dir="$1"
-  cp "$bundle_dir"/hugin-server.jar "$HUGIN_HOME/bin/hugin-server.jar"
+  cp "$bundle_dir"/bouw-server.jar "$BOUW_HOME/bin/bouw-server.jar"
   if [[ -f "$bundle_dir/agent-discord.jar" ]]; then
-    cp "$bundle_dir/agent-discord.jar" "$HUGIN_HOME/bin/agent-discord.jar"
+    cp "$bundle_dir/agent-discord.jar" "$BOUW_HOME/bin/agent-discord.jar"
   fi
 }
 
@@ -1577,14 +1577,14 @@ NEW_RELIC_TOKEN=${NEW_RELIC_TOKEN:-}
 NEW_RELIC_ENABLED=${NEW_RELIC_ENABLED:-false}
 GOOGLE_OAUTH_CLIENT_SECRETS_FILE=${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:-${existing_google_oauth_client_secrets_file:-}}
 GOOGLE_OAUTH_TOKEN_DIR=${GOOGLE_OAUTH_TOKEN_DIR:-${existing_google_oauth_token_dir:-}}
-AGENT_HOME=${HUGIN_HOME}
-DB_URL=jdbc:h2:file:${HUGIN_HOME}/db/hugin
+AGENT_HOME=${BOUW_HOME}
+DB_URL=jdbc:h2:file:${BOUW_HOME}/db/bouw
 ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
 JWT_SECRET=${JWT_SECRET:-}
 ENV
   chmod 600 "$ENV_FILE"
-  success "hugin.env updated."
+  success "bouw.env updated."
   if svc_is_active 2>/dev/null; then
     info "Restarting service..."
     svc_restart
@@ -1603,7 +1603,7 @@ cmd_doctor() {
   _dr_fixed() { printf '  \033[1;34m→ [fixed]\033[0m %s\n' "$*"; _fixes=$((_fixes + 1)); }
   _dr_note()  { printf '  \033[1;33m⚠\033[0m %s\n' "$*"; }
 
-  printf '\033[1;34m─── Hugin Doctor ───────────────────────────────────────────────────────\033[0m\n'
+  printf '\033[1;34m─── Bouw Doctor ───────────────────────────────────────────────────────\033[0m\n'
   echo
 
   # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -1621,11 +1621,11 @@ cmd_doctor() {
   printf '\033[1;34m[Files]\033[0m\n'
 
   for _d in bin config workspace logs; do
-    if [[ -d "$HUGIN_HOME/$_d" ]]; then
-      _dr_pass "~/.hugin/$_d/"
+    if [[ -d "$BOUW_HOME/$_d" ]]; then
+      _dr_pass "~/.bouw/$_d/"
     else
-      mkdir -p "$HUGIN_HOME/$_d"
-      _dr_fixed "Created missing directory ~/.hugin/$_d/"
+      mkdir -p "$BOUW_HOME/$_d"
+      _dr_fixed "Created missing directory ~/.bouw/$_d/"
     fi
   done
 
@@ -1634,18 +1634,18 @@ cmd_doctor() {
                            || stat -f '%OLp' "$ENV_FILE" 2>/dev/null \
                            || echo "unknown")
     if [[ "$_perms" == "600" ]]; then
-      _dr_pass "hugin.env (permissions 600)"
+      _dr_pass "bouw.env (permissions 600)"
     else
       chmod 600 "$ENV_FILE"
-      _dr_fixed "Fixed hugin.env permissions ($_perms → 600)"
+      _dr_fixed "Fixed bouw.env permissions ($_perms → 600)"
     fi
     if grep -qE '^OPEN_ROUTER_API_KEY=.+' "$ENV_FILE" 2>/dev/null; then
       _dr_pass "OPEN_ROUTER_API_KEY is set"
     else
-      _dr_fail "OPEN_ROUTER_API_KEY is missing or empty — run: hugin config"
+      _dr_fail "OPEN_ROUTER_API_KEY is missing or empty — run: bouw config"
     fi
   else
-    _dr_fail "hugin.env not found at $ENV_FILE — run: hugin config  or re-run install.sh"
+    _dr_fail "bouw.env not found at $ENV_FILE — run: bouw config  or re-run install.sh"
   fi
 
   if [[ -f "$CONFIG_YML" ]]; then
@@ -1654,11 +1654,11 @@ cmd_doctor() {
     _dr_fail "config/application.yml not found — re-run install.sh"
   fi
 
-  if [[ -f "$HUGIN_HOME/bin/hugin-server.jar" ]]; then
-    local _sz; _sz=$(du -sh "$HUGIN_HOME/bin/hugin-server.jar" | cut -f1)
-    _dr_pass "hugin-server.jar ($_sz)"
+  if [[ -f "$BOUW_HOME/bin/bouw-server.jar" ]]; then
+    local _sz; _sz=$(du -sh "$BOUW_HOME/bin/bouw-server.jar" | cut -f1)
+    _dr_pass "bouw-server.jar ($_sz)"
   else
-    _dr_fail "hugin-server.jar not found — rebuild: mvn clean package -DskipTests && re-run install.sh"
+    _dr_fail "bouw-server.jar not found — rebuild: mvn clean package -DskipTests && re-run install.sh"
   fi
 
   echo
@@ -1698,10 +1698,10 @@ cmd_doctor() {
       if svc_is_active 2>/dev/null; then
         _dr_fixed "Service started successfully"
       else
-        _dr_fail "Service started but exited — check: hugin logs"
+        _dr_fail "Service started but exited — check: bouw logs"
       fi
     else
-      _dr_fail "Could not start service — check: hugin logs"
+      _dr_fail "Could not start service — check: bouw logs"
     fi
   fi
 
@@ -1730,7 +1730,7 @@ cmd_doctor() {
         local _conflict; _conflict=$(lsof -iTCP:8080 -sTCP:LISTEN 2>/dev/null | tail -1 || true)
         [[ -n "$_conflict" ]] && _dr_fail "Port 8080 in use by another process: $_conflict"
       fi
-      _dr_note "Tip: inspect with  hugin logs"
+      _dr_note "Tip: inspect with  bouw logs"
     fi
   fi
 
@@ -1783,7 +1783,7 @@ cmd_doctor() {
   # Prefer a direct docker call (works when in the docker group); fall back to non-interactive
   # sudo so the check never hangs waiting for a password.
   _docker() { docker "$@" 2>/dev/null || sudo -n docker "$@" 2>/dev/null; }
-  _sandbox_image="${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}"
+  _sandbox_image="${BOUW_SANDBOX_IMAGE:-bouw-agent-sandbox:latest}"
   if command -v docker >/dev/null 2>&1; then
     _dr_pass "Docker CLI present ($(docker --version 2>/dev/null | head -1))"
     if _docker info >/dev/null 2>&1; then
@@ -1807,13 +1807,13 @@ cmd_doctor() {
   printf '\033[1;34m────────────────────────────────────────────────────────────────────────\033[0m\n'
   if [[ $_fails -eq 0 ]]; then
     if [[ $_fixes -gt 0 ]]; then
-      success "All checks passed after $_fixes auto-fix(es). Hugin is healthy."
+      success "All checks passed after $_fixes auto-fix(es). Bouw is healthy."
     else
-      success "All checks passed. Hugin is healthy."
+      success "All checks passed. Bouw is healthy."
     fi
   else
     warn "$_fails check(s) failed, $_fixes item(s) auto-fixed."
-    warn "Address the failures above, then re-run:  hugin doctor"
+    warn "Address the failures above, then re-run:  bouw doctor"
     return 1
   fi
 }
@@ -1869,7 +1869,7 @@ cmd_update() {
   if [[ "$bundle_ready" == "true" ]]; then
     install_release_bundle "$release_dir"
   else
-    cp "$REPO_DIR"/backend/target/hugin-backend-*.jar  "$HUGIN_HOME/bin/hugin-server.jar"
+    cp "$REPO_DIR"/backend/target/bouw-backend-*.jar  "$BOUW_HOME/bin/bouw-server.jar"
   fi
 
   local new_version
@@ -1879,21 +1879,21 @@ cmd_update() {
     new_source_sha="$RELEASE_BUNDLE_SOURCE_SHA"
   fi
   if [[ -f "$ENV_FILE" ]]; then
-    if grep -q '^HUGIN_VERSION=' "$ENV_FILE"; then
-      sed -i.bak -E "s|^HUGIN_VERSION=.*|HUGIN_VERSION=${new_version}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    if grep -q '^BOUW_VERSION=' "$ENV_FILE"; then
+      sed -i.bak -E "s|^BOUW_VERSION=.*|BOUW_VERSION=${new_version}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
     else
-      printf '\nHUGIN_VERSION=%s\n' "$new_version" >> "$ENV_FILE"
+      printf '\nBOUW_VERSION=%s\n' "$new_version" >> "$ENV_FILE"
     fi
-    if grep -q '^HUGIN_UPDATE_SOURCE_SHA=' "$ENV_FILE"; then
-      sed -i.bak -E "s|^HUGIN_UPDATE_SOURCE_SHA=.*|HUGIN_UPDATE_SOURCE_SHA=${new_source_sha}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    if grep -q '^BOUW_UPDATE_SOURCE_SHA=' "$ENV_FILE"; then
+      sed -i.bak -E "s|^BOUW_UPDATE_SOURCE_SHA=.*|BOUW_UPDATE_SOURCE_SHA=${new_source_sha}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
     else
-      printf 'HUGIN_UPDATE_SOURCE_SHA=%s\n' "$new_source_sha" >> "$ENV_FILE"
+      printf 'BOUW_UPDATE_SOURCE_SHA=%s\n' "$new_source_sha" >> "$ENV_FILE"
     fi
-    if ! grep -q '^HUGIN_REPO_DIR=' "$ENV_FILE"; then
-      printf 'HUGIN_REPO_DIR=%s\n' "$REPO_DIR" >> "$ENV_FILE"
+    if ! grep -q '^BOUW_REPO_DIR=' "$ENV_FILE"; then
+      printf 'BOUW_REPO_DIR=%s\n' "$REPO_DIR" >> "$ENV_FILE"
     fi
-    if ! grep -q '^HUGIN_LAUNCHER_PATH=' "$ENV_FILE"; then
-      printf 'HUGIN_LAUNCHER_PATH=%s\n' "$LAUNCHER_PATH" >> "$ENV_FILE"
+    if ! grep -q '^BOUW_LAUNCHER_PATH=' "$ENV_FILE"; then
+      printf 'BOUW_LAUNCHER_PATH=%s\n' "$LAUNCHER_PATH" >> "$ENV_FILE"
     fi
   fi
   success "Jars and scripts updated."
@@ -1904,12 +1904,12 @@ cmd_update() {
     local elapsed=0
     until curl -sf http://localhost:8080/actuator/health >/dev/null 2>&1; do
       elapsed=$((elapsed + 1))
-      [[ $elapsed -ge 60 ]] && { warn "Server did not respond within 60s. Try: hugin logs"; return 1; }
+      [[ $elapsed -ge 60 ]] && { warn "Server did not respond within 60s. Try: bouw logs"; return 1; }
       sleep 1
     done
     success "Service restarted and healthy."
   else
-    info "Service was not running — start it with: hugin start"
+    info "Service was not running — start it with: bouw start"
   fi
 
   if [[ -n "${RELEASE_BUNDLE_TMP:-}" ]]; then
@@ -1922,13 +1922,13 @@ cmd_uninstall() {
   svc_uninstall
   sudo_retry --reason "remove launcher from $LAUNCHER_PATH" rm -f "$LAUNCHER_PATH"
   success "Service and launcher removed."
-  if [[ -d "$HUGIN_HOME" ]]; then
-    printf '\033[1;35m   >\033[0m Delete %s? [y/N] ' "$HUGIN_HOME"
+  if [[ -d "$BOUW_HOME" ]]; then
+    printf '\033[1;35m   >\033[0m Delete %s? [y/N] ' "$BOUW_HOME"
     read -r _c; echo
     if [[ "$(echo "$_c" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-      rm -rf "$HUGIN_HOME"; success "$HUGIN_HOME deleted."
+      rm -rf "$BOUW_HOME"; success "$BOUW_HOME deleted."
     else
-      info "Kept $HUGIN_HOME."
+      info "Kept $BOUW_HOME."
     fi
   fi
 }
@@ -1950,7 +1950,7 @@ case "$CMD" in
   uninstall) cmd_uninstall ;;
   *)
     cat <<USAGE
-Usage: hugin [command]
+Usage: bouw [command]
 
   (none) / run   Start service if needed
   serve          Run the server in the foreground (no service manager)
@@ -1959,11 +1959,11 @@ Usage: hugin [command]
   restart        Restart the background service
   status         Show service status
   logs           Stream service logs
-  version        Print the installed Hugin version
+  version        Print the installed Bouw version
   config         Reconfigure credentials, restart service
   update         Pull latest code, rebuild jars, restart service
   doctor         Check every subsystem; auto-fix what it can
-  uninstall      Remove service, launcher, and optionally ~/.hugin
+  uninstall      Remove service, launcher, and optionally ~/.bouw
 USAGE
     exit 1
     ;;
@@ -1972,11 +1972,11 @@ LAUNCHER_EOF
 
 # Substitute the install-time paths into the temp file, then copy to final location
 SED_INPLACE \
-  -e "s|__HUGIN_HOME__|${HUGIN_HOME}|g" \
+  -e "s|__BOUW_HOME__|${BOUW_HOME}|g" \
   -e "s|__SERVICE_NAME__|${SERVICE_NAME}|g" \
   -e "s|__LAUNCHER_PATH__|${LAUNCHER_PATH}|g" \
   -e "s|__REPO_DIR__|${REPO_DIR}|g" \
-  -e "s|__HUGIN_VERSION__|${HUGIN_VERSION}|g" \
+  -e "s|__BOUW_VERSION__|${BOUW_VERSION}|g" \
   "$_launcher_tmp"
 if [[ -w "$LAUNCHER_PATH" || -w "$(dirname "$LAUNCHER_PATH")" ]]; then
   cp "$_launcher_tmp" "$LAUNCHER_PATH"
@@ -1993,16 +1993,16 @@ info "Installing auto-update helper..."
 _update_tmp=$(mktemp)
 cat > "$_update_tmp" <<'UPDATE_EOF'
 #!/usr/bin/env bash
-# hugin-auto-update — pull from origin/main when new commits are available.
+# bouw-auto-update — pull from origin/main when new commits are available.
 set -euo pipefail
 
-HUGIN_HOME="${HUGIN_HOME:-__HUGIN_HOME__}"
+BOUW_HOME="${BOUW_HOME:-__BOUW_HOME__}"
 REPO_DIR="__REPO_DIR__"
 LAUNCHER_PATH="__LAUNCHER_PATH__"
 
-info() { printf '\033[1;34m[hugin-update]\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m[hugin-update]\033[0m %s\n' "$*"; }
-die()  { printf '\033[1;31m[hugin-update]\033[0m %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[1;34m[bouw-update]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[bouw-update]\033[0m %s\n' "$*"; }
+die()  { printf '\033[1;31m[bouw-update]\033[0m %s\n' "$*" >&2; exit 1; }
 
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   die "Repo not found at $REPO_DIR."
@@ -2017,8 +2017,8 @@ git -C "$REPO_DIR" fetch origin main --prune
 
 remote_head="$(git -C "$REPO_DIR" rev-parse origin/main)"
 installed_head=""
-if [[ -f "$HUGIN_HOME/hugin.env" ]]; then
-  installed_head="$(grep -E '^HUGIN_UPDATE_SOURCE_SHA=' "$HUGIN_HOME/hugin.env" 2>/dev/null | cut -d= -f2- || true)"
+if [[ -f "$BOUW_HOME/bouw.env" ]]; then
+  installed_head="$(grep -E '^BOUW_UPDATE_SOURCE_SHA=' "$BOUW_HOME/bouw.env" 2>/dev/null | cut -d= -f2- || true)"
 fi
 
 if [[ -n "$installed_head" && "$installed_head" == "$remote_head" ]]; then
@@ -2034,7 +2034,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tmp_worktree="$(mktemp -d "${TMPDIR:-/tmp}/hugin-update.XXXXXX")"
+tmp_worktree="$(mktemp -d "${TMPDIR:-/tmp}/bouw-update.XXXXXX")"
 info "Checking out origin/main at ${remote_head:0:7} into a temporary worktree..."
 git -C "$REPO_DIR" worktree add --detach "$tmp_worktree" "$remote_head" >/dev/null
 
@@ -2044,7 +2044,7 @@ bash "$tmp_worktree/install.sh" --reinstall
 info "Auto-update completed successfully."
 UPDATE_EOF
 SED_INPLACE \
-  -e "s|__HUGIN_HOME__|${HUGIN_HOME}|g" \
+  -e "s|__BOUW_HOME__|${BOUW_HOME}|g" \
   -e "s|__REPO_DIR__|${REPO_DIR}|g" \
   -e "s|__LAUNCHER_PATH__|${LAUNCHER_PATH}|g" \
   "$_update_tmp"
@@ -2083,27 +2083,27 @@ wait_for_health 60
 # ── done ──────────────────────────────────────────────────────────────────────
 echo
 printf '\033[1;32m══════════════════════════════════════════════════════════════════\033[0m\n'
-printf '\033[1;32m  Hugin is running at http://localhost:8080\033[0m\n'
+printf '\033[1;32m  Bouw is running at http://localhost:8080\033[0m\n'
 printf '\033[1;32m══════════════════════════════════════════════════════════════════\033[0m\n'
 echo
 cat <<MSG
   Dashboard:            http://localhost:8080
-  Start chatting:       hugin
-  Server in foreground: hugin serve
-  Service status/logs:  hugin status  |  hugin logs
-  Auto-update logs:     tail -f $HUGIN_HOME/logs/hugin-update.log
-  Health check:         hugin doctor
-  Reconfigure:          hugin config
-  Update (rebuild):     hugin update
-  Workspace:            $HUGIN_HOME/workspace
-  Config:               $HUGIN_HOME/config/
+  Start chatting:       bouw
+  Server in foreground: bouw serve
+  Service status/logs:  bouw status  |  bouw logs
+  Auto-update logs:     tail -f $BOUW_HOME/logs/bouw-update.log
+  Health check:         bouw doctor
+  Reconfigure:          bouw config
+  Update (rebuild):     bouw update
+  Workspace:            $BOUW_HOME/workspace
+  Config:               $BOUW_HOME/config/
   Env vars:             $ENV_FILE
-  Uninstall:            hugin uninstall
+  Uninstall:            bouw uninstall
 MSG
 echo
 
 if [[ "$DOCKER_GROUP_PENDING" == "true" ]]; then
-  warn "Added $INSTALL_USER to the 'docker' group. The hugin service already picks this up,"
+  warn "Added $INSTALL_USER to the 'docker' group. The bouw service already picks this up,"
   warn "but to run 'docker' yourself without sudo, log out and back in (or run: newgrp docker)."
   echo
 fi

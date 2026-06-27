@@ -19,7 +19,7 @@ import { isMockMode } from "../mocks/env";
 const buildGitHubBugReportPrompt = (report: BugReportSummary) =>
   [
     `A bug report has been added to this repository checkout at \`${report.relativePath}\`.`,
-    "Before making changes, read `docs/skills/hugin-bug-reports/SKILL.md` and use that skill's workflow to inspect the bug report.",
+    "Before making changes, read `docs/skills/bouw-bug-reports/SKILL.md` and use that skill's workflow to inspect the bug report.",
     "Then diagnose the failure, add or update a regression test that covers it, and implement the fix."
   ].join(" ");
 

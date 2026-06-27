@@ -3397,7 +3397,7 @@ select {
   gap: 6px;
 }
 
-.mcp-tool-hugin {
+.mcp-tool-bouw {
   font-family: var(--font-mono, monospace);
   font-size: calc(12px * var(--font-scale));
   color: #1c1f23;

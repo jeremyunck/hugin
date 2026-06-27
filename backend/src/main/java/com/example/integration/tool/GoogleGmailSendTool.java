@@ -34,7 +34,7 @@ public class GoogleGmailSendTool implements LocalTool {
     @Override
     public String description() {
         return "Send a Gmail message with plain-text body. Provide 'to' and 'subject' for a new email, "
-                + "or 'reply_to_message_id' to reply to an existing Gmail message and let Hugin infer the "
+                + "or 'reply_to_message_id' to reply to an existing Gmail message and let Bouw infer the "
                 + "thread, subject, and recipient from the original email.";
     }
 
@@ -53,7 +53,7 @@ public class GoogleGmailSendTool implements LocalTool {
                         "bcc", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Optional BCC recipients."),
                         "reply_to_message_id", Map.of(
                                 "type", "string",
-                                "description", "Optional Gmail message id to reply to. Hugin uses the original message to infer the reply thread and recipient."),
+                                "description", "Optional Gmail message id to reply to. Bouw uses the original message to infer the reply thread and recipient."),
                         "thread_id", Map.of(
                                 "type", "string",
                                 "description", "Optional Gmail thread id. Usually inferred automatically when reply_to_message_id is provided.")),

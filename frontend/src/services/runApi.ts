@@ -3,7 +3,7 @@ import { apiFetch } from "./apiClient";
 
 // Compiled out of a normal build. The JSON reads route to fixtures via apiFetch; the raw-fetch
 // mutations below have no backend in mock mode and short-circuit to no-ops.
-const MOCK_MODE = import.meta.env.VITE_HUGIN_MOCK_MODE === "true";
+const MOCK_MODE = import.meta.env.VITE_BOUW_MOCK_MODE === "true";
 
 /** Lists the server home directory (~/) file tree backing the "Agent" chat mode. */
 export async function fetchAgentWorkspaceFiles(token: string): Promise<FileNode[]> {

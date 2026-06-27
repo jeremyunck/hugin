@@ -27,8 +27,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Docker-CLI implementation of {@link SandboxRuntime} for fully isolated project-chat sandboxes.
  *
- * <p>Every project chat receives its own container ({@code hugin-agent-<id>}) and named volume
- * ({@code hugin-agent-<id>-workspace}) mounted at {@code /workspace}. The repository is cloned
+ * <p>Every project chat receives its own container ({@code bouw-agent-<id>}) and named volume
+ * ({@code bouw-agent-<id>-workspace}) mounted at {@code /workspace}. The repository is cloned
  * <em>inside</em> the container at {@code /workspace/repo}; nothing is written to the host. All tool
  * execution — bash, git, and file read/write/list — runs through {@code docker exec}, so the host
  * filesystem is never touched for a project chat.
@@ -57,7 +57,7 @@ public class DockerSandboxRuntime implements SandboxRuntime {
     public SandboxSession create(String chatSessionId, RepositoryConfig repository) {
         if (!properties.enabled()) {
             throw new IllegalStateException(
-                    "Project sandboxes are disabled. Set hugin.sandbox.enabled=true to enable them.");
+                    "Project sandboxes are disabled. Set bouw.sandbox.enabled=true to enable them.");
         }
         if (repository == null || repository.cloneUrl() == null || repository.cloneUrl().isBlank()) {
             throw new IllegalArgumentException("A repository clone URL is required to create a sandbox.");
@@ -202,10 +202,10 @@ public class DockerSandboxRuntime implements SandboxRuntime {
             return;
         }
         String tokenB64 = Base64.getEncoder().encodeToString(token.getBytes(StandardCharsets.UTF_8));
-        String tokenFile = "$HOME/.config/hugin/github-token";
+        String tokenFile = "$HOME/.config/bouw/github-token";
         String helper = "!f() { echo username=x-access-token; echo password=$(cat " + tokenFile + "); }; f";
         String script = "umask 077"
-                + " && mkdir -p \"$HOME/.config/hugin\""
+                + " && mkdir -p \"$HOME/.config/bouw\""
                 + " && printf %s " + shellQuote(tokenB64) + " | base64 -d > \"" + tokenFile + "\""
                 + " && git config --global credential.helper " + shellQuote(helper);
 
@@ -245,16 +245,16 @@ public class DockerSandboxRuntime implements SandboxRuntime {
         String target = resolveInRepo(path);
         // base64-encode in the container so arbitrary bytes survive transport intact.
         String cmd = "if [ -f " + shellQuote(target) + " ]; then base64 " + shellQuote(target)
-                + "; else echo __HUGIN_MISSING__; fi";
+                + "; else echo __BOUW_MISSING__; fi";
         ProcessResult result = run(List.of(properties.dockerBin(), "exec",
                 properties.containerName(sandboxId), "bash", "-lc", cmd), properties.execTimeout(), null);
         if (!result.ok()) {
             throw new RuntimeException("Failed to read file " + path + " in sandbox: " + result.output());
         }
         String out = result.output().strip();
-        if (out.equals("__HUGIN_MISSING__") || out.isEmpty()) {
+        if (out.equals("__BOUW_MISSING__") || out.isEmpty()) {
             // An empty file legitimately produces no base64 output; distinguish via the marker only.
-            if (out.equals("__HUGIN_MISSING__")) {
+            if (out.equals("__BOUW_MISSING__")) {
                 return FileResult.missing(path);
             }
             return FileResult.of(path, "", false);

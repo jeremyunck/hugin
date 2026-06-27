@@ -278,7 +278,7 @@ public class McpOAuthService {
                     + "client registration. Provide a clientId (and clientSecret) explicitly.");
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("client_name", "Hugin");
+        body.put("client_name", "Bouw");
         body.put("redirect_uris", java.util.List.of(redirectUri));
         body.put("grant_types", java.util.List.of("authorization_code", "refresh_token"));
         body.put("response_types", java.util.List.of("code"));

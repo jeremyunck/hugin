@@ -13,7 +13,7 @@ import java.util.Optional;
 /**
  * Persistence for {@link McpServerToolEntity}. Lookups are by {@code server_id} (owner isolation is
  * enforced one level up, since a server is already owner-scoped) or by the globally unique
- * {@code hugin_tool_name}.
+ * {@code bouw_tool_name}.
  */
 @Repository
 public class McpServerToolRepository {
@@ -27,7 +27,7 @@ public class McpServerToolRepository {
     public List<McpServerToolEntity> findByServer(String serverId) {
         return jdbcTemplate.query(
                 """
-                        select id, server_id, tool_name, hugin_tool_name, description, input_schema_json,
+                        select id, server_id, tool_name, bouw_tool_name, description, input_schema_json,
                                enabled, stale, last_seen_at
                         from mcp_server_tools
                         where server_id = ?
@@ -40,7 +40,7 @@ public class McpServerToolRepository {
     public Optional<McpServerToolEntity> findByServerAndToolName(String serverId, String toolName) {
         return jdbcTemplate.query(
                         """
-                                select id, server_id, tool_name, hugin_tool_name, description, input_schema_json,
+                                select id, server_id, tool_name, bouw_tool_name, description, input_schema_json,
                                        enabled, stale, last_seen_at
                                 from mcp_server_tools
                                 where server_id = ? and tool_name = ?
@@ -51,16 +51,16 @@ public class McpServerToolRepository {
                 .findFirst();
     }
 
-    public Optional<McpServerToolEntity> findByHuginToolName(String huginToolName) {
+    public Optional<McpServerToolEntity> findByBouwToolName(String bouwToolName) {
         return jdbcTemplate.query(
                         """
-                                select id, server_id, tool_name, hugin_tool_name, description, input_schema_json,
+                                select id, server_id, tool_name, bouw_tool_name, description, input_schema_json,
                                        enabled, stale, last_seen_at
                                 from mcp_server_tools
-                                where hugin_tool_name = ?
+                                where bouw_tool_name = ?
                                 """,
                         this::mapRow,
-                        huginToolName)
+                        bouwToolName)
                 .stream()
                 .findFirst();
     }
@@ -68,7 +68,7 @@ public class McpServerToolRepository {
     public Optional<McpServerToolEntity> findByIdAndServer(String id, String serverId) {
         return jdbcTemplate.query(
                         """
-                                select id, server_id, tool_name, hugin_tool_name, description, input_schema_json,
+                                select id, server_id, tool_name, bouw_tool_name, description, input_schema_json,
                                        enabled, stale, last_seen_at
                                 from mcp_server_tools
                                 where id = ? and server_id = ?
@@ -83,14 +83,14 @@ public class McpServerToolRepository {
         jdbcTemplate.update(
                 """
                         insert into mcp_server_tools
-                            (id, server_id, tool_name, hugin_tool_name, description, input_schema_json,
+                            (id, server_id, tool_name, bouw_tool_name, description, input_schema_json,
                              enabled, stale, last_seen_at)
                         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                 tool.id(),
                 tool.serverId(),
                 tool.toolName(),
-                tool.huginToolName(),
+                tool.bouwToolName(),
                 tool.description(),
                 tool.inputSchemaJson(),
                 tool.enabled(),
@@ -137,7 +137,7 @@ public class McpServerToolRepository {
                 rs.getString("id"),
                 rs.getString("server_id"),
                 rs.getString("tool_name"),
-                rs.getString("hugin_tool_name"),
+                rs.getString("bouw_tool_name"),
                 rs.getString("description"),
                 rs.getString("input_schema_json"),
                 rs.getBoolean("enabled"),

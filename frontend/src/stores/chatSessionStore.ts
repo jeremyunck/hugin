@@ -35,9 +35,9 @@ const DEFAULT_DEPS: ChatSessionDeps = {
   resolveChatApproval: defaultResolveApproval
 };
 
-const THREAD_INDEX_KEY = "hugin-ui-thread-index-v1";
-const LEGACY_STATE_KEY = "hugin-minimal-ui-state-v1";
-const ACTIVE_THREAD_KEY = "hugin-active-thread-v1";
+const THREAD_INDEX_KEY = "bouw-ui-thread-index-v1";
+const LEGACY_STATE_KEY = "bouw-minimal-ui-state-v1";
+const ACTIVE_THREAD_KEY = "bouw-active-thread-v1";
 
 type ThreadMeta = Pick<
   ChatThread,

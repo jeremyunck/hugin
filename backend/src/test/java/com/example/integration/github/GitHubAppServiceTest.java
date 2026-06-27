@@ -60,11 +60,11 @@ class GitHubAppServiceTest {
 
     @Test
     void installUrlUsesAppSlug() {
-        GitHubProperties props = new GitHubProperties("123", "my-hugin-app", "", "", null, null, null);
+        GitHubProperties props = new GitHubProperties("123", "my-bouw-app", "", "", null, null, null);
         GitHubAppService service = new GitHubAppService(props, new ObjectMapper());
 
         assertThat(service.installUrl(null))
-                .contains("https://github.com/apps/my-hugin-app/installations/new");
+                .contains("https://github.com/apps/my-bouw-app/installations/new");
         assertThat(service.installUrl("https://app.example.com/return"))
                 .get().asString().contains("state=");
     }
@@ -164,7 +164,7 @@ class GitHubAppServiceTest {
         PublicKey publicKey = KeyFactory.getInstance("RSA")
                 .generatePublic(new RSAPublicKeySpec(crt.getModulus(), crt.getPublicExponent()));
 
-        byte[] data = "hugin.github.app".getBytes(StandardCharsets.UTF_8);
+        byte[] data = "bouw.github.app".getBytes(StandardCharsets.UTF_8);
         Signature signer = Signature.getInstance("SHA256withRSA");
         signer.initSign(privateKey);
         signer.update(data);

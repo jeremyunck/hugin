@@ -70,13 +70,13 @@ abstract class AbstractMcpDbTest {
                 now);
     }
 
-    protected McpServerToolEntity newTool(String serverId, String toolName, String huginName,
+    protected McpServerToolEntity newTool(String serverId, String toolName, String bouwName,
                                           boolean enabled, boolean stale) {
         return new McpServerToolEntity(
                 UUID.randomUUID().toString(),
                 serverId,
                 toolName,
-                huginName,
+                bouwName,
                 "desc",
                 "{\"type\":\"object\",\"properties\":{}}",
                 enabled,

@@ -126,12 +126,12 @@ public class EmailVerificationService {
                     email, code);
             return;
         }
-        emailClient.send(email, "Your Hugin verification code", buildHtml(code));
+        emailClient.send(email, "Your Bouw verification code", buildHtml(code));
     }
 
     private static String buildHtml(String code) {
         return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#1c1f23\">"
-                + "<p>Your Hugin verification code is:</p>"
+                + "<p>Your Bouw verification code is:</p>"
                 + "<p style=\"font-size:32px;font-weight:700;letter-spacing:6px\">" + code + "</p>"
                 + "<p style=\"color:#8b9099;font-size:13px\">This code expires shortly. "
                 + "If you did not request it, you can ignore this email.</p>"

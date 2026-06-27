@@ -1,9 +1,9 @@
 ---
-name: hugin-bug-reports
+name: bouw-bug-reports
 description: Use when working in this repo and a user refers to a freshly reported bug or a file under `bug-reports/`. Covers locating the newest report, separating the original user request from the actual failure, and extracting concrete logs, stack traces, and repro clues that matter for the fix.
 ---
 
-# Hugin Bug Reports
+# Bouw Bug Reports
 
 Use this workflow when the user says things like "look at the bug I just reported" or points at `bug-reports/`.
 

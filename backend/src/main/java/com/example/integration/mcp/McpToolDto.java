@@ -6,7 +6,7 @@ import java.time.Instant;
 public record McpToolDto(
         String id,
         String toolName,
-        String huginToolName,
+        String bouwToolName,
         String description,
         boolean enabled,
         boolean stale,
@@ -16,7 +16,7 @@ public record McpToolDto(
         return new McpToolDto(
                 tool.id(),
                 tool.toolName(),
-                tool.huginToolName(),
+                tool.bouwToolName(),
                 tool.description(),
                 tool.enabled(),
                 tool.stale(),

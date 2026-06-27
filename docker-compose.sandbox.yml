@@ -1,26 +1,26 @@
-# Optional override that enables Hugin's per-session Docker sandboxes, including the fully isolated
+# Optional override that enables Bouw's per-session Docker sandboxes, including the fully isolated
 # project-chat (GitHub repository) sandboxes that clone the repo inside a dedicated container.
 #
 #   # Build the agent sandbox image once so new project chats have an image to run:
-#   docker build -t hugin-agent-sandbox:latest docker/sandbox
+#   docker build -t bouw-agent-sandbox:latest docker/sandbox
 #
 #   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
 #
 # ⚠️  WARNING: this mounts the host Docker socket (/var/run/docker.sock) into the
-# Hugin container. That gives the container — and therefore the agent running
+# Bouw container. That gives the container — and therefore the agent running
 # inside it — full control of the host's Docker daemon, which is effectively
 # root-equivalent access to the host. Only enable this on a machine you trust and
 # never expose such a deployment to untrusted users or the public internet.
 
 services:
-  hugin:
+  bouw:
     environment:
       SANDBOX_ENABLED: "true"
       # Image for the generic agent.sandbox.* bind-mount sandboxes (POST /api/sandboxes).
       SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ubuntu:24.04}
-      # Image for the isolated project-chat sandboxes (hugin.sandbox.*); build it from
+      # Image for the isolated project-chat sandboxes (bouw.sandbox.*); build it from
       # docker/sandbox/Dockerfile. Must be available to the host daemon.
-      HUGIN_SANDBOX_IMAGE: ${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}
+      BOUW_SANDBOX_IMAGE: ${BOUW_SANDBOX_IMAGE:-bouw-agent-sandbox:latest}
     volumes:
       # ⚠️  Host Docker control — see warning above.
       - /var/run/docker.sock:/var/run/docker.sock

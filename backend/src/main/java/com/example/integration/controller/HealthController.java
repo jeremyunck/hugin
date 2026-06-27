@@ -18,7 +18,7 @@ public class HealthController {
 
     private final String appName;
 
-    public HealthController(@Value("${spring.application.name:hugin}") String appName) {
+    public HealthController(@Value("${spring.application.name:bouw}") String appName) {
         this.appName = appName;
     }
 

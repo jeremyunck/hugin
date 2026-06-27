@@ -36,7 +36,7 @@ public class CredentialCipher {
     private final SecureRandom random = new SecureRandom();
 
     /** Built-in key material used only when no secret is configured (development convenience). */
-    private static final String DEVELOPMENT_FALLBACK_SECRET = "hugin-insecure-development-key";
+    private static final String DEVELOPMENT_FALLBACK_SECRET = "bouw-insecure-development-key";
 
     public CredentialCipher(@Value("${app.encryption.secret:}") String secret) {
         String effectiveSecret;

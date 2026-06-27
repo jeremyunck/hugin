@@ -80,7 +80,7 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
             Optional<GitHubAppService> github,
             Optional<SandboxSessionService> projectSessions,
             Optional<DockerSandboxRuntime> projectRuntime,
-            @Value("${agent.home:${user.home}/.hugin}") String agentHome) {
+            @Value("${agent.home:${user.home}/.bouw}") String agentHome) {
         this.properties = properties;
         this.workspaceRegistry = workspaceRegistry;
         this.workspaceFactory = workspaceFactory;
@@ -177,7 +177,7 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
         if (projectSessions.isEmpty() || projectRuntime.isEmpty() || !projectSessions.get().enabled()) {
             throw new IllegalStateException(
                     "Project chats require an isolated sandbox container, but the sandbox runtime is "
-                    + "unavailable or disabled (hugin.sandbox.enabled). There is no host fallback for "
+                    + "unavailable or disabled (bouw.sandbox.enabled). There is no host fallback for "
                     + "project chats.");
         }
         RepositoryConfig repository = new RepositoryConfig(cloneUrl, repoFullName, branch, accessToken);
@@ -277,7 +277,7 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
     }
 
     private String sandboxImage(String imageOverride) {
-        return imageOverride == null || imageOverride.isBlank() ? "hugin-agent-sandbox" : imageOverride;
+        return imageOverride == null || imageOverride.isBlank() ? "bouw-agent-sandbox" : imageOverride;
     }
 
     private static String statusLabel(com.example.agent.sandbox.SandboxStatus status) {
@@ -399,7 +399,7 @@ public class DockerSandboxManager implements SandboxRuntime, WorkspaceRehydrator
                 // fall back to the last persisted status
             }
         }
-        return new SandboxInfo(session.sandboxId(), containerNameOf(session), "hugin-agent-sandbox",
+        return new SandboxInfo(session.sandboxId(), containerNameOf(session), "bouw-agent-sandbox",
                 status, session.createdAt(), session.repositoryPath());
     }
 

@@ -68,11 +68,11 @@ public class McpToolRegistry implements OwnerScopedToolProvider {
      * server). The returned wrapper delegates execution to {@link McpToolInvoker}.
      */
     @Override
-    public LocalTool find(String owner, String huginToolName) {
-        if (owner == null || owner.isBlank() || huginToolName == null) {
+    public LocalTool find(String owner, String bouwToolName) {
+        if (owner == null || owner.isBlank() || bouwToolName == null) {
             return null;
         }
-        return toolRepository.findByHuginToolName(huginToolName)
+        return toolRepository.findByBouwToolName(bouwToolName)
                 .filter(tool -> tool.enabled() && !tool.stale())
                 .filter(tool -> serverRepository.findByIdAndOwner(tool.serverId(), owner)
                         .map(McpServerEntity::enabled)
@@ -91,7 +91,7 @@ public class McpToolRegistry implements OwnerScopedToolProvider {
 
         @Override
         public String name() {
-            return tool.huginToolName();
+            return tool.bouwToolName();
         }
 
         @Override
@@ -104,7 +104,7 @@ public class McpToolRegistry implements OwnerScopedToolProvider {
 
         @Override
         public Map<String, Object> inputSchema() {
-            return parseSchema(tool.huginToolName(), tool.inputSchemaJson());
+            return parseSchema(tool.bouwToolName(), tool.inputSchemaJson());
         }
 
         @Override
@@ -118,14 +118,14 @@ public class McpToolRegistry implements OwnerScopedToolProvider {
         public String execute(Map<String, Object> arguments, ToolContext ctx) {
             String owner = ctx == null ? null : ctx.username();
             if (owner == null || owner.isBlank()) {
-                return "MCP tool '" + tool.huginToolName() + "' requires an authenticated user.";
+                return "MCP tool '" + tool.bouwToolName() + "' requires an authenticated user.";
             }
-            return invoker.invoke(owner, tool.huginToolName(), arguments,
+            return invoker.invoke(owner, tool.bouwToolName(), arguments,
                     ctx.agentId(), ctx.sessionId());
         }
     }
 
-    private Map<String, Object> parseSchema(String huginToolName, String json) {
+    private Map<String, Object> parseSchema(String bouwToolName, String json) {
         if (json == null || json.isBlank()) {
             return Map.of("type", "object", "properties", Map.of());
         }
@@ -133,7 +133,7 @@ public class McpToolRegistry implements OwnerScopedToolProvider {
             Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<>() {});
             return parsed == null ? Map.of("type", "object", "properties", Map.of()) : parsed;
         } catch (Exception e) {
-            log.warn("Could not parse stored input schema for MCP tool {}: {}", huginToolName, e.getMessage());
+            log.warn("Could not parse stored input schema for MCP tool {}: {}", bouwToolName, e.getMessage());
             return Map.of("type", "object", "properties", Map.of());
         }
     }

@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Commit SHA from jeremyunck/hugin to deploy
+        description: Commit SHA from jeremyunck/bouw to deploy
         required: false
       ref:
-        description: Git ref from jeremyunck/hugin to deploy
+        description: Git ref from jeremyunck/bouw to deploy
         required: false
         default: refs/heads/main
 
@@ -21,7 +21,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch hugin-deploy workflow
+      - name: Dispatch bouw-deploy workflow
         if: >-
           ${{
             github.event_name == 'workflow_dispatch' ||
@@ -33,8 +33,8 @@ jobs:
           }}
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HUGIN_DEPLOY_REPO_DISPATCH_TOKEN }}
-          DEPLOY_REPO: jeremyunck/hugin-deploy
+          GH_TOKEN: ${{ secrets.BOUW_DEPLOY_REPO_DISPATCH_TOKEN }}
+          DEPLOY_REPO: jeremyunck/bouw-deploy
           SOURCE_REPOSITORY: ${{ github.repository }}
           SOURCE_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
           SOURCE_REF: ${{ inputs.ref || 'refs/heads/main' }}
@@ -48,7 +48,7 @@ jobs:
             --arg source_run_id "${SOURCE_RUN_ID}" \
             --arg source_run_url "${SOURCE_RUN_URL}" \
             '{
-              event_type: "hugin_deploy",
+              event_type: "bouw_deploy",
               client_payload: {
                 sha: $sha,
                 ref: $ref,

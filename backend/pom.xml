@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.example</groupId>
-    <artifactId>hugin-backend</artifactId>
+    <artifactId>bouw-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>hugin-backend</name>
-    <description>Hugin server – agent loop, HTTP API, and web dashboard</description>
+    <name>bouw-backend</name>
+    <description>Bouw server – agent loop, HTTP API, and web dashboard</description>
 
     <properties>
         <java.version>21</java.version>

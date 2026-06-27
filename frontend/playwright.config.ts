@@ -45,7 +45,7 @@ export default defineConfig({
   // Serve the mock build with `vite preview`. Locally we build first so `npm run screenshots` is a
   // single self-contained command; in CI the workflow has already run `npm run build:mock` as its own
   // step, so we just preview the existing bundle (no redundant rebuild). The mock build bakes in
-  // `VITE_HUGIN_MOCK_MODE=true`, so the app boots without a backend.
+  // `VITE_BOUW_MOCK_MODE=true`, so the app boots without a backend.
   webServer: {
     command: isCI ? "npm run preview:mock" : "npm run build:mock && npm run preview:mock",
     url: baseURL,

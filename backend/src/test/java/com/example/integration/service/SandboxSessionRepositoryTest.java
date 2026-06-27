@@ -35,7 +35,7 @@ class SandboxSessionRepositoryTest {
 
     private SandboxSession session(UUID id, UUID chatId, SandboxStatus status, Instant expiresAt) {
         Instant now = Instant.now();
-        return new SandboxSession(id, chatId, "cid-" + id, "hugin-agent-" + id, "hugin-agent-" + id + "-workspace",
+        return new SandboxSession(id, chatId, "cid-" + id, "bouw-agent-" + id, "bouw-agent-" + id + "-workspace",
                 "https://github.com/octo/repo.git", "main", "/workspace/repo", status, now, now, expiresAt);
     }
 
@@ -47,8 +47,8 @@ class SandboxSessionRepositoryTest {
         repository.save(saved);
 
         SandboxSession loaded = repository.findById(id.toString()).orElseThrow();
-        assertThat(loaded.containerName()).isEqualTo("hugin-agent-" + id);
-        assertThat(loaded.dockerVolumeName()).isEqualTo("hugin-agent-" + id + "-workspace");
+        assertThat(loaded.containerName()).isEqualTo("bouw-agent-" + id);
+        assertThat(loaded.dockerVolumeName()).isEqualTo("bouw-agent-" + id + "-workspace");
         assertThat(loaded.repositoryUrl()).isEqualTo("https://github.com/octo/repo.git");
         assertThat(loaded.repositoryPath()).isEqualTo("/workspace/repo");
         assertThat(loaded.status()).isEqualTo(SandboxStatus.READY);

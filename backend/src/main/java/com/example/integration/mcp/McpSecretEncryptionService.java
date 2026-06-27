@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
  *
  * <p>This reuses the application's existing AES-256-GCM {@link CredentialCipher} rather than
  * introducing a second key — the encryption secret is configured via {@code app.encryption.secret}
- * (which falls back to {@code HUGIN_SECRET_KEY}; see {@code application.yml}). A round-trip self-test
+ * (which falls back to {@code BOUW_SECRET_KEY}; see {@code application.yml}). A round-trip self-test
  * runs at startup so a broken cipher configuration fails fast with a clear message instead of
  * silently corrupting stored tokens.
  *
@@ -64,7 +64,7 @@ public class McpSecretEncryptionService {
         } catch (RuntimeException e) {
             throw new IllegalStateException(
                     "MCP secret encryption could not initialize. Set a stable app.encryption.secret "
-                            + "(HUGIN_SECRET_KEY / APP_ENCRYPTION_SECRET) so MCP bearer tokens can be "
+                            + "(BOUW_SECRET_KEY / APP_ENCRYPTION_SECRET) so MCP bearer tokens can be "
                             + "encrypted at rest. Cause: " + e.getMessage(), e);
         }
     }

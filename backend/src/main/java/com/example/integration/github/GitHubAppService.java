@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Authenticates Hugin to the GitHub REST API as a <b>GitHub App</b> and reports connection status.
+ * Authenticates Bouw to the GitHub REST API as a <b>GitHub App</b> and reports connection status.
  *
  * <p>Two token layers are involved:
  * <ul>
@@ -37,7 +37,7 @@ import java.util.Optional;
  * </ul>
  *
  * <p>All failures are non-fatal: when the App is unconfigured or unreachable the integration simply
- * reports itself inactive so the rest of Hugin keeps working.
+ * reports itself inactive so the rest of Bouw keeps working.
  */
 @Service
 public class GitHubAppService {

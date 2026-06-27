@@ -31,12 +31,12 @@ fi
 
 TMP_CRON="$(mktemp)"
 trap 'rm -f "${TMP_CRON}"' EXIT
-crontab -l 2>/dev/null | grep -v '# Hugin local stock tracker' > "${TMP_CRON}" || true
+crontab -l 2>/dev/null | grep -v '# Bouw local stock tracker' > "${TMP_CRON}" || true
 
 for time in "${TIMES[@]}"; do
   hour="${time%%:*}"
   minute="${time##*:}"
-  printf '%s %s * * * cd %q && ./run.sh %q >> %q 2>&1 # Hugin local stock tracker\n' \
+  printf '%s %s * * * cd %q && ./run.sh %q >> %q 2>&1 # Bouw local stock tracker\n' \
     "${minute}" "${hour}" "${ROOT}" "${CONFIG}" "${ROOT}/cron.log" >> "${TMP_CRON}"
 done
 

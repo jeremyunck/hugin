@@ -19,8 +19,8 @@ import java.util.UUID;
  * @param id              primary key
  * @param chatSessionId   the chat session this sandbox belongs to
  * @param containerId     the Docker container id (assigned once the container is started)
- * @param containerName   the Docker container name ({@code hugin-agent-<id>})
- * @param dockerVolumeName the Docker volume name ({@code hugin-agent-<id>-workspace})
+ * @param containerName   the Docker container name ({@code bouw-agent-<id>})
+ * @param dockerVolumeName the Docker volume name ({@code bouw-agent-<id>-workspace})
  * @param repositoryUrl   the clone URL of the repository checked out inside the container
  * @param repositoryBranch the branch checked out inside the container
  * @param repositoryPath  the absolute path of the checkout inside the container ({@code /workspace/repo})

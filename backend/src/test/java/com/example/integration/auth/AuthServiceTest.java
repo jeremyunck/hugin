@@ -44,7 +44,7 @@ class AuthServiceTest {
         }
         JwtEncoder jwtEncoder = new NimbusJwtEncoder(
                 new ImmutableSecret<>(new SecretKeySpec(keyBytes, "HmacSHA256")));
-        AuthJwtProperties jwtProperties = new AuthJwtProperties(null, "hugin", Duration.ofHours(12));
+        AuthJwtProperties jwtProperties = new AuthJwtProperties(null, "bouw", Duration.ofHours(12));
 
         authService = new AuthService(repository, verificationService, passwordEncoder, jwtEncoder, jwtProperties);
     }

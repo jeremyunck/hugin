@@ -1,11 +1,11 @@
 ---
-name: hugin-ui-screenshots
+name: bouw-ui-screenshots
 description: Use when working in this repo and needing to run the local frontend, verify a UI change, and capture a current screenshot for a PR. Covers starting the Vite app, choosing a mobile-sized viewport, and saving screenshot files into `docs/pr-screenshots`.
 ---
 
-# Hugin UI Screenshots
+# Bouw UI Screenshots
 
-Use this workflow when a Hugin frontend change needs a current screenshot from the local app.
+Use this workflow when a Bouw frontend change needs a current screenshot from the local app.
 
 ## Preconditions
 
@@ -38,14 +38,14 @@ Prefer a deterministic local browser capture over manual screenshots. This repo 
 Create a temporary capture tool:
 
 ```bash
-mkdir -p /tmp/hugin-playwright-shot
-npm --prefix /tmp/hugin-playwright-shot install playwright-core
+mkdir -p /tmp/bouw-playwright-shot
+npm --prefix /tmp/bouw-playwright-shot install playwright-core
 ```
 
 Capture the mobile chat screen:
 
 ```bash
-node -e "const { chromium, devices } = require('/tmp/hugin-playwright-shot/node_modules/playwright-core'); (async() => { const browser = await chromium.launch({ executablePath: '/Users/jnku/Library/Caches/ms-playwright/chromium-1223/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing', headless: true }); const page = await browser.newPage(devices['iPhone 12']); await page.goto('http://127.0.0.1:4173/#/chat', { waitUntil: 'load' }); await page.screenshot({ path: 'docs/pr-screenshots/mobile-<short-description>.png', fullPage: true }); await browser.close(); })().catch(err => { console.error(err); process.exit(1); });"
+node -e "const { chromium, devices } = require('/tmp/bouw-playwright-shot/node_modules/playwright-core'); (async() => { const browser = await chromium.launch({ executablePath: '/Users/jnku/Library/Caches/ms-playwright/chromium-1223/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing', headless: true }); const page = await browser.newPage(devices['iPhone 12']); await page.goto('http://127.0.0.1:4173/#/chat', { waitUntil: 'load' }); await page.screenshot({ path: 'docs/pr-screenshots/mobile-<short-description>.png', fullPage: true }); await browser.close(); })().catch(err => { console.error(err); process.exit(1); });"
 ```
 
 Replace `mobile-<short-description>.png` with a descriptive filename for the changed state.

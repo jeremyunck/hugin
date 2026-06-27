@@ -1,18 +1,18 @@
 {
-  "name": "hugin-app",
+  "name": "bouw-app",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:mock": "VITE_HUGIN_MOCK_MODE=true vite",
+    "dev:mock": "VITE_BOUW_MOCK_MODE=true vite",
     "lint": "eslint src --ext .ts,.tsx",
     "build": "tsc -b && vite build",
-    "build:mock": "VITE_HUGIN_MOCK_MODE=true vite build",
+    "build:mock": "VITE_BOUW_MOCK_MODE=true vite build",
     "test": "vitest run",
     "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
-    "preview:mock": "VITE_HUGIN_MOCK_MODE=true vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "preview:mock": "VITE_BOUW_MOCK_MODE=true vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "screenshots": "playwright test tests/visual"
   },
   "dependencies": {

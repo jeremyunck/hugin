@@ -38,7 +38,7 @@ const FULL_TURN: ChatEvent[] = [
   event({ id: "e3", seq: 3, type: "assistant_message_started", messageId: "assistant-1", createdAt: "2026-06-20T00:00:03.000Z" }),
   event({ id: "e4", seq: 4, type: "assistant_reasoning", messageId: "assistant-1", content: "Thinking...", createdAt: "2026-06-20T00:00:04.000Z" }),
   event({ id: "e5", seq: 5, type: "tool_call_started", metadata: { callId: "c1", name: "read_file", args: "{\"path\":\"README.md\"}" }, createdAt: "2026-06-20T00:00:05.000Z" }),
-  event({ id: "e6", seq: 6, type: "tool_call_completed", metadata: { callId: "c1", name: "read_file", result: "# Hugin" }, createdAt: "2026-06-20T00:00:06.000Z" }),
+  event({ id: "e6", seq: 6, type: "tool_call_completed", metadata: { callId: "c1", name: "read_file", result: "# Bouw" }, createdAt: "2026-06-20T00:00:06.000Z" }),
   event({ id: "e7", seq: 7, type: "assistant_token", messageId: "assistant-1", content: "Done.", createdAt: "2026-06-20T00:00:07.000Z" }),
   event({ id: "e8", seq: 8, type: "assistant_message_completed", messageId: "assistant-1", content: "Done.", createdAt: "2026-06-20T00:00:08.000Z" }),
   event({ id: "e9", seq: 9, type: "run_completed", createdAt: "2026-06-20T00:00:09.000Z" })
@@ -81,7 +81,7 @@ describe("reduceChatEvent", () => {
     const tool = tools[0];
     expect(tool.type === "tool" ? tool.tool.name : "").toBe("read_file");
     expect(tool.type === "tool" ? tool.tool.args : "").toBe("{\"path\":\"README.md\"}");
-    expect(tool.type === "tool" ? tool.tool.result : "").toBe("# Hugin");
+    expect(tool.type === "tool" ? tool.tool.result : "").toBe("# Bouw");
     expect(tool.type === "tool" ? Boolean(tool.tool.finishedAt) : false).toBe(true);
     // Tool calls no longer leak into the separate activity projection.
     expect((result.activities ?? []).some((activity) => activity.type.startsWith("tool_call"))).toBe(false);

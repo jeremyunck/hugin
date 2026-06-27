@@ -1,8 +1,8 @@
-[![Hugin banner](img/readme_banner.png)](/img/readme_banner.png)
+[![Bouw banner](img/readme_banner.png)](/img/readme_banner.png)
 
-# Hugin
+# Bouw
 
-Hugin is a Spring Boot + React personal assistant. It talks to any OpenAI-compatible chat
+Bouw is a Spring Boot + React personal assistant. It talks to any OpenAI-compatible chat
 endpoint, exposes a web UI, and ships with local tools for file access, shell commands, web
 search, Google Workspace, email, scheduling, optional repo-local skills, and optional
 Redis-backed memory.
@@ -16,8 +16,8 @@ PostgreSQL, or Redis required.
 or Docker Engine + the Compose plugin (Linux).
 
 ```bash
-git clone https://github.com/jeremyunck/hugin.git
-cd hugin
+git clone https://github.com/jeremyunck/bouw.git
+cd bouw
 cp .env.example .env
 # Edit .env and add an LLM key:
 #   - OPEN_ROUTER_API_KEY=sk-or-v1-...   (keep LLM_PROVIDER=openrouter), or
@@ -29,8 +29,8 @@ Then open **http://localhost:8080**.
 
 Compose starts three services and creates everything automatically:
 
-- **hugin** — the app (multi-stage build: React frontend → Spring Boot jar → slim Java 21 runtime)
-- **postgres** — creates the `hugin` database, user, and schema on first boot (no manual SQL)
+- **bouw** — the app (multi-stage build: React frontend → Spring Boot jar → slim Java 21 runtime)
+- **postgres** — creates the `bouw` database, user, and schema on first boot (no manual SQL)
 - **redis** — available to the app for optional long-term memory
 
 The app waits for PostgreSQL to pass its healthcheck before starting, so the first `up` may take a
@@ -41,14 +41,14 @@ click **Create an account**, enter an email and password (twice), then confirm t
 is emailed to them; every subsequent login re-confirms a fresh code. Codes are delivered with
 [Resend](https://resend.com) — set `RESEND_API_KEY` and `RESEND_FROM` in `.env`. **When Resend is
 not configured, the code is written to the app logs instead of being emailed** (`docker compose logs
-hugin`), which keeps the localhost demo usable without a Resend account; do not rely on this beyond
+bouw`), which keeps the localhost demo usable without a Resend account; do not rely on this beyond
 local development. All accounts created this way are `ROLE_USER`.
 
 A bootstrap account is still created on first start from `AUTH_BOOTSTRAP_USERNAME` /
 `AUTH_BOOTSTRAP_PASSWORD` in `.env` (the quickstart ships `admin` / `change-me`). Because
-`change-me` is a well-known default, Hugin would normally **refuse to start** with it; the
+`change-me` is a well-known default, Bouw would normally **refuse to start** with it; the
 quickstart sets `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD=true` so the localhost demo boots while
-logging a loud warning. **Before exposing Hugin beyond localhost**, set a strong, unique
+logging a loud warning. **Before exposing Bouw beyond localhost**, set a strong, unique
 `AUTH_BOOTSTRAP_PASSWORD` and remove `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD` (it defaults to
 `false`). See [Production credentials](#production-credentials).
 
@@ -69,7 +69,7 @@ docker compose down -v
 - **LLM credentials are required for the agent to chat.** The stack boots without a key, but you
   must add `OPEN_ROUTER_API_KEY` (or `OPENAI_API_KEY` with `LLM_PROVIDER=openai`) for model calls to
   succeed.
-- **Sandbox mode is disabled by default in the quickstart** (`SANDBOX_ENABLED=false`). Hugin's
+- **Sandbox mode is disabled by default in the quickstart** (`SANDBOX_ENABLED=false`). Bouw's
   per-session Docker sandboxes run agent-issued shell commands inside Docker containers and need
   access to a Docker daemon. To enable them, layer in the override:
 
@@ -80,7 +80,7 @@ docker compose down -v
   > ⚠️ **Security: the override mounts the host Docker socket** (`/var/run/docker.sock`), which
   > grants the container control of the host's Docker daemon — effectively root-equivalent on the
   > host. Only enable this on trusted local/self-hosted machines you control. Docker socket access is
-  > never enabled silently; when sandbox mode starts, Hugin logs a `SANDBOX SECURITY NOTICE` (and
+  > never enabled silently; when sandbox mode starts, Bouw logs a `SANDBOX SECURITY NOTICE` (and
   > flags it explicitly when the socket is mounted).
 
 - **Secrets stay out of the image.** Keys are read from `.env` at runtime; `.env` is gitignored and
@@ -117,7 +117,7 @@ For any shared or production deployment, set these environment variables (see `.
 | `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD` | Leave unset / `false` in production. Set to `true` only for local dev to permit a weak password (a loud warning is logged). |
 | `SPRING_DATASOURCE_*` | PostgreSQL connection. |
 | `OPEN_ROUTER_API_KEY` / `OPENAI_API_KEY` | LLM provider key. |
-| `AUTH_JWT_SECRET_BASE64` | Optional bootstrap HMAC signing key; if set on first boot it is persisted to the database, otherwise Hugin generates and persists one automatically. |
+| `AUTH_JWT_SECRET_BASE64` | Optional bootstrap HMAC signing key; if set on first boot it is persisted to the database, otherwise Bouw generates and persists one automatically. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Resend API key and verified sender used to email login/registration verification codes. If unset, codes are logged instead of emailed (local dev only). |
 
 ### CI / validation
@@ -144,11 +144,11 @@ docker compose -f docker-compose.yml -f docker-compose.sandbox.yml config --quie
 
 ## Getting started (native install)
 
-The native CLI install is the advanced/alternative path and runs Hugin directly on your machine
+The native CLI install is the advanced/alternative path and runs Bouw directly on your machine
 (requires Java 21 and Maven, plus a reachable PostgreSQL).
 
 ```bash
-git clone https://github.com/jeremyunck/hugin.git && cd hugin
+git clone https://github.com/jeremyunck/bouw.git && cd bouw
 ./install.sh
 ```
 
@@ -163,24 +163,24 @@ launch so the daemon is running.
 Then run the app:
 
 ```bash
-hugin
+bouw
 ```
 
 The backend listens on `http://localhost:8080` and serves the built frontend from the same
-process. Run `hugin doctor` at any time to verify Docker, the sandbox image, and the rest of the
+process. Run `bouw doctor` at any time to verify Docker, the sandbox image, and the rest of the
 stack.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `hugin` | Ensure the backend is running |
-| `hugin onboard` | Run the interactive setup wizard |
-| `hugin server run` | Run the backend in the foreground |
-| `hugin server start / stop / restart / status` | Manage the background service |
-| `hugin server logs` | Stream service logs |
+| `bouw` | Ensure the backend is running |
+| `bouw onboard` | Run the interactive setup wizard |
+| `bouw server run` | Run the backend in the foreground |
+| `bouw server start / stop / restart / status` | Manage the background service |
+| `bouw server logs` | Stream service logs |
 
-Set `AGENT_HOME` to override the default agent home (`~/.hugin`).
+Set `AGENT_HOME` to override the default agent home (`~/.bouw`).
 Set `LLM_REASONING_EFFORT` to override the reasoning effort sent to the model.
 
 ## Prerequisites
@@ -188,7 +188,7 @@ Set `LLM_REASONING_EFFORT` to override the reasoning effort sent to the model.
 - Java 21 and Maven
 - Docker (CLI + a running daemon) — required for project/GitHub repository chats, which execute in
   an isolated container. Build the sandbox image once with
-  `docker build -t hugin-agent-sandbox:latest docker/sandbox` (`install.sh` does this for you).
+  `docker build -t bouw-agent-sandbox:latest docker/sandbox` (`install.sh` does this for you).
 - An OpenAI-compatible chat endpoint
 - Optional: Redis, if you enable long-term memory
 - Optional: Google credentials, if you want the Google Workspace tools
@@ -209,7 +209,7 @@ mvn -pl backend spring-boot:run
 
 To run this checkout as a `launchd` service and auto-update it every 30 minutes, install and start
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) first. The detached deploy flow
-rebuilds both the backend jar and the `hugin-agent-sandbox:latest` image used for project/GitHub
+rebuilds both the backend jar and the `bouw-agent-sandbox:latest` image used for project/GitHub
 repository chats.
 
 Then run:
@@ -219,27 +219,27 @@ mvn -q -DskipTests package
 ./scripts/install-launchd-jobs.sh
 ```
 
-The launchd updater lives at [`scripts/hugin-launchd-update.sh`](scripts/hugin-launchd-update.sh) and:
+The launchd updater lives at [`scripts/bouw-launchd-update.sh`](scripts/bouw-launchd-update.sh) and:
 
 - fetches `origin/main`
 - fast-forwards the checkout when there are new commits
 - rebuilds the backend jar, including the frontend bundle
-- rebuilds the `hugin-agent-sandbox:latest` Docker image from `docker/sandbox`
+- rebuilds the `bouw-agent-sandbox:latest` Docker image from `docker/sandbox`
 - restarts the service with `launchctl kickstart -k`
 
 The installer writes:
 
-- `~/Library/LaunchAgents/com.jnku.hugin.repo-server.plist`
-- `~/Library/LaunchAgents/com.jnku.hugin.repo-autoupdate.plist`
-- `~/.config/hugin-dev/env`
+- `~/Library/LaunchAgents/com.jnku.bouw.repo-server.plist`
+- `~/Library/LaunchAgents/com.jnku.bouw.repo-autoupdate.plist`
+- `~/.config/bouw-dev/env`
 
 The dev launchd scripts keep runtime state, including Docker sandbox workspaces, under
-`~/.local/share/hugin-dev` by default instead of creating a `sandboxes/` directory in the repo.
+`~/.local/share/bouw-dev` by default instead of creating a `sandboxes/` directory in the repo.
 
 The updater only deploys when `origin/main` has moved. It skips if the checkout is not on
 `main` or if there are tracked local changes that would make `git pull --ff-only` unsafe.
 
-## What Hugin can do
+## What Bouw can do
 
 - Chat with any OpenAI-compatible model
 - Stream responses over SSE
@@ -251,7 +251,7 @@ The updater only deploys when `origin/main` has moved. It skips if the checkout 
   for the model to digest and write a report from
 - Turn a task it just solved into a reusable tool with `create_agent_tool` — when you ask it to
   "make that a tool", it saves the working solution as a self-contained script plus a manifest in the
-  workspace's untracked `.hugin/jit-tools/` folder, loaded on the fly (no restart) for future requests
+  workspace's untracked `.bouw/jit-tools/` folder, loaded on the fly (no restart) for future requests
   to call directly
 - Read and write Google Docs, Sheets, Calendar, and Gmail when configured
 - Schedule prompts for later delivery

@@ -43,7 +43,7 @@ class DockerSandboxManagerContextTest {
                                 true, tmp.toString(), Duration.ofSeconds(10), 30_000, List.of()))))
                 .withBean(SandboxProperties.class, () -> new SandboxProperties(
                         true, "ubuntu:24.04", "docker",
-                        Duration.ofSeconds(10), Duration.ofSeconds(10), "", "hugin-sbx-", 25))
+                        Duration.ofSeconds(10), Duration.ofSeconds(10), "", "bouw-sbx-", 25))
                 // Registered by type so Spring must pick a constructor and autowire it itself,
                 // exactly as it does during application startup.
                 .withBean(DockerSandboxManager.class)

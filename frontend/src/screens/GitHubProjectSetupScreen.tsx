@@ -68,7 +68,7 @@ export function GitHubProjectSetupScreen(props: {
       <div className="screen-content">
         <div className="screen-pad">
           <p className="integration-subtitle">
-            Pick a repository and branch, then Hugin will open a fresh workspace with a clean pull of that branch.
+            Pick a repository and branch, then Bouw will open a fresh workspace with a clean pull of that branch.
           </p>
         </div>
 

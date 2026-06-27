@@ -8,11 +8,11 @@ This recipe is the local, non-LLM path for a request like:
 - run the collector from cron on the same machine
 
 It is intentionally deterministic. The cron job runs a Python script directly; it does not call
-Hugin's `schedule_prompt` tool and it does not require the LLM.
+Bouw's `schedule_prompt` tool and it does not require the LLM.
 
 ## What this bridges
 
-Hugin already has:
+Bouw already has:
 
 - local file editing tools
 - local shell execution

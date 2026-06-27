@@ -46,7 +46,7 @@ public class DefaultUserBootstrap implements ApplicationRunner {
             "passw0rd",
             "default",
             "secret",
-            "hugin",
+            "bouw",
             "test");
 
     private final UserAccountRepository userAccountRepository;

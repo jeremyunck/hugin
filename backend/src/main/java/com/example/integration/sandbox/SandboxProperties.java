@@ -39,7 +39,7 @@ public record SandboxProperties(
             network = "";
         }
         if (containerPrefix == null || containerPrefix.isBlank()) {
-            containerPrefix = "hugin-sbx-";
+            containerPrefix = "bouw-sbx-";
         }
         if (maxSandboxes <= 0) {
             maxSandboxes = 25;

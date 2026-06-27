@@ -18,15 +18,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Retrieves the version of the hugin CLI. */
+/** Retrieves the version of the bouw CLI. */
 @Component
-public class HuginVersionTool implements LocalTool {
+public class BouwVersionTool implements LocalTool {
 
     private static final String COMMON_PATH_PREFIX = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin";
     private static final List<Path> COMMON_LAUNCHERS = List.of(
-            Path.of("/usr/local/bin/hugin"),
-            Path.of("/opt/homebrew/bin/hugin"));
-    private static final Pattern VERSION_ASSIGNMENT = Pattern.compile("(?m)^HUGIN_VERSION=\"([^\"]+)\"");
+            Path.of("/usr/local/bin/bouw"),
+            Path.of("/opt/homebrew/bin/bouw"));
+    private static final Pattern VERSION_ASSIGNMENT = Pattern.compile("(?m)^BOUW_VERSION=\"([^\"]+)\"");
     private static final Pattern REPO_DIR_ASSIGNMENT = Pattern.compile("(?m)^REPO_DIR=\"([^\"]+)\"");
 
     private final Workspace workspace;
@@ -34,7 +34,7 @@ public class HuginVersionTool implements LocalTool {
     private final int maxChars;
     private final ObjectMapper objectMapper;
 
-    public HuginVersionTool(Workspace workspace, LocalToolProperties properties, ObjectMapper objectMapper) {
+    public BouwVersionTool(Workspace workspace, LocalToolProperties properties, ObjectMapper objectMapper) {
         this.workspace = workspace;
         this.timeout = properties.bashTimeout();
         this.maxChars = properties.maxOutputChars();
@@ -43,12 +43,12 @@ public class HuginVersionTool implements LocalTool {
 
     @Override
     public String name() {
-        return "hugin_version";
+        return "bouw_version";
     }
 
     @Override
     public String description() {
-        return "Get the installed version of the hugin CLI tool.";
+        return "Get the installed version of the bouw CLI tool.";
     }
 
     @Override
@@ -72,8 +72,8 @@ public class HuginVersionTool implements LocalTool {
         }
 
         List<List<String>> commands = List.of(
-                List.of("hugin", "--version"),
-                List.of("hugin", "version"));
+                List.of("bouw", "--version"),
+                List.of("bouw", "version"));
 
         List<String> failures = new ArrayList<>();
         for (List<String> command : commands) {
@@ -92,17 +92,17 @@ public class HuginVersionTool implements LocalTool {
                     + (result.output().isBlank() ? "" : "\n" + result.output().strip()));
         }
 
-        return "Error: could not determine hugin version.\n" + String.join("\n\n", failures);
+        return "Error: could not determine bouw version.\n" + String.join("\n\n", failures);
     }
 
     private Optional<String> resolveMetadataVersion(Path workspaceRoot) {
-        String envVersion = System.getenv("HUGIN_VERSION");
+        String envVersion = System.getenv("BOUW_VERSION");
         if (isVersion(envVersion)) {
             return Optional.of(envVersion.strip());
         }
 
         List<Path> packageJsonCandidates = new ArrayList<>();
-        addPackageJsonCandidate(packageJsonCandidates, System.getenv("HUGIN_REPO_DIR"));
+        addPackageJsonCandidate(packageJsonCandidates, System.getenv("BOUW_REPO_DIR"));
         addPackageJsonCandidate(packageJsonCandidates, System.getenv("REPO_DIR"));
         packageJsonCandidates.add(workspaceRoot.resolve("package.json"));
         addLauncherPackageJsonCandidates(packageJsonCandidates);
@@ -129,7 +129,7 @@ public class HuginVersionTool implements LocalTool {
 
     private static void addLauncherPackageJsonCandidates(List<Path> candidates) {
         List<Path> launchers = new ArrayList<>();
-        String configuredLauncher = System.getenv("HUGIN_LAUNCHER_PATH");
+        String configuredLauncher = System.getenv("BOUW_LAUNCHER_PATH");
         if (configuredLauncher != null && !configuredLauncher.isBlank()) {
             launchers.add(Path.of(configuredLauncher));
         }
@@ -172,7 +172,7 @@ public class HuginVersionTool implements LocalTool {
                 }
                 String content = Files.readString(launcher, StandardCharsets.UTF_8);
                 Optional<String> version = extractAssignment(content, VERSION_ASSIGNMENT)
-                        .filter(HuginVersionTool::isVersion);
+                        .filter(BouwVersionTool::isVersion);
                 Optional<Path> repoDir = extractAssignment(content, REPO_DIR_ASSIGNMENT)
                         .filter(value -> !value.isBlank())
                         .map(Path::of);
@@ -241,7 +241,7 @@ public class HuginVersionTool implements LocalTool {
             return null;
         }
         String text = output.strip();
-        if (text.startsWith("Usage: hugin")) {
+        if (text.startsWith("Usage: bouw")) {
             return null;
         }
 
@@ -250,9 +250,9 @@ public class HuginVersionTool implements LocalTool {
             if (trimmed.matches("v?\\d+\\.\\d+\\.\\d+.*")) {
                 return trimmed.startsWith("v") ? trimmed.substring(1) : trimmed;
             }
-            int packageAt = trimmed.indexOf("hugin-agent@");
+            int packageAt = trimmed.indexOf("bouw-agent@");
             if (packageAt >= 0) {
-                String candidate = trimmed.substring(packageAt + "hugin-agent@".length()).strip();
+                String candidate = trimmed.substring(packageAt + "bouw-agent@".length()).strip();
                 int end = 0;
                 while (end < candidate.length()
                         && !Character.isWhitespace(candidate.charAt(end))

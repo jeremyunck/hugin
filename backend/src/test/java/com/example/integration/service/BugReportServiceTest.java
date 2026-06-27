@@ -39,7 +39,7 @@ class BugReportServiceTest {
         Path workspaceRoot = Files.createDirectories(tempDir.resolve("workspace"));
         Path agentHome = Files.createDirectories(tempDir.resolve("agent-home"));
         Files.createDirectories(agentHome.resolve("logs"));
-        Files.writeString(agentHome.resolve("logs/hugin.log"), "server log");
+        Files.writeString(agentHome.resolve("logs/bouw.log"), "server log");
 
         var workspace = mock(com.example.agent.tool.Workspace.class);
         when(workspace.root()).thenReturn(workspaceRoot);
@@ -72,10 +72,10 @@ class BugReportServiceTest {
         assertThat(saved).exists();
         assertThat(result.relativePath()).contains("bug-reports/2026-06-18/");
         assertThat(result.relativePath()).contains("chat-hung-on-tool-result.txt");
-        assertThat(result.logFiles()).contains("agent-home/logs/hugin.log");
+        assertThat(result.logFiles()).contains("agent-home/logs/bouw.log");
 
         String body = Files.readString(saved);
-        assertThat(body).contains("Hugin Bug Report");
+        assertThat(body).contains("Bouw Bug Report");
         assertThat(body).contains("Client Thread Snapshot");
         assertThat(body).contains("Server Conversation History");
         assertThat(body).contains("server log");
@@ -117,7 +117,7 @@ class BugReportServiceTest {
         Path workspaceRoot = Files.createDirectories(tempDir.resolve("workspace-3"));
         Path agentHome = Files.createDirectories(tempDir.resolve("agent-home-3"));
         Files.createDirectories(agentHome.resolve("logs"));
-        Files.writeString(agentHome.resolve("logs/hugin.log"), "a".repeat(300_000) + "\nTAIL");
+        Files.writeString(agentHome.resolve("logs/bouw.log"), "a".repeat(300_000) + "\nTAIL");
 
         var workspace = mock(com.example.agent.tool.Workspace.class);
         when(workspace.root()).thenReturn(workspaceRoot);

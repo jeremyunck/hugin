@@ -58,7 +58,7 @@ public class FindFilesTool implements LocalTool {
                 + "pattern, like 'find -name'. A pattern without '/' (e.g. '*.java', 'pom.xml') matches "
                 + "against each entry's name at any depth; a pattern containing '/' (e.g. 'src/**/*.yml') "
                 + "matches against the path relative to the workspace root. Set type='dir' to find "
-                + "directories (e.g. pattern 'hugin') or type='any' for both. Returns matching paths "
+                + "directories (e.g. pattern 'bouw') or type='any' for both. Returns matching paths "
                 + "(directories end with '/'), one per line. Common build/VCS directories (.git, target, "
                 + "node_modules, …) are skipped.";
     }
@@ -70,7 +70,7 @@ public class FindFilesTool implements LocalTool {
                 "properties", Map.of(
                         "pattern", Map.of(
                                 "type", "string",
-                                "description", "Glob to match, e.g. '*.java', 'pom.xml', 'hugin' or 'src/**/*.yml'."),
+                                "description", "Glob to match, e.g. '*.java', 'pom.xml', 'bouw' or 'src/**/*.yml'."),
                         "path", Map.of(
                                 "type", "string",
                                 "description", "Directory to search under, relative to the workspace root. Defaults to '.'."),

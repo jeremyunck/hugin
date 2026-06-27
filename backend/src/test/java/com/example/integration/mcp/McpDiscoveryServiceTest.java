@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/** Tests discovery upsert/stale reconciliation and collision-free hugin-name generation. */
+/** Tests discovery upsert/stale reconciliation and collision-free bouw-name generation. */
 class McpDiscoveryServiceTest extends AbstractMcpDbTest {
 
     private McpTransports transports;
@@ -45,7 +45,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         assertThat(response.success()).isTrue();
         assertThat(response.discoveredCount()).isEqualTo(2);
         List<McpServerToolEntity> tools = toolRepository.findByServer(server.id());
-        assertThat(tools).extracting(McpServerToolEntity::huginToolName)
+        assertThat(tools).extracting(McpServerToolEntity::bouwToolName)
                 .containsExactlyInAnyOrder("mcp_linear_create_issue", "mcp_linear_list_issues");
         assertThat(tools).allMatch(McpServerToolEntity::enabled);
     }
@@ -70,7 +70,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         McpServerToolEntity refreshed = toolRepository.findByServer(server.id()).get(0);
         assertThat(refreshed.enabled()).isFalse();
         assertThat(refreshed.description()).isEqualTo("v2-updated");
-        assertThat(refreshed.huginToolName()).isEqualTo(tool.huginToolName());
+        assertThat(refreshed.bouwToolName()).isEqualTo(tool.bouwToolName());
         assertThat(refreshed.stale()).isFalse();
     }
 
@@ -112,7 +112,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
     }
 
     @Test
-    void huginNameCollisionAcrossServersIsDisambiguated() {
+    void bouwNameCollisionAcrossServersIsDisambiguated() {
         insertUser("alice");
         McpServerEntity a = newServer("alice", "linear", McpAuthType.NONE, null);
         McpServerEntity b = newServer("alice", "linear-2", McpAuthType.NONE, null);
@@ -121,7 +121,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         // Seed an existing tool occupying the base name.
         toolRepository.insert(newTool(a.id(), "create_issue", "mcp_linear_create_issue", true, false));
 
-        String generated = discovery.generateHuginToolName("linear", "create_issue", b.id());
+        String generated = discovery.generateBouwToolName("linear", "create_issue", b.id());
         assertThat(generated).isNotEqualTo("mcp_linear_create_issue");
         assertThat(generated).startsWith("mcp_linear_create_issue");
     }

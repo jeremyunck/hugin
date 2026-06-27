@@ -66,7 +66,7 @@ describe("chat session stream replay", () => {
         id: "evt-4",
         seq: 4,
         type: "tool_call_completed",
-        metadata: { callId: "call-1", name: "read_file", result: "# Hugin" },
+        metadata: { callId: "call-1", name: "read_file", result: "# Bouw" },
         createdAt: "2026-06-20T00:00:04.000Z"
       }),
       event({
@@ -104,7 +104,7 @@ describe("chat session stream replay", () => {
       },
       configurable: true
     });
-    window.localStorage.setItem("hugin-active-thread-v1", JSON.stringify({
+    window.localStorage.setItem("bouw-active-thread-v1", JSON.stringify({
       threadId: "thread-2",
       screen: "chat"
     }));

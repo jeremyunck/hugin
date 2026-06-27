@@ -46,11 +46,11 @@ class CreateAgentToolToolTest {
         assertThat(result).contains("no restart needed");
 
         // Script and manifest landed under the non-tracked jit-tools directory.
-        Path scriptDir = tmp.resolve(".hugin/jit-tools/scripts");
+        Path scriptDir = tmp.resolve(".bouw/jit-tools/scripts");
         assertThat(Files.exists(scriptDir.resolve("lookup_stock_ticker.py"))).isTrue();
-        assertThat(Files.exists(tmp.resolve(".hugin/jit-tools/lookup_stock_ticker.tool.json"))).isTrue();
+        assertThat(Files.exists(tmp.resolve(".bouw/jit-tools/lookup_stock_ticker.tool.json"))).isTrue();
         // A .gitignore keeps the generated code out of version control.
-        assertThat(Files.readString(tmp.resolve(".hugin/jit-tools/.gitignore"))).contains("*");
+        assertThat(Files.readString(tmp.resolve(".bouw/jit-tools/.gitignore"))).contains("*");
 
         // The JIT registry picks it up on the next scan and can run it end-to-end.
         LocalTool created = jitTools.find("lookup_stock_ticker", workspace);
@@ -67,7 +67,7 @@ class CreateAgentToolToolTest {
         Map<String, Object> args = baseArgs("Bad Name!");
         String result = tool.execute(args, new ToolContext(workspace));
         assertThat(result).contains("invalid tool name");
-        assertThat(Files.exists(tmp.resolve(".hugin/jit-tools"))).isFalse();
+        assertThat(Files.exists(tmp.resolve(".bouw/jit-tools"))).isFalse();
     }
 
     @Test
@@ -93,7 +93,7 @@ class CreateAgentToolToolTest {
         String result = tool.execute(args, new ToolContext(workspace));
         assertThat(result).contains("timeout_seconds");
         // Nothing should have been written when validation fails.
-        assertThat(Files.exists(tmp.resolve(".hugin/jit-tools/bad_timeout.tool.json"))).isFalse();
+        assertThat(Files.exists(tmp.resolve(".bouw/jit-tools/bad_timeout.tool.json"))).isFalse();
     }
 
     @Test
@@ -101,7 +101,7 @@ class CreateAgentToolToolTest {
         Map<String, Object> args = baseArgs("timed_tool");
         args.put("timeout_seconds", 45);
         tool.execute(args, new ToolContext(workspace));
-        String manifest = Files.readString(tmp.resolve(".hugin/jit-tools/timed_tool.tool.json"));
+        String manifest = Files.readString(tmp.resolve(".bouw/jit-tools/timed_tool.tool.json"));
         assertThat(manifest).contains("\"timeoutSeconds\" : 45");
     }
 

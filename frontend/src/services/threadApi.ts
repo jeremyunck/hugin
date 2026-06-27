@@ -16,12 +16,12 @@ import {
   type ChatEvent
 } from "./apiClient";
 
-const APP_STORAGE_KEY = "hugin-minimal-ui-state-v1";
+const APP_STORAGE_KEY = "bouw-minimal-ui-state-v1";
 
 // Compiled out of a normal build; only the mock harness sets this. The JSON-data endpoints route to
 // fixtures via `apiFetch`/`mockApiFetch`; the raw-fetch mutations and the SSE stream below have no
 // backend in mock mode, so they short-circuit to inert no-ops.
-const MOCK_MODE = import.meta.env.VITE_HUGIN_MOCK_MODE === "true";
+const MOCK_MODE = import.meta.env.VITE_BOUW_MOCK_MODE === "true";
 
 export type ChatSessionSummary = {
   id: string;

@@ -32,7 +32,7 @@ public final class GoogleErrors {
             if (code == 403 || code == 404) {
                 return "Google API error " + code + " (" + detail + "). The document or spreadsheet may "
                         + "not exist, or the authenticated Google account may not have access. Share the file "
-                        + "with that account (or set google.default-share-with for files Hugin creates), "
+                        + "with that account (or set google.default-share-with for files Bouw creates), "
                         + "then try again.";
             }
             return "Google API error " + code + ": " + detail;

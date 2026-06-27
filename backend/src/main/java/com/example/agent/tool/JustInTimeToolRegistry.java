@@ -27,8 +27,8 @@ import java.util.stream.Stream;
 /**
  * Loads just-in-time tools from the current workspace.
  *
- * <p>Tool manifests live under {@code .hugin/jit-tools/*.json} in each workspace. The agent
- * rescans that directory on every loop iteration, so once Hugin writes a manifest it becomes
+ * <p>Tool manifests live under {@code .bouw/jit-tools/*.json} in each workspace. The agent
+ * rescans that directory on every loop iteration, so once Bouw writes a manifest it becomes
  * available on the next reasoning pass without restarting the service. To keep that rescan cheap,
  * parsed manifests are cached per directory and only re-read when the directory listing or a
  * manifest's modification time / size changes.
@@ -221,7 +221,7 @@ public class JustInTimeToolRegistry {
             builder.directory(workingDir.toFile());
             builder.redirectErrorStream(true);
             builder.environment().putAll(manifest.env());
-            builder.environment().put("HUGIN_TOOL_ARGS_JSON", objectMapper.writeValueAsString(arguments));
+            builder.environment().put("BOUW_TOOL_ARGS_JSON", objectMapper.writeValueAsString(arguments));
 
             Process process = builder.start();
             if (manifest.passArgumentsViaStdin()) {

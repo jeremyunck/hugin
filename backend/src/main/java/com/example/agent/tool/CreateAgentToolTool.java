@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  * rather than deciding on its own initiative or using this to attempt an unsolved problem.
  *
  * <p>The generated script lives under the workspace's just-in-time tool directory
- * ({@code .hugin/jit-tools/scripts/}), which this tool keeps out of version control by writing a
+ * ({@code .bouw/jit-tools/scripts/}), which this tool keeps out of version control by writing a
  * {@code .gitignore} alongside the manifests. {@link JustInTimeToolRegistry} rescans that directory
  * on every reasoning pass, so a freshly created tool becomes callable on the next loop iteration
  * <em>without restarting the service</em>.
@@ -101,7 +101,7 @@ public class CreateAgentToolTool implements LocalTool {
                 + "with yfinance — generalised with parameters, NOT a fresh, untested attempt at a new "
                 + "problem. Do not create tools on your own initiative, and never use this to try to "
                 + "solve something you have not solved yet. The script receives the call arguments as a "
-                + "JSON object on stdin (also in the HUGIN_TOOL_ARGS_JSON env var) and should print its "
+                + "JSON object on stdin (also in the BOUW_TOOL_ARGS_JSON env var) and should print its "
                 + "result to stdout. After creating the tool, make sure its dependencies are installed "
                 + "and verify it by calling it once.";
     }

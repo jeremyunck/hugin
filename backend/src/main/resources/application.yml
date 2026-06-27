@@ -3,12 +3,12 @@ server:
 
 spring:
   application:
-    name: hugin
+    name: bouw
   datasource:
     # Defaults target a local PostgreSQL for native development. Inside Docker, compose sets
-    # SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hugin to reach the postgres service.
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hugin}
-    username: ${SPRING_DATASOURCE_USERNAME:hugin}
+    # SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/bouw to reach the postgres service.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bouw}
+    username: ${SPRING_DATASOURCE_USERNAME:bouw}
     password: ${SPRING_DATASOURCE_PASSWORD:}
   sql:
     init:
@@ -23,11 +23,11 @@ spring:
 app:
   encryption:
     # Secret used to encrypt user-supplied credentials at rest (per-user OpenRouter API keys and MCP
-    # bearer tokens). Set APP_ENCRYPTION_SECRET (or HUGIN_SECRET_KEY) to a stable, high-entropy value
+    # bearer tokens). Set APP_ENCRYPTION_SECRET (or BOUW_SECRET_KEY) to a stable, high-entropy value
     # in production — rotating or losing it makes previously stored secrets undecryptable. If neither is
     # set a built-in development key is used (MCP encryption still initializes, but offers no real
     # protection).
-    secret: ${APP_ENCRYPTION_SECRET:${HUGIN_SECRET_KEY:}}
+    secret: ${APP_ENCRYPTION_SECRET:${BOUW_SECRET_KEY:}}
 
 mcp:
   # Streamable HTTP transport tuning for outbound MCP calls.
@@ -48,7 +48,7 @@ mcp:
     allowed-commands: ${MCP_STDIO_ALLOWED_COMMANDS:}
   oauth:
     request-timeout-seconds: ${MCP_OAUTH_REQUEST_TIMEOUT_SECONDS:20}
-    # Optional explicit base URL for the OAuth redirect (e.g. https://hugin.example.com). When blank the
+    # Optional explicit base URL for the OAuth redirect (e.g. https://bouw.example.com). When blank the
     # callback URL is derived from the incoming request; set this when behind a proxy/load balancer.
     redirect-base-url: ${MCP_OAUTH_REDIRECT_BASE_URL:}
 
@@ -147,9 +147,9 @@ agent:
   # A higher value gives the model more chances to use tools and refine its answer,
   # but also increases the maximum latency of a single request.
   max-iterations: 50
-  # Base-of-operations directory for the agent server (install.sh sets this to ~/.hugin).
+  # Base-of-operations directory for the agent server (install.sh sets this to ~/.bouw).
   # Used by SystemFactsService for disk-space reporting and by CloudAgentService for agent directories.
-  home: ${AGENT_HOME:${user.home}/.hugin}
+  home: ${AGENT_HOME:${user.home}/.bouw}
   # Cloud-agent feature: each POST /api/agents clones a repository and runs the agent loop against it.
   cloud:
     # Enable the /api/agents endpoints and repo-cloning feature.
@@ -190,10 +190,10 @@ agent:
     # Examples:  **/.env  secrets/**  **/*.key  .git/**
     deny-list: []
     # Workspace-local just-in-time tool manifests. The agent rescans this directory on every
-    # loop iteration, so tools created at runtime become available without restarting Hugin.
+    # loop iteration, so tools created at runtime become available without restarting Bouw.
     # The create_agent_tool tool writes generated scripts + manifests here (and a .gitignore so
     # they are never committed). Keep this path covered by .gitignore.
-    jit-tool-directory: .hugin/jit-tools
+    jit-tool-directory: .bouw/jit-tools
     # Cap on the number of generated (just-in-time) tools per workspace. A guardrail against the
     # agent minting a sprawl of one-off tools; create_agent_tool refuses once the limit is hit.
     max-jit-tools: 24
@@ -204,7 +204,7 @@ agent:
   #
   # GitHub project chats (POST /api/sandboxes/github) are now fully isolated: the selected repository
   # is cloned INSIDE a dedicated Docker container (never on the host) and all of the agent's file and
-  # shell tools execute in that container. Those project sandboxes are configured under hugin.sandbox.*
+  # shell tools execute in that container. Those project sandboxes are configured under bouw.sandbox.*
   # (see below) and persisted in the sandbox_sessions table, not by the settings in this block — the
   # agent.sandbox.* settings here apply only to the generic POST /api/sandboxes bind-mount sandboxes.
   sandbox:
@@ -222,35 +222,35 @@ agent:
     # Docker network for sandbox containers. Blank uses the default bridge; set to "none" to isolate.
     network: ${SANDBOX_NETWORK:}
     # Prefix for sandbox container names: <prefix><sandbox-id>.
-    container-prefix: hugin-sbx-
+    container-prefix: bouw-sbx-
     # Cap on the number of concurrently running sandboxes.
     max-sandboxes: 25
 
-# Fully isolated, containerized project-chat sandboxes (hugin.sandbox.*). Unlike the legacy
+# Fully isolated, containerized project-chat sandboxes (bouw.sandbox.*). Unlike the legacy
 # agent.sandbox.* bind-mount sandboxes above, a project (GitHub repository) chat here gets its own
 # Docker container plus a named volume that holds the repository checkout. The repository is cloned
 # INSIDE the container at /workspace/repo and never written to the host, so every file and shell tool
 # executes inside the container. There is no host-execution fallback for project chats: if Docker is
 # unavailable, sandbox creation fails loudly.
-hugin:
+bouw:
   sandbox:
     # Master switch for the isolated project-chat sandbox runtime.
     enabled: ${SANDBOX_ENABLED:true}
     # Image new sandbox containers run. Build it from docker/sandbox/Dockerfile:
-    #   docker build -t hugin-agent-sandbox:latest docker/sandbox
-    image: ${HUGIN_SANDBOX_IMAGE:hugin-agent-sandbox:latest}
+    #   docker build -t bouw-agent-sandbox:latest docker/sandbox
+    image: ${BOUW_SANDBOX_IMAGE:bouw-agent-sandbox:latest}
     # Hours a sandbox may sit unused before the hourly cleanup job destroys it.
-    idle-timeout-hours: ${HUGIN_SANDBOX_IDLE_TIMEOUT_HOURS:72}
+    idle-timeout-hours: ${BOUW_SANDBOX_IDLE_TIMEOUT_HOURS:72}
     # Docker CLI binary used to manage containers and volumes.
-    docker-bin: ${HUGIN_SANDBOX_DOCKER_BIN:docker}
+    docker-bin: ${BOUW_SANDBOX_DOCKER_BIN:docker}
     # Per-container resource limits.
-    memory: ${HUGIN_SANDBOX_MEMORY:4g}
-    cpus: ${HUGIN_SANDBOX_CPUS:2}
-    pids-limit: ${HUGIN_SANDBOX_PIDS_LIMIT:512}
+    memory: ${BOUW_SANDBOX_MEMORY:4g}
+    cpus: ${BOUW_SANDBOX_CPUS:2}
+    pids-limit: ${BOUW_SANDBOX_PIDS_LIMIT:512}
     # Docker network for sandbox containers. Blank uses the default bridge; set to "none" to isolate.
-    network: ${HUGIN_SANDBOX_NETWORK:}
+    network: ${BOUW_SANDBOX_NETWORK:}
     # Prefix for container/volume names: <prefix><id> and <prefix><id>-workspace.
-    container-prefix: hugin-agent-
+    container-prefix: bouw-agent-
     # Workspace mount point and repository checkout subdirectory inside the container.
     workspace-path: /workspace
     repo-subdir: repo
@@ -279,9 +279,9 @@ auth:
     password: ${AUTH_TEST_USER_PASSWORD:}
   jwt:
     # Optional base64-encoded HMAC key used only to seed the persisted JWT signing key on first boot.
-    # Once Hugin has stored a key in the database, that persisted key is reused across restarts.
+    # Once Bouw has stored a key in the database, that persisted key is reused across restarts.
     secret-base64: ${AUTH_JWT_SECRET_BASE64:}
-    issuer: hugin
+    issuer: bouw
     # Default browser session lifetime. A longer TTL avoids frequent re-login while remaining finite.
     token-ttl: 30d
   email-verification:
@@ -300,7 +300,7 @@ auth:
     # Master switch for the scheduling tools and the runner. When false the tools are not registered.
     enabled: ${SCHEDULER_ENABLED:true}
     # JSON file scheduled prompts are persisted to so they survive a restart ('~/' is expanded).
-    store-file: ${SCHEDULER_STORE_FILE:~/.hugin/scheduled-prompts.json}
+    store-file: ${SCHEDULER_STORE_FILE:~/.bouw/scheduled-prompts.json}
     # Cap on how many active schedules a single origin (session) may hold.
     max-per-target: 20
     # IANA timezone used when a schedule request omits one (e.g. America/Chicago for US Central).
@@ -309,10 +309,10 @@ auth:
 resend:
   # Transactional email provider used to deliver the email-verification codes (see
   # auth.email-verification above). Create an API key at https://resend.com and verify a sending
-  # domain/address. When the API key is blank, Hugin logs the code at WARN instead of emailing it.
-  # If RESEND_FROM is omitted, Hugin defaults to Resend's onboarding sender for local testing.
+  # domain/address. When the API key is blank, Bouw logs the code at WARN instead of emailing it.
+  # If RESEND_FROM is omitted, Bouw defaults to Resend's onboarding sender for local testing.
   api-key: ${RESEND_API_KEY:}
-  # Verified sender address, e.g. "Hugin <login@yourdomain.com>". Defaults to Resend's test sender.
+  # Verified sender address, e.g. "Bouw <login@yourdomain.com>". Defaults to Resend's test sender.
   from: ${RESEND_FROM:onboarding@resend.dev}
   endpoint: ${RESEND_ENDPOINT:https://api.resend.com/emails}
 
@@ -324,24 +324,24 @@ google:
   #   1. In a Google Cloud project, enable the Google Docs, Sheets, Drive, Calendar and Gmail APIs.
   #   2. Create an OAuth client for a desktop app and download its JSON.
   #   3. Point oauth-client-secrets-file at that JSON (or set GOOGLE_OAUTH_CLIENT_SECRETS_FILE).
-  #   4. On first use, Hugin opens the browser for consent and caches refresh tokens in oauth-token-dir.
+  #   4. On first use, Bouw opens the browser for consent and caches refresh tokens in oauth-token-dir.
   #
   # Legacy Workspace setup:
   #   1. Create a service account and download its JSON key.
   #   2. Point credentials-file at that JSON (or set GOOGLE_APPLICATION_CREDENTIALS).
-  #   3. Share the docs/sheets/calendar/email data you want Hugin to access with the service account's email.
+  #   3. Share the docs/sheets/calendar/email data you want Bouw to access with the service account's email.
   # Gmail write support requires gmail.send scope in addition to gmail.readonly.
   # When no credentials are configured the google_* tools report themselves unavailable (no startup failure).
   oauth-client-secrets-file: ${GOOGLE_OAUTH_CLIENT_SECRETS_FILE:}
-  oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.hugin/google-oauth}
+  oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.bouw/google-oauth}
   oauth-local-server-port: ${GOOGLE_OAUTH_LOCAL_SERVER_PORT:8765}
   # Public callback URL registered in the Google Cloud Console OAuth client. Set this to the
-  # deployed server's callback endpoint (e.g. https://hugin.thecognitivejunction.com/Callback).
+  # deployed server's callback endpoint (e.g. https://bouw.thecognitivejunction.com/Callback).
   # When blank a local loopback receiver is used (suitable for local dev only).
-  oauth-callback-url: ${GOOGLE_OAUTH_CALLBACK_URL:https://hugin.thecognitivejunction.com/Callback}
+  oauth-callback-url: ${GOOGLE_OAUTH_CALLBACK_URL:https://bouw.thecognitivejunction.com/Callback}
   credentials-file: ${GOOGLE_APPLICATION_CREDENTIALS:}
   # Application name reported to the Google APIs (cosmetic).
-  application-name: Hugin
+  application-name: Bouw
   # Optional: for Google Workspace domains with domain-wide delegation, the user email to impersonate.
   impersonate-user: ${GOOGLE_IMPERSONATE_USER:}
   # Optional: email that newly created docs/sheets are automatically shared with (as editor),
@@ -353,12 +353,12 @@ github:
   #
   # Setup:
   #   1. Create a GitHub App (Settings → Developer settings → GitHub Apps → New). Give it the
-  #      repository permissions you want Hugin to have (e.g. Contents: read, Issues: read & write).
+  #      repository permissions you want Bouw to have (e.g. Contents: read, Issues: read & write).
   #   2. Note the numeric App ID and the App's slug (the name in its public URL,
   #      https://github.com/apps/<slug>), then generate and download a private key (.pem).
   #   3. Point private-key-path at that .pem (or paste the PEM into private-key) and set app-id/app-slug.
   #   4. Click "Connect" in the Integrations screen to open the App's install page, then install it on
-  #      the account/organization and repositories you want Hugin to access.
+  #      the account/organization and repositories you want Bouw to access.
   # When no credentials are configured the github_* tools report themselves unavailable (no startup failure).
   app-id: ${GITHUB_APP_ID:}
   app-slug: ${GITHUB_APP_SLUG:}
@@ -383,7 +383,7 @@ management:
 newrelic:
   enabled: ${NEW_RELIC_ENABLED:false}
   license-key: ${NEW_RELIC_TOKEN:}
-  service-name: hugin
+  service-name: bouw
 
 logging:
   level:

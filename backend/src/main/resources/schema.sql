@@ -129,7 +129,7 @@ create table if not exists github_workspaces (
 -- Isolated, containerized execution environment backing a project (GitHub repository) chat. Each
 -- project chat owns exactly one sandbox session: a Docker container plus a named volume holding the
 -- repository checkout. This row is the durable handle the backend uses to reconnect to (or clean up)
--- that container across restarts, and to expire it once it has been idle past hugin.sandbox.idle-timeout-hours.
+-- that container across restarts, and to expire it once it has been idle past bouw.sandbox.idle-timeout-hours.
 create table if not exists sandbox_sessions (
     id varchar(36) primary key,
     chat_session_id varchar(36),
@@ -195,7 +195,7 @@ create table if not exists mcp_oauth_states (
 
 create index if not exists idx_mcp_oauth_states_server on mcp_oauth_states(server_id);
 
--- Tools discovered from an MCP server via tools/list. hugin_tool_name is the collision-free,
+-- Tools discovered from an MCP server via tools/list. bouw_tool_name is the collision-free,
 -- sanitized name advertised to the model (mcp_<server>_<tool>) and is globally unique. tool_name is
 -- the original name the upstream server uses for tools/call. When a tool disappears from a later
 -- discovery it is marked stale rather than deleted, preserving the user's enabled choice if it
@@ -204,14 +204,14 @@ create table if not exists mcp_server_tools (
     id varchar(36) primary key,
     server_id varchar(36) not null references mcp_servers(id) on delete cascade,
     tool_name varchar(255) not null,
-    hugin_tool_name varchar(255) not null,
+    bouw_tool_name varchar(255) not null,
     description text,
     input_schema_json text,
     enabled boolean not null default true,
     stale boolean not null default false,
     last_seen_at timestamp with time zone,
     constraint mcp_server_tools_server_tool_unique unique (server_id, tool_name),
-    constraint mcp_server_tools_hugin_name_unique unique (hugin_tool_name)
+    constraint mcp_server_tools_bouw_name_unique unique (bouw_tool_name)
 );
 
 create index if not exists idx_mcp_server_tools_server on mcp_server_tools(server_id);

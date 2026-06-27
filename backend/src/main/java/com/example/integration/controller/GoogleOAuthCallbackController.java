@@ -46,7 +46,7 @@ public class GoogleOAuthCallbackController {
             log.warn("Google OAuth callback received error: {}", error);
             writePage(response, "Google connection failed",
                     "Google returned an error: " + error + ".",
-                    "https://hugin.thecognitivejunction.com/");
+                    "https://bouw.thecognitivejunction.com/");
             return;
         }
 
@@ -54,7 +54,7 @@ public class GoogleOAuthCallbackController {
             log.warn("Google OAuth callback received without a code parameter");
             writePage(response, "Google connection failed",
                     "The callback didn't include an authorization code. Please try reconnecting.",
-                    "https://hugin.thecognitivejunction.com/");
+                    "https://bouw.thecognitivejunction.com/");
             return;
         }
 
@@ -64,7 +64,7 @@ public class GoogleOAuthCallbackController {
                 log.warn("Google OAuth callback with mismatched state — possible CSRF");
                 writePage(response, "Google connection failed",
                         "The security check failed. Please try reconnecting.",
-                        "https://hugin.thecognitivejunction.com/");
+                        "https://bouw.thecognitivejunction.com/");
                 return;
             }
         }
@@ -75,14 +75,14 @@ public class GoogleOAuthCallbackController {
             String returnTo = request.getParameter("state");
             // The state parameter may also encode the return-to URL in some flows;
             // default to the main app URL.
-            String target = "https://hugin.thecognitivejunction.com/";
+            String target = "https://bouw.thecognitivejunction.com/";
             writePage(response, "Google connected",
-                    "Your Google account is now connected to Hugin.",
+                    "Your Google account is now connected to Bouw.",
                     target);
         } else {
             writePage(response, "Google connection failed",
                     "Could not exchange the authorization code for tokens. Please try reconnecting.",
-                    "https://hugin.thecognitivejunction.com/");
+                    "https://bouw.thecognitivejunction.com/");
         }
     }
 

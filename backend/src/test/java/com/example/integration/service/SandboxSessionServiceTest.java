@@ -32,8 +32,8 @@ class SandboxSessionServiceTest {
     private SandboxSessionService service;
 
     private ProjectSandboxProperties props(boolean enabled) {
-        return new ProjectSandboxProperties(enabled, "hugin-agent-sandbox:latest", 72, "docker",
-                "4g", "2", 512, "", "hugin-agent-", "/workspace", "repo", null, null, null);
+        return new ProjectSandboxProperties(enabled, "bouw-agent-sandbox:latest", 72, "docker",
+                "4g", "2", 512, "", "bouw-agent-", "/workspace", "repo", null, null, null);
     }
 
     @BeforeEach
@@ -46,7 +46,7 @@ class SandboxSessionServiceTest {
     private SandboxSession session(SandboxStatus status) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
-        return new SandboxSession(id, null, "cid", "hugin-agent-" + id, "hugin-agent-" + id + "-workspace",
+        return new SandboxSession(id, null, "cid", "bouw-agent-" + id, "bouw-agent-" + id + "-workspace",
                 "https://github.com/octo/repo.git", "main", "/workspace/repo", status, now, now,
                 now.plus(Duration.ofHours(72)));
     }

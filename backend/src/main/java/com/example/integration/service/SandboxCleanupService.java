@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Periodically destroys isolated project-chat sandboxes that have been idle past
- * {@code hugin.sandbox.idle-timeout-hours}, reclaiming their containers, volumes, and database rows.
+ * {@code bouw.sandbox.idle-timeout-hours}, reclaiming their containers, volumes, and database rows.
  *
  * <p>Runs once an hour. Each sandbox's expiry is refreshed whenever the chat uses it (see
  * {@link SandboxSessionService#touch}), so an actively used chat never expires.
@@ -27,7 +27,7 @@ public class SandboxCleanupService {
     }
 
     /** Hourly sweep of expired sandboxes. */
-    @Scheduled(fixedDelayString = "${hugin.sandbox.cleanup-interval-ms:3600000}", initialDelayString = "${hugin.sandbox.cleanup-initial-delay-ms:600000}")
+    @Scheduled(fixedDelayString = "${bouw.sandbox.cleanup-interval-ms:3600000}", initialDelayString = "${bouw.sandbox.cleanup-initial-delay-ms:600000}")
     public void cleanupExpiredSandboxes() {
         if (!properties.enabled()) {
             return;

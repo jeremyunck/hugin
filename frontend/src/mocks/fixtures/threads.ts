@@ -42,11 +42,11 @@ export const mockThreads: ChatThread[] = [
   }),
   thread({
     id: MOCK_GITHUB_THREAD_ID,
-    title: "ada-lovelace/hugin-demo (main)",
+    title: "ada-lovelace/bouw-demo (main)",
     kind: "github",
-    sandboxId: "sandbox-hugin-demo",
-    repoFullName: "ada-lovelace/hugin-demo",
-    repoName: "hugin-demo",
+    sandboxId: "sandbox-bouw-demo",
+    repoFullName: "ada-lovelace/bouw-demo",
+    repoName: "bouw-demo",
     branchName: "main",
     modelId: "anthropic/claude-sonnet-4.6",
     updatedAt: minutesAgo(22)

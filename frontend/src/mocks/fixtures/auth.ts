@@ -24,11 +24,11 @@ export function daysAgo(days: number): string {
 /** The signed-in demo identity. No real account, token, or credentials — purely illustrative. */
 export const mockSession: AuthSession = {
   token: "mock-session-token",
-  username: "ada@hugin.dev",
+  username: "ada@bouw.dev",
   roles: ["ROLE_USER"],
   expiresAt: daysAgo(-7),
   displayName: "Ada Lovelace",
-  email: "ada@hugin.dev",
+  email: "ada@bouw.dev",
   customInstructions:
     "Prefer concise answers. Use British English. When writing code, favour small, well-named functions and add a short comment explaining any non-obvious decision."
 };

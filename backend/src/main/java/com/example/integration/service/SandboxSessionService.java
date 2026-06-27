@@ -65,7 +65,7 @@ public class SandboxSessionService {
     public SandboxSession createForChat(String chatSessionId, RepositoryConfig repository) {
         if (!properties.enabled()) {
             throw new IllegalStateException(
-                    "Project sandboxes are disabled. Set hugin.sandbox.enabled=true to enable them.");
+                    "Project sandboxes are disabled. Set bouw.sandbox.enabled=true to enable them.");
         }
         SandboxSession session = runtime.create(chatSessionId, repository);
         this.repository.save(session);

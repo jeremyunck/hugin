@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { loadAuthSession, saveAuthSession } from "./apiClient";
 
-const AUTH_STORAGE_KEY = "hugin-auth-session-v1";
+const AUTH_STORAGE_KEY = "bouw-auth-session-v1";
 
 describe("auth session storage", () => {
   beforeEach(() => {

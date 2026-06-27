@@ -197,7 +197,7 @@ export type Integration = {
 export type McpTool = {
   id: string;
   toolName: string;
-  huginToolName: string;
+  bouwToolName: string;
   description: string | null;
   enabled: boolean;
   stale: boolean;

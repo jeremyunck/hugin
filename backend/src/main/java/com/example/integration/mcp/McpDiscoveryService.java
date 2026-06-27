@@ -20,7 +20,7 @@ import java.util.UUID;
  * <p>Discovery performs {@code initialize} + {@code tools/list} and then upserts each tool:
  * <ul>
  *   <li>A tool seen before (same {@code server_id} + {@code tool_name}) keeps its {@code enabled}
- *       state and advertised {@code hugin_tool_name}; only its schema/description and freshness are
+ *       state and advertised {@code bouw_tool_name}; only its schema/description and freshness are
  *       refreshed.</li>
  *   <li>A new tool is inserted with a sanitized, collision-free {@code mcp_<server>_<tool>} name and is
  *       enabled by default.</li>
@@ -32,7 +32,7 @@ import java.util.UUID;
 public class McpDiscoveryService {
 
     private static final Logger log = LoggerFactory.getLogger(McpDiscoveryService.class);
-    private static final int MAX_HUGIN_NAME_LENGTH = 200;
+    private static final int MAX_BOUW_NAME_LENGTH = 200;
 
     private final McpServerToolRepository toolRepository;
     private final McpTransports transports;
@@ -93,12 +93,12 @@ public class McpDiscoveryService {
         String schemaJson = serializeSchema(tool.inputSchema());
         toolRepository.findByServerAndToolName(server.id(), tool.name()).ifPresentOrElse(existing -> {
             // Schema may have changed; refresh it and clear staleness, but keep the enabled state and
-            // the already-advertised hugin name so the model sees a stable tool identity.
+            // the already-advertised bouw name so the model sees a stable tool identity.
             McpServerToolEntity refreshed = new McpServerToolEntity(
                     existing.id(),
                     existing.serverId(),
                     existing.toolName(),
-                    existing.huginToolName(),
+                    existing.bouwToolName(),
                     tool.description(),
                     schemaJson,
                     existing.enabled(),
@@ -106,12 +106,12 @@ public class McpDiscoveryService {
                     now);
             toolRepository.updateOnRediscovery(refreshed);
         }, () -> {
-            String huginName = generateHuginToolName(server.name(), tool.name(), server.id());
+            String bouwName = generateBouwToolName(server.name(), tool.name(), server.id());
             McpServerToolEntity created = new McpServerToolEntity(
                     UUID.randomUUID().toString(),
                     server.id(),
                     tool.name(),
-                    huginName,
+                    bouwName,
                     tool.description(),
                     schemaJson,
                     true,
@@ -131,37 +131,37 @@ public class McpDiscoveryService {
 
     /**
      * Builds the model-facing tool name {@code mcp_<serverSlug>_<toolSlug>}, sanitized to
-     * {@code [a-z0-9_]} and guaranteed globally unique (the {@code hugin_tool_name} column is unique).
+     * {@code [a-z0-9_]} and guaranteed globally unique (the {@code bouw_tool_name} column is unique).
      * On collision with a different server's tool, a short server-id suffix disambiguates; a numeric
      * suffix is the final fallback.
      */
-    String generateHuginToolName(String serverSlug, String toolName, String serverId) {
+    String generateBouwToolName(String serverSlug, String toolName, String serverId) {
         String base = "mcp_" + slug(serverSlug) + "_" + slug(toolName);
-        if (base.length() > MAX_HUGIN_NAME_LENGTH) {
-            base = base.substring(0, MAX_HUGIN_NAME_LENGTH);
+        if (base.length() > MAX_BOUW_NAME_LENGTH) {
+            base = base.substring(0, MAX_BOUW_NAME_LENGTH);
         }
         if (isAvailable(base)) {
             return base;
         }
         String shortId = serverId.replace("-", "");
         shortId = shortId.substring(0, Math.min(8, shortId.length()));
-        String candidate = trimTo(base, MAX_HUGIN_NAME_LENGTH - shortId.length() - 1) + "_" + shortId;
+        String candidate = trimTo(base, MAX_BOUW_NAME_LENGTH - shortId.length() - 1) + "_" + shortId;
         if (isAvailable(candidate)) {
             return candidate;
         }
         for (int i = 2; i < 1000; i++) {
             String suffix = "_" + i;
-            String numbered = trimTo(base, MAX_HUGIN_NAME_LENGTH - suffix.length()) + suffix;
+            String numbered = trimTo(base, MAX_BOUW_NAME_LENGTH - suffix.length()) + suffix;
             if (isAvailable(numbered)) {
                 return numbered;
             }
         }
         // Extremely unlikely; a UUID fragment guarantees termination.
-        return ("mcp_" + UUID.randomUUID().toString().replace("-", "")).substring(0, MAX_HUGIN_NAME_LENGTH);
+        return ("mcp_" + UUID.randomUUID().toString().replace("-", "")).substring(0, MAX_BOUW_NAME_LENGTH);
     }
 
-    private boolean isAvailable(String huginName) {
-        return toolRepository.findByHuginToolName(huginName).isEmpty();
+    private boolean isAvailable(String bouwName) {
+        return toolRepository.findByBouwToolName(bouwName).isEmpty();
     }
 
     private static String trimTo(String value, int max) {

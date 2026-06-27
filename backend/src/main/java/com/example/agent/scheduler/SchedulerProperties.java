@@ -26,7 +26,7 @@ public record SchedulerProperties(
             enabled = true;
         }
         if (storeFile == null || storeFile.isBlank()) {
-            storeFile = "~/.hugin/scheduled-prompts.json";
+            storeFile = "~/.bouw/scheduled-prompts.json";
         }
         if (maxPerTarget == null || maxPerTarget <= 0) {
             maxPerTarget = 20;

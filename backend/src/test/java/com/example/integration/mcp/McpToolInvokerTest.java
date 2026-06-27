@@ -42,7 +42,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         McpServerToolEntity tool = seedTool("alice", "linear", true);
         when(sessionManager.callTool(any(), any(), eq("create_issue"), any())).thenReturn("Created issue #42");
 
-        String result = invoker.invoke("alice", tool.huginToolName(), Map.of("title", "Bug"),
+        String result = invoker.invoke("alice", tool.bouwToolName(), Map.of("title", "Bug"),
                 "agent-1", "session-1");
 
         assertThat(result).isEqualTo("Created issue #42");
@@ -59,7 +59,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         when(sessionManager.callTool(any(), any(), any(), any()))
                 .thenThrow(new McpHttpClient.McpClientException("HTTP 500"));
 
-        String result = invoker.invoke("alice", tool.huginToolName(), Map.of(), "agent-1", "session-1");
+        String result = invoker.invoke("alice", tool.bouwToolName(), Map.of(), "agent-1", "session-1");
 
         assertThat(result).contains("failed").contains("HTTP 500");
         Integer errors = jdbcTemplate.queryForObject(
@@ -73,7 +73,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         insertUser("bob");
         McpServerToolEntity tool = seedTool("alice", "linear", true);
 
-        String result = invoker.invoke("bob", tool.huginToolName(), Map.of(), null, null);
+        String result = invoker.invoke("bob", tool.bouwToolName(), Map.of(), null, null);
 
         assertThat(result).contains("not available");
         verify(sessionManager, never()).callTool(any(), any(), any(), any());
@@ -84,7 +84,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         insertUser("alice");
         McpServerToolEntity tool = seedTool("alice", "linear", false);
 
-        String result = invoker.invoke("alice", tool.huginToolName(), Map.of(), null, null);
+        String result = invoker.invoke("alice", tool.bouwToolName(), Map.of(), null, null);
 
         assertThat(result).contains("disabled");
         verify(sessionManager, never()).callTool(any(), any(), any(), any());

@@ -22,7 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Runs {@code hugin update}, which pulls {@code origin/main}, rebuilds the jars,
+ * Runs {@code bouw update}, which pulls {@code origin/main}, rebuilds the jars,
  * and restarts the local services using the checked-out repository.
  */
 @Component
@@ -54,7 +54,7 @@ public class SelfUpdateTool implements LocalTool {
 
     @Override
     public String description() {
-        return "Update Hugin agent from the latest main branch. No arguments needed";
+        return "Update Bouw agent from the latest main branch. No arguments needed";
     }
 
     @Override
@@ -78,7 +78,7 @@ public class SelfUpdateTool implements LocalTool {
         String extendedPath = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:" + currentPath;
 
         ProcessBuilder builder = new ProcessBuilder(
-                "/bin/bash", "-c", "hugin update");
+                "/bin/bash", "-c", "bouw update");
         builder.directory(ctx.workspace().root().toFile());
         builder.environment().put("PATH", extendedPath);
         builder.redirectErrorStream(true);
@@ -93,7 +93,7 @@ public class SelfUpdateTool implements LocalTool {
         if (!finished) {
             process.destroyForcibly();
             reader.join(1000);
-            return "Error: 'hugin update' timed out after " + timeout.toSeconds() + "s.\n"
+            return "Error: 'bouw update' timed out after " + timeout.toSeconds() + "s.\n"
                     + "Partial output:\n" + render(output);
         }
         reader.join(2000);

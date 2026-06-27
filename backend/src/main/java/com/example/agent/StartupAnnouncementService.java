@@ -29,7 +29,7 @@ public class StartupAnnouncementService {
     private final AtomicReference<String> pending = new AtomicReference<>();
 
     public StartupAnnouncementService(
-            @Value("${agent.startup-announcement-file:${user.home}/.hugin/startup-announcement}") String path) {
+            @Value("${agent.startup-announcement-file:${user.home}/.bouw/startup-announcement}") String path) {
         this.file = Path.of(path);
     }
 

@@ -40,7 +40,7 @@ class DockerSandboxRuntimeTest {
         Path fakeDocker = writeFakeDocker(tmp.resolve("docker-root"));
         ProjectSandboxProperties properties = new ProjectSandboxProperties(
                 true, "test-image", 72, fakeDocker.toString(),
-                "4g", "2", 512, "", "hugin-agent-", "/workspace", "repo",
+                "4g", "2", 512, "", "bouw-agent-", "/workspace", "repo",
                 Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(60));
         runtime = new DockerSandboxRuntime(properties);
     }
@@ -53,8 +53,8 @@ class DockerSandboxRuntimeTest {
         SandboxSession session = runtime.create(java.util.UUID.randomUUID().toString(), repo);
         String id = session.sandboxId();
         assertThat(session.status()).isEqualTo(SandboxStatus.READY);
-        assertThat(session.containerName()).isEqualTo("hugin-agent-" + id);
-        assertThat(session.dockerVolumeName()).isEqualTo("hugin-agent-" + id + "-workspace");
+        assertThat(session.containerName()).isEqualTo("bouw-agent-" + id);
+        assertThat(session.dockerVolumeName()).isEqualTo("bouw-agent-" + id + "-workspace");
         assertThat(runtime.isActive(id)).isTrue();
 
         // The repository was cloned INSIDE the container at /workspace/repo.
@@ -99,7 +99,7 @@ class DockerSandboxRuntimeTest {
 
         // The token is stored in a 0600 file outside the repository working tree.
         SandboxRuntime.ExecResult token = runtime.exec(
-                id, "cat \"$HOME/.config/hugin/github-token\"", Duration.ofSeconds(10));
+                id, "cat \"$HOME/.config/bouw/github-token\"", Duration.ofSeconds(10));
         assertThat(token.exitCode()).isZero();
         assertThat(token.output().strip()).isEqualTo("secret-token-123");
 
@@ -150,7 +150,7 @@ class DockerSandboxRuntimeTest {
         runtime.refreshCredentials(id, "  ");
 
         SandboxRuntime.ExecResult token = runtime.exec(
-                id, "cat \"$HOME/.config/hugin/github-token\"", Duration.ofSeconds(10));
+                id, "cat \"$HOME/.config/bouw/github-token\"", Duration.ofSeconds(10));
         assertThat(token.output().strip()).isEqualTo("clone-time-token");
 
         runtime.delete(id);
@@ -166,7 +166,7 @@ class DockerSandboxRuntimeTest {
 
         // No token at clone time means no persisted credential file or global helper.
         SandboxRuntime.ExecResult tokenFile = runtime.exec(
-                id, "test -f \"$HOME/.config/hugin/github-token\"; echo $?", Duration.ofSeconds(10));
+                id, "test -f \"$HOME/.config/bouw/github-token\"; echo $?", Duration.ofSeconds(10));
         assertThat(tokenFile.output().strip()).isEqualTo("1");
 
         runtime.delete(id);

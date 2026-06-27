@@ -8,7 +8,7 @@ import java.time.Duration;
 public record AuthJwtProperties(String secretBase64, String issuer, Duration tokenTtl) {
 
     public String issuer() {
-        return issuer == null || issuer.isBlank() ? "hugin" : issuer;
+        return issuer == null || issuer.isBlank() ? "bouw" : issuer;
     }
 
     public Duration tokenTtl() {

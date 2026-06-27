@@ -5,7 +5,7 @@ import type { ChatThread } from "../../lib/types";
 import type { Screen } from "../../lib/screen";
 import type { OpenRouterCredits } from "../../services/apiClient";
 
-const LOGO = "/hugin-bird.jpg";
+const LOGO = "/bouw-bird.jpg";
 
 /** Formats a credit amount as a compact dollar figure (OpenRouter credits are denominated in USD). */
 function formatCredits(value: number): string {
@@ -49,8 +49,8 @@ export function DesktopSidebar(props: {
     <aside className="desktop-sidebar">
       {/* Brand */}
       <div className="ds-brand">
-        <img src={LOGO} alt="Hugin" className="brand-logo" />
-        <span className="ds-brand-name">Hugin</span>
+        <img src={LOGO} alt="Bouw" className="brand-logo" />
+        <span className="ds-brand-name">Bouw</span>
       </div>
 
       {/* New Chat button */}

@@ -1,11 +1,11 @@
 ---
 name: google-docs-sheets
-description: Use when the user asks Hugin to create, read, or edit Google Docs or Google Sheets (e.g. "make a doc", "add a row to my spreadsheet", "read that Google Sheet", "summarise this doc"). Covers the google_docs_* and google_sheets_* built-in tools, how authentication/sharing works, and the right tool for each editing operation.
+description: Use when the user asks Bouw to create, read, or edit Google Docs or Google Sheets (e.g. "make a doc", "add a row to my spreadsheet", "read that Google Sheet", "summarise this doc"). Covers the google_docs_* and google_sheets_* built-in tools, how authentication/sharing works, and the right tool for each editing operation.
 ---
 
 # Google Docs & Sheets
 
-Hugin has seven built-in tools for Google Workspace, backed by the official Google API Java
+Bouw has seven built-in tools for Google Workspace, backed by the official Google API Java
 client libraries. They run in-process in the `mcp-integration` server (no MCP server needed).
 
 | Tool | Purpose |
@@ -33,8 +33,8 @@ Workspace/domain-wide delegation.
 
 OAuth has one important consequence:
 
-- On first use, Hugin opens a browser for consent and caches refresh tokens in `google.oauth-token-dir`.
-- Files Hugin creates belong to the authenticated Google user, so `share_with` is only needed when you
+- On first use, Bouw opens a browser for consent and caches refresh tokens in `google.oauth-token-dir`.
+- Files Bouw creates belong to the authenticated Google user, so `share_with` is only needed when you
   want to share the new doc/sheet with someone else.
 
 Service account auth has two consequences you must keep in mind:

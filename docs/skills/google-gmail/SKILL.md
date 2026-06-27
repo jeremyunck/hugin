@@ -1,11 +1,11 @@
 ---
 name: google-gmail
-description: Use when the user asks Hugin to inspect, search, read, or send Gmail emails. Covers the google_gmail_search, google_gmail_read, and google_gmail_send built-in tools, Gmail query syntax, and OAuth/service-account setup.
+description: Use when the user asks Bouw to inspect, search, read, or send Gmail emails. Covers the google_gmail_search, google_gmail_read, and google_gmail_send built-in tools, Gmail query syntax, and OAuth/service-account setup.
 ---
 
 # Google Gmail
 
-Hugin has three built-in Gmail tools for working with the authenticated account.
+Bouw has three built-in Gmail tools for working with the authenticated account.
 
 | Tool | Purpose |
 | --- | --- |
@@ -20,7 +20,7 @@ Hugin has three built-in Gmail tools for working with the authenticated account.
 - Gmail query syntax is the same as Gmail search in the web UI, for example `from:alice@example.com newer_than:7d is:unread`.
 - If the user does not provide a query, search defaults to `in:inbox`.
 - Use `google_gmail_send` when the user wants a reply, a follow-up, or a new outbound email.
-- For replies, prefer passing `reply_to_message_id` and the reply body. Hugin can infer the recipient, thread, and subject from the original message.
+- For replies, prefer passing `reply_to_message_id` and the reply body. Bouw can infer the recipient, thread, and subject from the original message.
 
 ## Authentication
 
@@ -34,7 +34,7 @@ The Gmail tools use the same Google Workspace configuration as Docs and Sheets.
 ## Practical notes
 
 - Search is read-only. `google_gmail_send` writes mail, but only after the Gmail write scope is granted.
-- Message bodies are returned as plain text when possible; if a message is HTML-only, Hugin falls back to a readable text version.
+- Message bodies are returned as plain text when possible; if a message is HTML-only, Bouw falls back to a readable text version.
 - If the tools report themselves as unavailable, Google credentials have not been configured.
 
 ## Workflow recipes
@@ -46,7 +46,7 @@ The Gmail tools use the same Google Workspace configuration as Docs and Sheets.
 - Reply workflow:
   - Read the target message first.
   - Use `google_gmail_send` with `reply_to_message_id` and the reply body.
-  - Let Hugin infer the thread, subject, and recipient unless you need to override them.
+  - Let Bouw infer the thread, subject, and recipient unless you need to override them.
 - Follow-up workflow:
   - Search for old unresolved mail such as `is:unread older_than:7d` or `label:important older_than:14d`.
   - Read the remaining candidates.

@@ -1,20 +1,20 @@
 ---
-name: hugin-sandbox-screenshots
-description: Use when you must bring up the full Hugin stack from scratch in a fresh/headless environment (e.g. Claude Code on the web, a CI box, or any container with no Docker daemon), seed a login, and capture browser screenshots of a sandbox chat driving the agent. Covers native Postgres/Redis startup, building the bundled jar, the no-Docker "host-fallback" sandbox trick, an OpenRouter + gpt-oss-120b config, and a Playwright headless-shell capture flow with the exact UI selectors.
+name: bouw-sandbox-screenshots
+description: Use when you must bring up the full Bouw stack from scratch in a fresh/headless environment (e.g. Claude Code on the web, a CI box, or any container with no Docker daemon), seed a login, and capture browser screenshots of a sandbox chat driving the agent. Covers native Postgres/Redis startup, building the bundled jar, the no-Docker "host-fallback" sandbox trick, an OpenRouter + gpt-oss-120b config, and a Playwright headless-shell capture flow with the exact UI selectors.
 ---
 
-# Hugin Sandbox Screenshots (from-scratch local run)
+# Bouw Sandbox Screenshots (from-scratch local run)
 
-Use this when you have a clean checkout and need to actually *run* Hugin and
+Use this when you have a clean checkout and need to actually *run* Bouw and
 photograph the UI — including a **sandbox chat** — rather than just verify a
-frontend tweak. This differs from `hugin-local-dev` (assumes an installed macOS
-runtime + LaunchAgents) and `hugin-ui-screenshots` (assumes a running Vite dev
+frontend tweak. This differs from `bouw-local-dev` (assumes an installed macOS
+runtime + LaunchAgents) and `bouw-ui-screenshots` (assumes a running Vite dev
 server). Here we build the bundled jar and serve everything from one process on
 `:8080`, no Docker daemon required.
 
 ## When the host-fallback trick matters
 
-Hugin's "New sandbox" button calls `POST /api/sandboxes`, which normally starts a
+Bouw's "New sandbox" button calls `POST /api/sandboxes`, which normally starts a
 Docker container. In a nested sandbox / cloud session there is usually **no
 Docker daemon**. `DockerSandboxManager` has a built-in escape hatch: if the
 docker *binary itself* cannot be launched, it transparently creates a
@@ -24,7 +24,7 @@ that does not exist (see config below). The UI then shows a real sandbox chat
 (`sandbox` badge, `~/sandbox/<id>` file tree) and `run_bash`/`write_file` work.
 
 > Do not just leave `SANDBOX_DOCKER_BIN=docker`: with the real CLI present but no
-> daemon, `docker run` returns a connection error (non-zero exit), which Hugin
+> daemon, `docker run` returns a connection error (non-zero exit), which Bouw
 > treats as a hard failure — sandbox creation fails instead of falling back.
 
 ## Preconditions
@@ -42,13 +42,13 @@ redis-server --daemonize yes --port 6379
 
 # Create the database/role the app expects, then grant schema rights (PG15+ needs this).
 sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
-CREATE USER hugin WITH PASSWORD 'hugin';
-CREATE DATABASE hugin OWNER hugin;
-GRANT ALL PRIVILEGES ON DATABASE hugin TO hugin;
+CREATE USER bouw WITH PASSWORD 'bouw';
+CREATE DATABASE bouw OWNER bouw;
+GRANT ALL PRIVILEGES ON DATABASE bouw TO bouw;
 SQL
-sudo -u postgres psql -d hugin -v ON_ERROR_STOP=1 <<'SQL'
-GRANT ALL ON SCHEMA public TO hugin;
-ALTER SCHEMA public OWNER TO hugin;
+sudo -u postgres psql -d bouw -v ON_ERROR_STOP=1 <<'SQL'
+GRANT ALL ON SCHEMA public TO bouw;
+ALTER SCHEMA public OWNER TO bouw;
 SQL
 ```
 
@@ -62,7 +62,7 @@ and copies the React bundle into the backend, so one command builds everything:
 
 ```bash
 mvn -q -DskipTests package
-# -> backend/target/hugin-backend-0.0.1-SNAPSHOT.jar  (Spring Boot serves UI + API on :8080)
+# -> backend/target/bouw-backend-0.0.1-SNAPSHOT.jar  (Spring Boot serves UI + API on :8080)
 ```
 
 ## 3. Run with a seeded login + host-fallback sandbox
@@ -73,20 +73,20 @@ the DB. (Alternatively set `AUTH_TEST_USER_USERNAME`/`AUTH_TEST_USER_PASSWORD`
 to seed the dedicated screenshot account per `AGENTS.md`.)
 
 ```bash
-export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/hugin
-export SPRING_DATASOURCE_USERNAME=hugin
-export SPRING_DATASOURCE_PASSWORD=hugin
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bouw
+export SPRING_DATASOURCE_USERNAME=bouw
+export SPRING_DATASOURCE_PASSWORD=bouw
 export LLM_PROVIDER=openrouter
 export LLM_MODEL=openai/gpt-oss-120b          # auto-enabled via the model catalog fallback
 export OPEN_ROUTER_API_KEY="$OPEN_ROUTER_API_KEY"
 export SANDBOX_ENABLED=true
 export SANDBOX_DOCKER_BIN=docker-unavailable-fallback   # nonexistent -> host-fallback sandbox
-export AGENT_HOME=/home/user/.hugin
+export AGENT_HOME=/home/user/.bouw
 export AUTH_BOOTSTRAP_USERNAME=testuser
 export AUTH_BOOTSTRAP_PASSWORD='Test1234!'    # seeds the DB login
 export MEMORY_ENABLED=false
 
-java -jar backend/target/hugin-backend-0.0.1-SNAPSHOT.jar > /tmp/hugin.log 2>&1 &
+java -jar backend/target/bouw-backend-0.0.1-SNAPSHOT.jar > /tmp/bouw.log 2>&1 &
 ```
 
 Wait for readiness (health is `DOWN` until Redis is up, hence step 1):
@@ -136,7 +136,7 @@ waits for the final answer -> screenshots each step):
 
 ```bash
 cd /tmp/shots
-cp <repo>/docs/skills/hugin-sandbox-screenshots/files/capture.mjs .
+cp <repo>/docs/skills/bouw-sandbox-screenshots/files/capture.mjs .
 PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright node capture.mjs
 ```
 
@@ -148,7 +148,7 @@ Key facts the script relies on (see [files/capture.mjs](files/capture.mjs)):
   text `Sign in`.
 - Open the menu via `aria-label="Open menu"`, then click
   `button.menu-item:has-text("New sandbox")`.
-- The composer is `input[placeholder="Message Hugin…"]` (note the `…` glyph) and
+- The composer is `input[placeholder="Message Bouw…"]` (note the `…` glyph) and
   the send button is `[aria-label="Send message"]`.
 - A finished run re-enables the composer; the final answer renders in
   `.message-row-assistant .assistant-response`. Tool calls render as
@@ -164,7 +164,7 @@ actually did the work server-side:
 
 ```bash
 find "$AGENT_HOME/sandboxes" -name hello.py -exec cat {} \;   # the file it created
-PGPASSWORD=hugin psql -h localhost -U hugin -d hugin -c \
+PGPASSWORD=bouw psql -h localhost -U bouw -d bouw -c \
   "select status, mode from agent_runs order by started_at desc limit 1;"  # completed | SANDBOX
 ```
 

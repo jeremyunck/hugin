@@ -1,13 +1,13 @@
-# Hugin agent sandbox image.
+# Bouw agent sandbox image.
 #
-# Each project (GitHub repository) chat runs in its own container built from this image. The Hugin
+# Each project (GitHub repository) chat runs in its own container built from this image. The Bouw
 # backend orchestrates the agent loop and streams results; this container is purely the isolated
 # execution environment — it holds the repository checkout (in a Docker volume mounted at /workspace)
 # and runs the agent's bash/git/build/test commands. It never runs an HTTP server or agent runtime;
 # the backend drives it entirely through `docker exec`.
 #
 # Build:
-#   docker build -t hugin-agent-sandbox:latest docker/sandbox
+#   docker build -t bouw-agent-sandbox:latest docker/sandbox
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -35,11 +35,11 @@ RUN apt-get update \
 
 # Non-root user that owns the workspace. The container runs as this user so the agent cannot act as
 # root inside the sandbox (reinforced by --cap-drop=ALL and --security-opt=no-new-privileges on run).
-RUN useradd --create-home --shell /bin/bash hugin \
+RUN useradd --create-home --shell /bin/bash bouw \
     && mkdir -p /workspace \
-    && chown -R hugin:hugin /workspace
+    && chown -R bouw:bouw /workspace
 
-USER hugin
+USER bouw
 WORKDIR /workspace
 
 # Keep the container alive so the backend can exec into it for the lifetime of the chat. The run

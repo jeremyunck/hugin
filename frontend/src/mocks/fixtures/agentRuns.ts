@@ -5,7 +5,7 @@ import { minutesAgo } from "./auth";
 export const mockAgentRuns: AgentRun[] = [
   {
     id: "run-7c1a",
-    owner: "ada@hugin.dev",
+    owner: "ada@bouw.dev",
     sessionId: "thread-agent-1",
     agentId: "agent-research",
     prompt: "Research the most popular charting libraries and summarise trade-offs in a markdown table.",
@@ -17,12 +17,12 @@ export const mockAgentRuns: AgentRun[] = [
   },
   {
     id: "run-3f88",
-    owner: "ada@hugin.dev",
+    owner: "ada@bouw.dev",
     sessionId: "thread-github-1",
     agentId: "agent-coder",
     prompt: "Fix the onboarding wizard mobile bug and add a regression test.",
     model: "anthropic/claude-sonnet-4.6",
-    sandboxId: "sandbox-hugin-demo",
+    sandboxId: "sandbox-bouw-demo",
     startedAt: minutesAgo(11),
     disconnected: true,
     cancellationRequested: false

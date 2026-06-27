@@ -27,7 +27,7 @@ public class CloudAgentEventStore {
     private final Path agentHome;
     private final ObjectMapper objectMapper;
 
-    public CloudAgentEventStore(@Value("${agent.home:${user.home}/.hugin}") String agentHome, ObjectMapper objectMapper) {
+    public CloudAgentEventStore(@Value("${agent.home:${user.home}/.bouw}") String agentHome, ObjectMapper objectMapper) {
         this.agentHome = Path.of(agentHome);
         this.objectMapper = objectMapper;
     }

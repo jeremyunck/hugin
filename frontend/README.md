@@ -1,6 +1,6 @@
-# Hugin Frontend
+# Bouw Frontend
 
-A React + Vite client for the Hugin agent backend. It signs in against the backend, streams agent
+A React + Vite client for the Bouw agent backend. It signs in against the backend, streams agent
 responses over Server-Sent Events, runs sandbox sessions with a live workspace file tree, and manages
 integrations — all against the REST API in `../backend`.
 

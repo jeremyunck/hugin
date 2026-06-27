@@ -3,7 +3,7 @@ import { KeyRound, Lock, Mail } from "lucide-react";
 import type { AuthMode } from "../hooks/useAuthBootstrap";
 import { COLORS } from "../lib/theme";
 
-const LOGO = "/hugin-bird.jpg";
+const LOGO = "/bouw-bird.jpg";
 
 function Field(props: {
   icon: typeof Mail;
@@ -104,8 +104,8 @@ export function LoginScreen(props: {
         }}
       >
         <div className="login-brand">
-          <img src={LOGO} alt="Hugin" className="login-logo" />
-          <span className="login-wordmark">HUGIN</span>
+          <img src={LOGO} alt="Bouw" className="login-logo" />
+          <span className="login-wordmark">BOUW</span>
           <p>
             {isForgot ? "Enter the code we emailed to reset your password" : "Enter the code we emailed"}
             {pendingEmail ? ` to ${pendingEmail}` : ""}
@@ -177,8 +177,8 @@ export function LoginScreen(props: {
       }}
     >
       <div className="login-brand">
-        <img src={LOGO} alt="Hugin" className="login-logo" />
-        <span className="login-wordmark">HUGIN</span>
+        <img src={LOGO} alt="Bouw" className="login-logo" />
+        <span className="login-wordmark">BOUW</span>
         <p>{subtitle}</p>
       </div>
 

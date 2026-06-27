@@ -51,7 +51,7 @@ public class GoogleGmailTrashTool implements LocalTool {
                 + "it moves them to the Trash label, where they can be restored until Gmail empties the "
                 + "Trash (about 30 days later). It also ALWAYS requires explicit user approval and never "
                 + "acts immediately. Provide the Gmail message ids (from google_gmail_search) to trash; "
-                + "Hugin shows the user a summary of each email and asks them to approve or decline before "
+                + "Bouw shows the user a summary of each email and asks them to approve or decline before "
                 + "anything is moved.";
     }
 

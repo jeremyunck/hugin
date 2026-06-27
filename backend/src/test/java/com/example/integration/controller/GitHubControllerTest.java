@@ -126,14 +126,14 @@ class GitHubControllerTest {
         when(github.beginConnect("http://localhost:5173/dashboard")).thenReturn(new GitHubConnectResponse(
                 new GitHubStatus(false, true, true, "github-app", "",
                         "GitHub App is configured but not installed yet."),
-                "https://github.com/apps/hugin/installations/new?state=x"));
+                "https://github.com/apps/bouw/installations/new?state=x"));
 
         mockMvc.perform(post("/api/github/connect")
                         .contentType("application/json")
                         .content("{\"returnTo\":\"http://localhost:5173/dashboard\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.configured").value(true))
-                .andExpect(jsonPath("$.installUrl").value("https://github.com/apps/hugin/installations/new?state=x"));
+                .andExpect(jsonPath("$.installUrl").value("https://github.com/apps/bouw/installations/new?state=x"));
     }
 
     @Test

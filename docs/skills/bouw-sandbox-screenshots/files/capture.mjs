@@ -1,23 +1,23 @@
-// Hugin sandbox-chat screenshot capture.
+// Bouw sandbox-chat screenshot capture.
 //
-// Drives the local Hugin UI: login -> New sandbox -> ask the agent to create a
+// Drives the local Bouw UI: login -> New sandbox -> ask the agent to create a
 // Python script -> wait for the final answer -> screenshot each step.
 //
 // Run with the headless-shell browser path set, e.g.:
 //   PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright node capture.mjs
 //
-// Prereqs: Hugin running on :8080, a seeded login, and SANDBOX_DOCKER_BIN
+// Prereqs: Bouw running on :8080, a seeded login, and SANDBOX_DOCKER_BIN
 // pointed at a nonexistent binary so the host-fallback sandbox is used.
 // See ../SKILL.md.
 
 import { chromium } from 'playwright';
 
-const BASE = process.env.HUGIN_BASE || 'http://localhost:8080';
-const USER = process.env.HUGIN_USER || 'testuser';
-const PASS = process.env.HUGIN_PASS || 'Test1234!';
-const OUT = process.env.HUGIN_SHOTS || '/tmp/shots';
+const BASE = process.env.BOUW_BASE || 'http://localhost:8080';
+const USER = process.env.BOUW_USER || 'testuser';
+const PASS = process.env.BOUW_PASS || 'Test1234!';
+const OUT = process.env.BOUW_SHOTS || '/tmp/shots';
 
-const MSG = 'input[placeholder="Message Hugin…"]'; // note the … glyph
+const MSG = 'input[placeholder="Message Bouw…"]'; // note the … glyph
 const SEND = '[aria-label="Send message"]';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

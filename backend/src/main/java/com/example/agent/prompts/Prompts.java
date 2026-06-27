@@ -62,7 +62,7 @@ public final class Prompts {
             wrong, and the thing they want may live somewhere other than where they said. If an exact \
             path does not exist, do NOT report it as missing — search for it. Use find_path to locate \
             a file or directory by its name or a fragment of its path (for example, asked to "look for \
-            the folder /code/hugin/hugin", search for the basename "hugin"), use find_files for glob \
+            the folder /code/bouw/bouw", search for the basename "bouw"), use find_files for glob \
             matches (pass type='dir' to match directories), grep_search to find files by their \
             contents, and list_files to explore directory structure. Try the basename, parent \
             directories, case variations, and related names before concluding something cannot be \
@@ -263,7 +263,7 @@ public final class Prompts {
         String cleanPurpose = purpose == null ? "" : purpose.trim();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("You are ").append(cleanName).append(", a specialized Hugin agent.");
+        sb.append("You are ").append(cleanName).append(", a specialized Bouw agent.");
         if (!cleanPurpose.isBlank()) {
             sb.append("\n\nPrimary purpose:\n").append(cleanPurpose);
         }

@@ -20,7 +20,7 @@ import {
  *
  * Everything else (transcripts, models, integrations, GitHub, workspace files) flows through the
  * normal service calls, which route to the mock fixtures via {@link mockApiFetch}. Because this
- * module is dynamically imported behind a `VITE_HUGIN_MOCK_MODE` guard, none of it — or the fixture
+ * module is dynamically imported behind a `VITE_BOUW_MOCK_MODE` guard, none of it — or the fixture
  * data — ships in a normal build.
  */
 
@@ -28,9 +28,9 @@ import {
 //   apiClient.ts          -> AUTH_STORAGE_KEY
 //   chatSessionStore.ts   -> THREAD_INDEX_KEY
 //   chatSessionStore.ts / launch.ts -> the active-thread hint
-const AUTH_STORAGE_KEY = "hugin-auth-session-v1";
-const THREAD_INDEX_KEY = "hugin-ui-thread-index-v1";
-const ACTIVE_THREAD_KEY = "hugin-active-thread-v1";
+const AUTH_STORAGE_KEY = "bouw-auth-session-v1";
+const THREAD_INDEX_KEY = "bouw-ui-thread-index-v1";
+const ACTIVE_THREAD_KEY = "bouw-active-thread-v1";
 
 /** The thread that should be active for a given screen so chat/project views have a transcript. */
 function activeThreadIdForScreen(screen: Screen): string {

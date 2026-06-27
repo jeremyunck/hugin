@@ -362,24 +362,24 @@ class LocalToolsExtendedTest {
 
     @Test
     void findFilesByDefaultMatchesOnlyFiles() throws Exception {
-        Files.createDirectories(tmp.resolve("hugin"));
-        Files.writeString(tmp.resolve("hugin.txt"), "x");
+        Files.createDirectories(tmp.resolve("bouw"));
+        Files.writeString(tmp.resolve("bouw.txt"), "x");
         var find = new FindFilesTool(workspace);
 
-        String result = find.execute(Map.of("pattern", "hugin*"));
+        String result = find.execute(Map.of("pattern", "bouw*"));
 
-        assertThat(result).contains("hugin.txt");
-        assertThat(result).doesNotContain("hugin/");
+        assertThat(result).contains("bouw.txt");
+        assertThat(result).doesNotContain("bouw/");
     }
 
     @Test
     void findFilesWithTypeDirMatchesDirectories() throws Exception {
-        Files.createDirectories(tmp.resolve("nested/hugin"));
+        Files.createDirectories(tmp.resolve("nested/bouw"));
         var find = new FindFilesTool(workspace);
 
-        String result = find.execute(Map.of("pattern", "hugin", "type", "dir"));
+        String result = find.execute(Map.of("pattern", "bouw", "type", "dir"));
 
-        assertThat(result).contains("nested/hugin/");
+        assertThat(result).contains("nested/bouw/");
     }
 
     // ------------------------------------------------------------------
@@ -388,37 +388,37 @@ class LocalToolsExtendedTest {
 
     @Test
     void findPathLocatesDirectoryByBasenameFromFullPath() throws Exception {
-        // The directory lives at code/hugin; the user asked for the (non-existent) /code/hugin/hugin.
-        Files.createDirectories(tmp.resolve("code/hugin"));
+        // The directory lives at code/bouw; the user asked for the (non-existent) /code/bouw/bouw.
+        Files.createDirectories(tmp.resolve("code/bouw"));
         var find = new FindPathTool(workspace);
 
-        String result = find.execute(Map.of("name", "/code/hugin/hugin"));
+        String result = find.execute(Map.of("name", "/code/bouw/bouw"));
 
-        assertThat(result).contains("code/hugin/");
+        assertThat(result).contains("code/bouw/");
     }
 
     @Test
     void findPathMatchesFilesAndDirectoriesCaseInsensitively() throws Exception {
-        Files.createDirectories(tmp.resolve("src/Hugin"));
-        Files.writeString(tmp.resolve("src/Hugin/HuginService.java"), "class HuginService {}");
+        Files.createDirectories(tmp.resolve("src/Bouw"));
+        Files.writeString(tmp.resolve("src/Bouw/BouwService.java"), "class BouwService {}");
         var find = new FindPathTool(workspace);
 
-        String result = find.execute(Map.of("name", "hugin"));
+        String result = find.execute(Map.of("name", "bouw"));
 
-        assertThat(result).contains("src/Hugin/");
-        assertThat(result).contains("src/Hugin/HuginService.java");
+        assertThat(result).contains("src/Bouw/");
+        assertThat(result).contains("src/Bouw/BouwService.java");
     }
 
     @Test
     void findPathTypeDirReturnsOnlyDirectories() throws Exception {
-        Files.createDirectories(tmp.resolve("hugin"));
-        Files.writeString(tmp.resolve("hugin.md"), "doc");
+        Files.createDirectories(tmp.resolve("bouw"));
+        Files.writeString(tmp.resolve("bouw.md"), "doc");
         var find = new FindPathTool(workspace);
 
-        String result = find.execute(Map.of("name", "hugin", "type", "dir"));
+        String result = find.execute(Map.of("name", "bouw", "type", "dir"));
 
-        assertThat(result).contains("hugin/");
-        assertThat(result).doesNotContain("hugin.md");
+        assertThat(result).contains("bouw/");
+        assertThat(result).doesNotContain("bouw.md");
     }
 
     @Test
@@ -433,13 +433,13 @@ class LocalToolsExtendedTest {
 
     @Test
     void findPathRanksExactNameMatchesFirst() throws Exception {
-        Files.createDirectories(tmp.resolve("a/huginous"));
-        Files.createDirectories(tmp.resolve("z/hugin"));
+        Files.createDirectories(tmp.resolve("a/bouwous"));
+        Files.createDirectories(tmp.resolve("z/bouw"));
         var find = new FindPathTool(workspace);
 
-        String result = find.execute(Map.of("name", "hugin", "type", "dir"));
+        String result = find.execute(Map.of("name", "bouw", "type", "dir"));
 
-        // The exact basename match (z/hugin) should be ranked ahead of the substring match.
-        assertThat(result.indexOf("z/hugin/")).isLessThan(result.indexOf("a/huginous/"));
+        // The exact basename match (z/bouw) should be ranked ahead of the substring match.
+        assertThat(result.indexOf("z/bouw/")).isLessThan(result.indexOf("a/bouwous/"));
     }
 }

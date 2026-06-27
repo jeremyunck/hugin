@@ -42,8 +42,8 @@ function pathOf(rawPath: string): string {
 function sandbox(id: string): SandboxInfo {
   return {
     id,
-    containerName: `hugin-${id}`,
-    image: "ghcr.io/hugin/sandbox:latest",
+    containerName: `bouw-${id}`,
+    image: "ghcr.io/bouw/sandbox:latest",
     status: "running",
     createdAt: MOCK_NOW,
     workspace: "/workspace"
@@ -138,7 +138,7 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
   }
   if (method === "PATCH" && /\/api\/mcp\/servers\/[^/]+\/tools\/[^/]+$/.test(path)) {
     const body = parseBody(init.body) as Record<string, unknown>;
-    return ok({ id: "mock-tool", toolName: "mock", huginToolName: "mcp_mock", description: null, enabled: Boolean(body.enabled), stale: false, lastSeenAt: null }) as Promise<T>;
+    return ok({ id: "mock-tool", toolName: "mock", bouwToolName: "mcp_mock", description: null, enabled: Boolean(body.enabled), stale: false, lastSeenAt: null }) as Promise<T>;
   }
   if (method === "PATCH" && /\/api\/mcp\/servers\/[^/]+$/.test(path)) {
     return ok({ id: "mock-mcp-1", name: "mock", displayName: "Mock", transport: "STREAMABLE_HTTP", endpointUrl: "https://example.com/mcp", authType: "NONE", enabled: true, hasToken: false, oauthConnected: false, needsAuthorization: false, command: null, toolCount: 0, enabledToolCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), tools: [] }) as Promise<T>;
@@ -185,7 +185,7 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
 
   // --- Sandboxes ------------------------------------------------------------
   if (method === "POST" && path === "/api/sandboxes/github") {
-    return ok(sandbox("sandbox-hugin-demo")) as Promise<T>;
+    return ok(sandbox("sandbox-bouw-demo")) as Promise<T>;
   }
   if (method === "GET" && /\/api\/sandboxes\/[^/]+\/files$/.test(path)) {
     return ok(mockProjectFiles) as Promise<T>;

@@ -95,7 +95,7 @@ export function McpServersSection(props: {
         <div className="mcp-empty">
           <Server size={22} strokeWidth={1.5} color="#8b9099" />
           <p className="integrations-empty-text">
-            No MCP servers yet. Add one to expose its tools to Hugin.
+            No MCP servers yet. Add one to expose its tools to Bouw.
           </p>
         </div>
       ) : null}
@@ -287,7 +287,7 @@ function McpToolRow(props: { tool: McpTool; onToggle: (enabled: boolean) => void
       </label>
       <div className="mcp-tool-info">
         <div className="mcp-tool-names">
-          <code className="mcp-tool-hugin">{tool.huginToolName}</code>
+          <code className="mcp-tool-bouw">{tool.bouwToolName}</code>
           <span className="mcp-tool-original">({tool.toolName})</span>
           {tool.stale ? <span className="mcp-tool-stale-tag">stale</span> : null}
         </div>

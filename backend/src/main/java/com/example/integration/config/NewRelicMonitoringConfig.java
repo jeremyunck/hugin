@@ -18,7 +18,7 @@ public class NewRelicMonitoringConfig {
     @Value("${newrelic.license-key}")
     private String licenseKey;
 
-    @Value("${newrelic.service-name:hugin}")
+    @Value("${newrelic.service-name:bouw}")
     private String serviceName;
 
     @Bean

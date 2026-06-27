@@ -210,7 +210,7 @@ class AgentControllerTest {
                         "bug-reports/2026-06-18/report.txt",
                         "/tmp/report.txt",
                         "/workspace",
-                        List.of("/tmp/hugin.log")));
+                        List.of("/tmp/bouw.log")));
 
         ResponseEntity<BugReportResponse> result = controller.saveBugReport(request, jwt);
 
@@ -218,7 +218,7 @@ class AgentControllerTest {
         assertThat(result.getBody()).isEqualTo(new BugReportResponse(
                 "bug-123",
                 "bug-reports/2026-06-18/report.txt",
-                List.of("/tmp/hugin.log")));
+                List.of("/tmp/bouw.log")));
     }
 
     @Test

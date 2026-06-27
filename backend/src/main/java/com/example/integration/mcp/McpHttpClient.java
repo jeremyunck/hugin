@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Minimal client for the MCP Streamable HTTP transport.
  *
- * <p>Speaks JSON-RPC 2.0 over HTTP POST and implements the three calls Hugin needs: {@code initialize},
+ * <p>Speaks JSON-RPC 2.0 over HTTP POST and implements the three calls Bouw needs: {@code initialize},
  * {@code tools/list}, and {@code tools/call}. Each logical operation runs {@code initialize} first (as
  * the spec requires) and then the real call, carrying any {@code Mcp-Session-Id} the server returns
  * between the two requests.
@@ -46,14 +46,14 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>TODO(sessions): we still do not open a long-lived GET stream for server-initiated messages
  * (server→client notifications/sampling). That is only needed for servers that push to the client,
- * which Hugin does not yet consume.
+ * which Bouw does not yet consume.
  */
 @Component
 public class McpHttpClient {
 
     private static final Logger log = LoggerFactory.getLogger(McpHttpClient.class);
 
-    /** MCP protocol revision Hugin advertises. */
+    /** MCP protocol revision Bouw advertises. */
     public static final String PROTOCOL_VERSION = "2025-06-18";
 
     private final HttpClient httpClient;
@@ -194,7 +194,7 @@ public class McpHttpClient {
         params.put("protocolVersion", PROTOCOL_VERSION);
         params.set("capabilities", objectMapper.createObjectNode());
         ObjectNode clientInfo = objectMapper.createObjectNode();
-        clientInfo.put("name", "hugin");
+        clientInfo.put("name", "bouw");
         clientInfo.put("version", "1.0");
         params.set("clientInfo", clientInfo);
 

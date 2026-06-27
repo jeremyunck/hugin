@@ -12,11 +12,11 @@
     </parent>
 
     <groupId>com.example</groupId>
-    <artifactId>hugin-server</artifactId>
+    <artifactId>bouw-server</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>hugin-server</name>
-    <description>Hugin – monorepo: Spring Boot server + React frontend</description>
+    <name>bouw-server</name>
+    <description>Bouw – monorepo: Spring Boot server + React frontend</description>
 
     <modules>
         <module>backend</module>

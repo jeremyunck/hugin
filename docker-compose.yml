@@ -1,11 +1,11 @@
-# Hugin — Docker quickstart stack: the app plus its PostgreSQL and Redis backends.
+# Bouw — Docker quickstart stack: the app plus its PostgreSQL and Redis backends.
 #
 #   cp .env.example .env   # then add your LLM key and set HOST_PORT if 8080 is already taken
 #   docker compose up --build
 #
 # App is served on http://localhost:${HOST_PORT:-8080}. Stop with `docker compose down`;
 # reset all local data (DB, Redis, agent home, workspace) with `docker compose down -v`.
-# If port 8080 is already in use on the host (e.g. by a native Hugin install), set
+# If port 8080 is already in use on the host (e.g. by a native Bouw install), set
 # HOST_PORT to a free port (e.g. HOST_PORT=8081) in .env before starting.
 
 services:
@@ -13,13 +13,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${SPRING_DATASOURCE_DB:-hugin}
-      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-hugin}
-      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hugin}
+      POSTGRES_DB: ${SPRING_DATASOURCE_DB:-bouw}
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-bouw}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-bouw}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-hugin} -d ${SPRING_DATASOURCE_DB:-hugin}"]
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-bouw} -d ${SPRING_DATASOURCE_DB:-bouw}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 10
 
-  hugin:
+  bouw:
     build:
       context: .
       dockerfile: Dockerfile
@@ -48,9 +48,9 @@ services:
         condition: service_healthy
     environment:
       # Reach the postgres service inside the compose network instead of localhost.
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${SPRING_DATASOURCE_DB:-hugin}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-hugin}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hugin}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${SPRING_DATASOURCE_DB:-bouw}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-bouw}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-bouw}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       # LLM provider / credentials.
@@ -60,14 +60,14 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-medium}
       # Agent runtime.
-      AGENT_HOME: ${AGENT_HOME:-/home/hugin/.hugin}
+      AGENT_HOME: ${AGENT_HOME:-/home/bouw/.bouw}
       AGENT_WORKSPACE_ROOT: /workspace
       SANDBOX_ENABLED: ${SANDBOX_ENABLED:-false}
       MEMORY_ENABLED: ${MEMORY_ENABLED:-false}
       # Bootstrap login. The default password is a well-known weak value, so the app would normally
       # refuse to start; this localhost quickstart opts in to the weak password (a loud warning is
       # logged). Set a strong AUTH_BOOTSTRAP_PASSWORD and AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD=false
-      # before exposing Hugin beyond localhost.
+      # before exposing Bouw beyond localhost.
       AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-change-me}
       AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD: ${AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD:-true}
@@ -80,11 +80,11 @@ services:
       retries: 12
       start_period: 60s
     volumes:
-      - hugin_home:/home/hugin/.hugin
+      - bouw_home:/home/bouw/.bouw
       - workspace:/workspace
 
 volumes:
   pgdata:
   redisdata:
-  hugin_home:
+  bouw_home:
   workspace:

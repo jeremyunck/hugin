@@ -42,15 +42,15 @@ describe("FileTree", () => {
         files={githubFiles}
         wsOpen={true}
         onToggleWs={() => {}}
-        label="hugin · main"
-        rootName="hugin"
+        label="bouw · main"
+        rootName="bouw"
         badge="github"
         defaultOpenDirectories={false}
       />
     );
 
-    expect(screen.getByText("hugin · main")).toBeTruthy();
-    expect(screen.getByText("hugin")).toBeTruthy();
+    expect(screen.getByText("bouw · main")).toBeTruthy();
+    expect(screen.getByText("bouw")).toBeTruthy();
     expect(screen.queryByText("workspace")).toBeNull();
     expect(screen.getByText("frontend")).toBeTruthy();
     expect(screen.getByText("README.md")).toBeTruthy();

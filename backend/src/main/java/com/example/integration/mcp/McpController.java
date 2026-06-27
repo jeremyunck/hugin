@@ -145,7 +145,7 @@ public class McpController {
         return "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + heading + "</title></head>"
                 + "<body style=\"font-family:system-ui,sans-serif;padding:2rem;text-align:center\">"
                 + "<h2>" + heading + "</h2><p>" + safeMessage + "</p>"
-                + "<p>You can close this window and return to Hugin.</p>"
+                + "<p>You can close this window and return to Bouw.</p>"
                 + "<script>setTimeout(function(){window.close();},1500);</script>"
                 + "</body></html>";
     }

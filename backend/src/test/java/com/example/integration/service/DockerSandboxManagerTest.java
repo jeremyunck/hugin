@@ -37,7 +37,7 @@ class DockerSandboxManagerTest {
                 Duration.ofSeconds(10),
                 Duration.ofSeconds(10),
                 "",
-                "hugin-sbx-",
+                "bouw-sbx-",
                 25);
 
         DockerSandboxManager manager = new DockerSandboxManager(properties, registry, factory, tmp.toString());
@@ -75,7 +75,7 @@ class DockerSandboxManagerTest {
                 Duration.ofSeconds(10),
                 Duration.ofMillis(200),
                 "",
-                "hugin-sbx-",
+                "bouw-sbx-",
                 25);
 
         DockerSandboxManager manager = new DockerSandboxManager(properties, registry, factory, tmp.toString());

@@ -91,7 +91,7 @@ export function Composer(props: {
           }}
           rows={3}
           disabled={disabled}
-          placeholder={attachment ? "Ask about this image..." : "Message Hugin…"}
+          placeholder={attachment ? "Ask about this image..." : "Message Bouw…"}
         />
         {busy ? (
           <button type="button" className="input-bar-send" onClick={onStop} aria-label="Stop run">
@@ -149,7 +149,7 @@ export function Composer(props: {
           </div>
         </label>
       </div>
-      <p className="input-note">Hugin can make mistakes. Please verify important information.</p>
+      <p className="input-note">Bouw can make mistakes. Please verify important information.</p>
     </div>
   );
 }

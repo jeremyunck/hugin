@@ -14,7 +14,7 @@ import java.util.UUID;
 /**
  * Executes an MCP tool call on behalf of an authenticated user and records an audit entry.
  *
- * <p>Given the model-facing {@code hugin_tool_name}, the invoker:
+ * <p>Given the model-facing {@code bouw_tool_name}, the invoker:
  * <ol>
  *   <li>looks up the tool and its owning server,</li>
  *   <li>enforces owner isolation and enabled/stale gating (a tool the caller doesn't own, or that is
@@ -57,14 +57,14 @@ public class McpToolInvoker {
     }
 
     /**
-     * Invokes the MCP tool advertised as {@code huginToolName} for {@code owner}. Returns a text result
+     * Invokes the MCP tool advertised as {@code bouwToolName} for {@code owner}. Returns a text result
      * suitable to feed straight back to the model, including for the failure cases.
      */
-    public String invoke(String owner, String huginToolName, Map<String, Object> arguments,
+    public String invoke(String owner, String bouwToolName, Map<String, Object> arguments,
                          String agentId, String sessionId) {
-        Optional<McpServerToolEntity> toolOpt = toolRepository.findByHuginToolName(huginToolName);
+        Optional<McpServerToolEntity> toolOpt = toolRepository.findByBouwToolName(bouwToolName);
         if (toolOpt.isEmpty()) {
-            return "MCP tool '" + huginToolName + "' is not available.";
+            return "MCP tool '" + bouwToolName + "' is not available.";
         }
         McpServerToolEntity tool = toolOpt.get();
 
@@ -72,13 +72,13 @@ public class McpToolInvoker {
         // the tool as simply unavailable rather than revealing another user's server exists.
         Optional<McpServerEntity> serverOpt = serverRepository.findByIdAndOwner(tool.serverId(), owner);
         if (serverOpt.isEmpty()) {
-            log.warn("Owner {} attempted to invoke MCP tool {} they do not own; denied.", owner, huginToolName);
-            return "MCP tool '" + huginToolName + "' is not available.";
+            log.warn("Owner {} attempted to invoke MCP tool {} they do not own; denied.", owner, bouwToolName);
+            return "MCP tool '" + bouwToolName + "' is not available.";
         }
         McpServerEntity server = serverOpt.get();
 
         if (!server.enabled() || !tool.enabled() || tool.stale()) {
-            return "MCP tool '" + huginToolName + "' is currently disabled.";
+            return "MCP tool '" + bouwToolName + "' is currently disabled.";
         }
 
         String argsPreview = previewArguments(arguments);
@@ -89,7 +89,7 @@ public class McpToolInvoker {
                     result, McpAuditLogEntity.STATUS_SUCCESS);
             return result == null || result.isBlank() ? "(the tool returned no content)" : result;
         } catch (McpHttpClient.McpClientException e) {
-            String message = "MCP tool '" + huginToolName + "' failed: " + e.getMessage();
+            String message = "MCP tool '" + bouwToolName + "' failed: " + e.getMessage();
             recordAudit(owner, agentId, sessionId, server.id(), tool.toolName(), argsPreview,
                     message, McpAuditLogEntity.STATUS_ERROR);
             return message;

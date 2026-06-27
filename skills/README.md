@@ -1,6 +1,6 @@
 # Workspace Skills
 
-Hugin now scans repo-local skills from:
+Bouw now scans repo-local skills from:
 
 - `skills/**/SKILL.md`
 - `docs/skills/**/SKILL.md`

@@ -47,7 +47,7 @@ class McpOAuthServiceTest extends AbstractMcpDbTest {
                 "client-123", null, "https://auth.example.com/authorize", "https://auth.example.com/token",
                 null, "read", "https://mcp.example.com/mcp", null, null, null));
 
-        String url = oauth.startAuthorization(server, "https://hugin.app/api/mcp/oauth/callback");
+        String url = oauth.startAuthorization(server, "https://bouw.app/api/mcp/oauth/callback");
 
         assertThat(url).startsWith("https://auth.example.com/authorize?");
         assertThat(url).contains("response_type=code");
@@ -76,7 +76,7 @@ class McpOAuthServiceTest extends AbstractMcpDbTest {
         registered.put("client_id", "dyn-client");
         when(http.postJson(eq("https://as.example.com/register"), any())).thenReturn(registered);
 
-        String url = oauth.startAuthorization(server, "https://hugin.app/api/mcp/oauth/callback");
+        String url = oauth.startAuthorization(server, "https://bouw.app/api/mcp/oauth/callback");
 
         assertThat(url).startsWith("https://as.example.com/authorize?");
         assertThat(url).contains("client_id=dyn-client");
@@ -94,7 +94,7 @@ class McpOAuthServiceTest extends AbstractMcpDbTest {
                 "client-123", null, "https://auth.example.com/authorize", "https://auth.example.com/token",
                 null, null, "https://mcp.example.com/mcp", null, null, null));
         stateRepository.insert(new McpOAuthStateRepository.State(
-                "state-1", server.id(), "alice", "verifier-1", "https://hugin.app/api/mcp/oauth/callback",
+                "state-1", server.id(), "alice", "verifier-1", "https://bouw.app/api/mcp/oauth/callback",
                 Instant.now(clock)));
 
         ObjectNode tokens = objectMapper.createObjectNode();

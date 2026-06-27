@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
 
           release_tag="release-main-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          release_name="Hugin runtime ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          release_name="Bouw runtime ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
           source_sha="${GITHUB_SHA}"
           source_ref="${GITHUB_REF_NAME}"
           version="$(node -p "require('./package.json').version")"
@@ -44,22 +44,22 @@ jobs:
           cp agent-core/target/agent-core-*.jar "$bundle_dir/agent-core.jar"
           cp openrouter-search-mcp.py "$bundle_dir/openrouter-search-mcp.py"
 
-          tar -C "$bundle_dir" -czf "${dist_dir}/hugin-runtime.tar.gz" .
+          tar -C "$bundle_dir" -czf "${dist_dir}/bouw-runtime.tar.gz" .
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${dist_dir}/hugin-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/hugin-runtime.tar.gz.sha256"
+            sha256sum "${dist_dir}/bouw-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/bouw-runtime.tar.gz.sha256"
           else
-            shasum -a 256 "${dist_dir}/hugin-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/hugin-runtime.tar.gz.sha256"
+            shasum -a 256 "${dist_dir}/bouw-runtime.tar.gz" | awk '{print $1}' > "${dist_dir}/bouw-runtime.tar.gz.sha256"
           fi
 
-          bundle_sha256="$(cat "${dist_dir}/hugin-runtime.tar.gz.sha256")"
-          cat > "${dist_dir}/hugin-manifest.json" <<EOF
+          bundle_sha256="$(cat "${dist_dir}/bouw-runtime.tar.gz.sha256")"
+          cat > "${dist_dir}/bouw-manifest.json" <<EOF
           {
             "release_tag": "${release_tag}",
             "release_name": "${release_name}",
             "source_ref": "${source_ref}",
             "source_sha": "${source_sha}",
             "package_version": "${version}",
-            "bundle_name": "hugin-runtime.tar.gz",
+            "bundle_name": "bouw-runtime.tar.gz",
             "bundle_sha256": "${bundle_sha256}"
           }
 EOF
@@ -68,11 +68,11 @@ EOF
         uses: softprops/action-gh-release@v2
         with:
           tag_name: release-main-${{ github.run_id }}-${{ github.run_attempt }}
-          name: Hugin runtime ${{ github.run_id }}.${{ github.run_attempt }}
+          name: Bouw runtime ${{ github.run_id }}.${{ github.run_attempt }}
           generate_release_notes: true
           files: |
-            dist/release/hugin-runtime.tar.gz
-            dist/release/hugin-runtime.tar.gz.sha256
-            dist/release/hugin-manifest.json
+            dist/release/bouw-runtime.tar.gz
+            dist/release/bouw-runtime.tar.gz.sha256
+            dist/release/bouw-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

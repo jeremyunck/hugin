@@ -66,7 +66,7 @@ import java.util.Comparator;
 public class GoogleWorkspaceClientFactory {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleWorkspaceClientFactory.class);
-    private static final String OAUTH_USER_ID = "hugin";
+    private static final String OAUTH_USER_ID = "bouw";
 
     /** Scopes for the Google APIs the built-in Workspace tools use. */
     private static final List<String> SCOPES = List.of(
@@ -510,8 +510,8 @@ public class GoogleWorkspaceClientFactory {
         String target = normalizeReturnTo(returnTo);
         String headline = success ? "Google connected" : "Google connection failed";
         String message = success
-                ? "Returning you to Hugin..."
-                : "The reconnect flow did not finish cleanly. Returning you to Hugin...";
+                ? "Returning you to Bouw..."
+                : "The reconnect flow did not finish cleanly. Returning you to Bouw...";
         String escapedTarget = escapeHtml(target);
         String escapedMessage = escapeHtml(message);
         String escapedHeadline = escapeHtml(headline);
@@ -578,16 +578,16 @@ public class GoogleWorkspaceClientFactory {
 
     private String normalizeReturnTo(String returnTo) {
         if (returnTo == null || returnTo.isBlank()) {
-            return "https://hugin.thecognitivejunction.com/";
+            return "https://bouw.thecognitivejunction.com/";
         }
         try {
             URI uri = URI.create(returnTo.trim());
             if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
-                return "https://hugin.thecognitivejunction.com/";
+                return "https://bouw.thecognitivejunction.com/";
             }
             return returnTo.trim();
         } catch (IllegalArgumentException e) {
-            return "https://hugin.thecognitivejunction.com/";
+            return "https://bouw.thecognitivejunction.com/";
         }
     }
 

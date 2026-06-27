@@ -32,7 +32,7 @@ class JustInTimeToolRegistryTest {
 
     @Test
     void loadsAndExecutesToolFromManifest() throws Exception {
-        Files.createDirectories(tmp.resolve(".hugin/jit-tools"));
+        Files.createDirectories(tmp.resolve(".bouw/jit-tools"));
         Files.createDirectories(tmp.resolve("scripts"));
         Files.writeString(tmp.resolve("scripts/echo_args.py"), """
                 import json
@@ -42,7 +42,7 @@ class JustInTimeToolRegistryTest {
                 print(payload["message"])
                 """);
 
-        Files.writeString(tmp.resolve(".hugin/jit-tools/echo.tool.json"), """
+        Files.writeString(tmp.resolve(".bouw/jit-tools/echo.tool.json"), """
                 {
                   "name": "echo_manifest",
                   "description": "Echoes a message from stdin JSON.",
@@ -73,11 +73,11 @@ class JustInTimeToolRegistryTest {
 
     @Test
     void rescansWorkspaceEachTimeSoNewToolsAppearWithoutRestart() throws Exception {
-        Files.createDirectories(tmp.resolve(".hugin/jit-tools"));
+        Files.createDirectories(tmp.resolve(".bouw/jit-tools"));
 
         assertThat(registry.tools(workspace)).isEmpty();
 
-        Files.writeString(tmp.resolve(".hugin/jit-tools/adder.tool.json"), """
+        Files.writeString(tmp.resolve(".bouw/jit-tools/adder.tool.json"), """
                 {
                   "name": "adder",
                   "command": "python3",
@@ -101,8 +101,8 @@ class JustInTimeToolRegistryTest {
 
     @Test
     void reloadsManifestWhenItChangesAndServesCacheWhenItDoesNot() throws Exception {
-        Files.createDirectories(tmp.resolve(".hugin/jit-tools"));
-        Path manifest = tmp.resolve(".hugin/jit-tools/greeter.tool.json");
+        Files.createDirectories(tmp.resolve(".bouw/jit-tools"));
+        Path manifest = tmp.resolve(".bouw/jit-tools/greeter.tool.json");
         Files.writeString(manifest, """
                 { "name": "greeter", "description": "first version", "command": "true" }
                 """);

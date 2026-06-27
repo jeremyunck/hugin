@@ -246,31 +246,31 @@ class LocalToolsTest {
     }
 
     @Test
-    void huginVersionExtractsPlainCliVersion() {
-        assertThat(HuginVersionTool.extractVersion("0.1.6\n")).isEqualTo("0.1.6");
+    void bouwVersionExtractsPlainCliVersion() {
+        assertThat(BouwVersionTool.extractVersion("0.1.6\n")).isEqualTo("0.1.6");
     }
 
     @Test
-    void huginVersionExtractsNpmGlobalVersion() {
-        assertThat(HuginVersionTool.extractVersion("/opt/homebrew/lib\n└── hugin-agent@0.1.6\n"))
+    void bouwVersionExtractsNpmGlobalVersion() {
+        assertThat(BouwVersionTool.extractVersion("/opt/homebrew/lib\n└── bouw-agent@0.1.6\n"))
                 .isEqualTo("0.1.6");
     }
 
     @Test
-    void huginVersionIgnoresLauncherUsageOutput() {
-        assertThat(HuginVersionTool.extractVersion("Usage: hugin [command]\n\n  logs Stream service logs\n"))
+    void bouwVersionIgnoresLauncherUsageOutput() {
+        assertThat(BouwVersionTool.extractVersion("Usage: bouw [command]\n\n  logs Stream service logs\n"))
                 .isNull();
     }
 
     @Test
-    void huginVersionReadsPackageJsonFromWorkspace() throws Exception {
+    void bouwVersionReadsPackageJsonFromWorkspace() throws Exception {
         Files.writeString(tmp.resolve("package.json"), """
                 {
-                  "name": "hugin-agent",
+                  "name": "bouw-agent",
                   "version": "9.8.7"
                 }
                 """);
-        var tool = new HuginVersionTool(workspace, properties, new ObjectMapper());
+        var tool = new BouwVersionTool(workspace, properties, new ObjectMapper());
 
         String result = tool.execute(Map.of());
 

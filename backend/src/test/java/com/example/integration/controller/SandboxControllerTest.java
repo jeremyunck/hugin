@@ -40,7 +40,7 @@ class SandboxControllerTest {
     @Test
     void createGitHubSandboxClonesSelectedBranch() throws Exception {
         SandboxInfo sandbox = new SandboxInfo(
-                "sbx-1", "hugin-sbx-sbx-1", "ubuntu:24.04", SandboxInfo.RUNNING, Instant.now(), "/tmp/sbx-1/workspace");
+                "sbx-1", "bouw-sbx-sbx-1", "ubuntu:24.04", SandboxInfo.RUNNING, Instant.now(), "/tmp/sbx-1/workspace");
         when(github.installationToken()).thenReturn(Optional.of("token-123"));
         when(github.cloneUrl("octocat/hello-world")).thenReturn("https://github.com/octocat/hello-world.git");
         when(sandboxManager.createGitHubRepoSandbox(
@@ -61,7 +61,7 @@ class SandboxControllerTest {
     @Test
     void createGitHubSandboxResolvesSelectedBugReport() throws Exception {
         SandboxInfo sandbox = new SandboxInfo(
-                "sbx-1", "hugin-sbx-sbx-1", "ubuntu:24.04", SandboxInfo.RUNNING, Instant.now(), "/tmp/sbx-1/workspace");
+                "sbx-1", "bouw-sbx-sbx-1", "ubuntu:24.04", SandboxInfo.RUNNING, Instant.now(), "/tmp/sbx-1/workspace");
         var bugReport = new BugReportCatalogService.StoredBugReport(
                 "bug-123",
                 "Hung chat",

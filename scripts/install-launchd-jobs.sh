@@ -3,21 +3,21 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-ENV_DIR="$HOME/.config/hugin-dev"
+ENV_DIR="$HOME/.config/bouw-dev"
 ENV_FILE="$ENV_DIR/env"
 LOG_DIR="$REPO_DIR/.data/logs"
-DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
-DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
-SERVICE_LABEL="${HUGIN_DEV_SERVICE_LABEL:-com.jnku.hugin.repo-server}"
-UPDATE_LABEL="${HUGIN_DEV_UPDATE_LABEL:-com.jnku.hugin.repo-autoupdate}"
+DEV_HOME="${BOUW_DEV_HOME:-$HOME/.local/share/bouw-dev}"
+DEPLOY_REPO_DIR="${BOUW_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
+SERVICE_LABEL="${BOUW_DEV_SERVICE_LABEL:-com.jnku.bouw.repo-server}"
+UPDATE_LABEL="${BOUW_DEV_UPDATE_LABEL:-com.jnku.bouw.repo-autoupdate}"
 SERVICE_PLIST="$LAUNCH_AGENTS_DIR/${SERVICE_LABEL}.plist"
 UPDATE_PLIST="$LAUNCH_AGENTS_DIR/${UPDATE_LABEL}.plist"
-RUN_SCRIPT="$REPO_DIR/scripts/hugin-launchd-run.sh"
-UPDATE_SCRIPT="$REPO_DIR/scripts/hugin-launchd-update.sh"
+RUN_SCRIPT="$REPO_DIR/scripts/bouw-launchd-run.sh"
+UPDATE_SCRIPT="$REPO_DIR/scripts/bouw-launchd-update.sh"
 REPO_URL="$(git -C "$REPO_DIR" remote get-url origin)"
 
 die() {
-  printf '[hugin-launchd-install] %s\n' "$*" >&2
+  printf '[bouw-launchd-install] %s\n' "$*" >&2
   exit 1
 }
 
@@ -28,7 +28,7 @@ require_cmd() {
 resolve_docker_bin() {
   local candidate
   for candidate in \
-    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "${BOUW_SANDBOX_DOCKER_BIN:-}" \
     "$(command -v docker 2>/dev/null || true)" \
     "$HOME/.docker/bin/docker" \
     "/Applications/Docker.app/Contents/Resources/bin/docker"
@@ -99,14 +99,14 @@ append_if_set CLOUD_AGENTS_ENABLED "${CLOUD_AGENTS_ENABLED:-}"
 append_if_set SCHEDULER_DEFAULT_ZONE "${SCHEDULER_DEFAULT_ZONE:-}"
 append_if_set SCHEDULER_ENABLED "${SCHEDULER_ENABLED:-}"
 append_if_set AGENT_HOME "$DEV_HOME"
-append_if_set HUGIN_DEV_HOME "$DEV_HOME"
-append_if_set HUGIN_DEV_ENV_FILE "$ENV_FILE"
-append_if_set HUGIN_DEV_LOG_DIR "$LOG_DIR"
-append_if_set HUGIN_DEV_SERVICE_LABEL "$SERVICE_LABEL"
-append_if_set HUGIN_DEV_UPDATE_LABEL "$UPDATE_LABEL"
-append_if_set HUGIN_DEV_DEPLOY_REPO_DIR "$DEPLOY_REPO_DIR"
-append_if_set HUGIN_DEV_REPO_URL "$REPO_URL"
-append_if_set HUGIN_SANDBOX_DOCKER_BIN "$DOCKER_BIN"
+append_if_set BOUW_DEV_HOME "$DEV_HOME"
+append_if_set BOUW_DEV_ENV_FILE "$ENV_FILE"
+append_if_set BOUW_DEV_LOG_DIR "$LOG_DIR"
+append_if_set BOUW_DEV_SERVICE_LABEL "$SERVICE_LABEL"
+append_if_set BOUW_DEV_UPDATE_LABEL "$UPDATE_LABEL"
+append_if_set BOUW_DEV_DEPLOY_REPO_DIR "$DEPLOY_REPO_DIR"
+append_if_set BOUW_DEV_REPO_URL "$REPO_URL"
+append_if_set BOUW_SANDBOX_DOCKER_BIN "$DOCKER_BIN"
 chmod 600 "$ENV_FILE"
 
 cat > "$SERVICE_PLIST" <<EOF
@@ -125,11 +125,11 @@ cat > "$SERVICE_PLIST" <<EOF
   <string>${REPO_DIR}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HUGIN_DEV_ENV_FILE</key>
+    <key>BOUW_DEV_ENV_FILE</key>
     <string>${ENV_FILE}</string>
-    <key>HUGIN_DEV_LOG_DIR</key>
+    <key>BOUW_DEV_LOG_DIR</key>
     <string>${LOG_DIR}</string>
-    <key>HUGIN_DEV_SERVICE_LABEL</key>
+    <key>BOUW_DEV_SERVICE_LABEL</key>
     <string>${SERVICE_LABEL}</string>
   </dict>
   <key>RunAtLoad</key>
@@ -160,11 +160,11 @@ cat > "$UPDATE_PLIST" <<EOF
   <string>${REPO_DIR}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HUGIN_DEV_ENV_FILE</key>
+    <key>BOUW_DEV_ENV_FILE</key>
     <string>${ENV_FILE}</string>
-    <key>HUGIN_DEV_LOG_DIR</key>
+    <key>BOUW_DEV_LOG_DIR</key>
     <string>${LOG_DIR}</string>
-    <key>HUGIN_DEV_SERVICE_LABEL</key>
+    <key>BOUW_DEV_SERVICE_LABEL</key>
     <string>${SERVICE_LABEL}</string>
   </dict>
   <key>StartInterval</key>

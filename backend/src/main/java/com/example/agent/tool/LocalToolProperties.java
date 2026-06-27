@@ -66,7 +66,7 @@ public record LocalToolProperties(
             loginShell = true;
         }
         if (jitToolDirectory == null || jitToolDirectory.isBlank()) {
-            jitToolDirectory = ".hugin/jit-tools";
+            jitToolDirectory = ".bouw/jit-tools";
         }
     }
 

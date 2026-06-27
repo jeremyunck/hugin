@@ -100,9 +100,9 @@ final class ContainerWorkspaceTools {
         String dir = shellPath(path);
         String command = "cd " + quote(dir) + " 2>/dev/null && find . -mindepth 1 "
                 + pruneExpr() + " -printf '%y %P\\n' | sort -k2 | head -n " + (maxEntries + 1)
-                + " || echo __HUGIN_NOPATH__";
+                + " || echo __BOUW_NOPATH__";
         SandboxRuntime.ExecResult result = exec(rt, sandboxId, command, timeout);
-        if (result.output().contains("__HUGIN_NOPATH__")) {
+        if (result.output().contains("__BOUW_NOPATH__")) {
             return "Error: directory does not exist: " + path;
         }
         List<String> rendered = new ArrayList<>();
@@ -157,9 +157,9 @@ final class ContainerWorkspaceTools {
         String command = "cd " + quote(shellPath(path)) + " 2>/dev/null && find . -mindepth 1 "
                 + pruneExpr() + typeExpr + matchExpr
                 + " -printf '%y %P\\n' | sort -k2 | head -n " + (maxResults + 1)
-                + " || echo __HUGIN_NOPATH__";
+                + " || echo __BOUW_NOPATH__";
         SandboxRuntime.ExecResult result = exec(rt, sandboxId, command, timeout);
-        if (result.output().contains("__HUGIN_NOPATH__")) {
+        if (result.output().contains("__BOUW_NOPATH__")) {
             return "Error: path does not exist: " + path;
         }
         List<String> rendered = new ArrayList<>();

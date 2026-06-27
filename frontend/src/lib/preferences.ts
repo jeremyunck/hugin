@@ -1,6 +1,6 @@
 import type { ModelOption } from "./types";
 
-const PREFERENCES_STORAGE_KEY = "hugin-preferences-v1";
+const PREFERENCES_STORAGE_KEY = "bouw-preferences-v1";
 
 export type FontSizeId = "small" | "medium" | "large" | "xlarge";
 

@@ -170,7 +170,7 @@ public class McpStdioClient {
             params.put("protocolVersion", McpHttpClient.PROTOCOL_VERSION);
             params.set("capabilities", objectMapper.createObjectNode());
             ObjectNode clientInfo = objectMapper.createObjectNode();
-            clientInfo.put("name", "hugin");
+            clientInfo.put("name", "bouw");
             clientInfo.put("version", "1.0");
             params.set("clientInfo", clientInfo);
             this.serverInfo = request("initialize", params);

@@ -7,17 +7,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <ul>
  *   <li>{@code oauthClientSecretsFile} — path to a Google OAuth client-secrets JSON file. This is the
- *       preferred way to authenticate a personal Hugin install. Create a desktop OAuth client in a
+ *       preferred way to authenticate a personal Bouw install. Create a desktop OAuth client in a
  *       Google Cloud project, enable the Docs/Sheets/Drive/Gmail APIs, download the JSON, and point
- *       this at it. When first used, Hugin opens the browser for user consent and stores refresh
+ *       this at it. When first used, Bouw opens the browser for user consent and stores refresh
  *       tokens in {@code oauthTokenDir}.</li>
  *   <li>{@code oauthTokenDir} — directory where OAuth refresh tokens are cached. Defaults to a
- *       directory under {@code ~/.hugin} so the consent flow only needs to run once.</li>
+ *       directory under {@code ~/.bouw} so the consent flow only needs to run once.</li>
  *   <li>{@code oauthLocalServerPort} — local loopback port used for the OAuth callback during the
  *       initial consent flow on a desktop dev environment.</li>
  *   <li>{@code oauthCallbackUrl} — the public callback URL registered in the Google Cloud Console
  *       as the OAuth redirect URI. Set this to the deployed server's callback endpoint
- *       (e.g. {@code https://hugin.thecognitivejunction.com/Callback}) for server-side OAuth flows.
+ *       (e.g. {@code https://bouw.thecognitivejunction.com/Callback}) for server-side OAuth flows.
  *       When blank, a local loopback server ({@code localhost:oauthLocalServerPort}) is used instead,
  *       which is suitable for local development only.</li>
  *   <li>{@code credentialsFile} — optional path to a Google <b>service-account</b> JSON key file for
@@ -55,7 +55,7 @@ public record GoogleWorkspaceProperties(
             oauthClientSecretsFile = "";
         }
         if (oauthTokenDir == null || oauthTokenDir.isBlank()) {
-            oauthTokenDir = System.getProperty("user.home") + "/.hugin/google-oauth";
+            oauthTokenDir = System.getProperty("user.home") + "/.bouw/google-oauth";
         }
         if (oauthLocalServerPort == null || oauthLocalServerPort <= 0) {
             oauthLocalServerPort = 8765;
@@ -64,7 +64,7 @@ public record GoogleWorkspaceProperties(
             oauthCallbackUrl = "";
         }
         if (applicationName == null || applicationName.isBlank()) {
-            applicationName = "Hugin";
+            applicationName = "Bouw";
         }
         if (impersonateUser == null) {
             impersonateUser = "";

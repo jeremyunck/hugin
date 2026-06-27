@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
  * <p>The Google Docs API is structural rather than Markdown-native, so this renderer converts
  * Markdown blocks into real Docs constructs such as headings, bullets, block quotes, and formatted
  * text spans. The goal is not to be a full CommonMark implementation; it is to render the kinds of
- * content Hugin tends to generate into a clean, readable document.
+ * content Bouw tends to generate into a clean, readable document.
  */
 public final class GoogleDocsMarkdownRenderer {
 

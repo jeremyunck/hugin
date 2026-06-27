@@ -17,8 +17,8 @@ import java.util.stream.Stream;
  * fragment anywhere under the workspace, even when the exact path the user gave does not exist.
  *
  * <p>This complements {@code find_files} (glob match on file names only) and {@code list_files}
- * (one directory) by being forgiving: given something like {@code /code/hugin/hugin} it matches on
- * the trailing path segments and the basename, so a directory simply named {@code hugin} is found
+ * (one directory) by being forgiving: given something like {@code /code/bouw/bouw} it matches on
+ * the trailing path segments and the basename, so a directory simply named {@code bouw} is found
  * without the caller knowing its real location. Matching is case-insensitive substring on both the
  * entry name and its workspace-relative path; results where the name matches exactly (or the path
  * ends with the query) are ranked first.
@@ -50,7 +50,7 @@ public class FindPathTool implements LocalTool {
         return "Locate a file or directory by name, partial name, or path fragment anywhere under "
                 + "the workspace — use this when you know roughly what something is called but not "
                 + "where it lives, or when an exact path was not found. Matching is case-insensitive "
-                + "and forgiving: a query like '/code/hugin/hugin' matches a directory named 'hugin' "
+                + "and forgiving: a query like '/code/bouw/bouw' matches a directory named 'bouw' "
                 + "by its basename and trailing path segments. Returns matching paths (directories "
                 + "end with '/'), best matches first. Common build/VCS directories are skipped.";
     }
@@ -63,7 +63,7 @@ public class FindPathTool implements LocalTool {
                         "name", Map.of(
                                 "type", "string",
                                 "description", "File or directory name, partial name, or path fragment to "
-                                        + "locate, e.g. 'hugin', 'AgentService.java' or '/code/hugin/hugin'."),
+                                        + "locate, e.g. 'bouw', 'AgentService.java' or '/code/bouw/bouw'."),
                         "path", Map.of(
                                 "type", "string",
                                 "description", "Directory to search under, relative to the workspace root. Defaults to '.'."),
@@ -104,7 +104,7 @@ public class FindPathTool implements LocalTool {
         }
 
         // Normalise the query into a basename (last segment) and a slash-style path fragment so we
-        // can match both "hugin" against entry names and "code/hugin/hugin" against relative paths.
+        // can match both "bouw" against entry names and "code/bouw/bouw" against relative paths.
         String normalized = query.replace('\\', '/').replaceAll("^/+", "").replaceAll("/+$", "");
         String basename = normalized.contains("/")
                 ? normalized.substring(normalized.lastIndexOf('/') + 1)

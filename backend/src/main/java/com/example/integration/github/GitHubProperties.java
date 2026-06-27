@@ -5,12 +5,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Configuration for the GitHub integration, authenticated as a <b>GitHub App</b>.
  *
- * <p>Hugin authenticates to the GitHub REST API as a GitHub App rather than with a personal access
+ * <p>Bouw authenticates to the GitHub REST API as a GitHub App rather than with a personal access
  * token. The flow is:
  * <ol>
  *   <li>The App is identified by its numeric {@code appId} and an RSA {@code privateKey}
  *       (PEM, downloaded from the App's settings page). These sign a short-lived JWT.</li>
- *   <li>The App is <i>installed</i> on a user/org. Each installation has an id; Hugin exchanges the
+ *   <li>The App is <i>installed</i> on a user/org. Each installation has an id; Bouw exchanges the
  *       App JWT for a per-installation access token used to call the API on the installation's
  *       behalf.</li>
  * </ol>
@@ -24,7 +24,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>{@code privateKeyPath} — path to a {@code .pem} file containing the App's private key
  *       ({@code ~/} is expanded). Either PKCS#1 ("BEGIN RSA PRIVATE KEY") or PKCS#8
  *       ("BEGIN PRIVATE KEY") encodings are accepted.</li>
- *   <li>{@code installationId} — optional. Pin a specific installation. When blank, Hugin discovers
+ *   <li>{@code installationId} — optional. Pin a specific installation. When blank, Bouw discovers
  *       the first installation of the App automatically.</li>
  *   <li>{@code apiBaseUrl} — GitHub REST API root (override for GitHub Enterprise).</li>
  *   <li>{@code webBaseUrl} — GitHub web root used to build the install URL (override for Enterprise).</li>

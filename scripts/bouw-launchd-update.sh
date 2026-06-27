@@ -2,17 +2,17 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${HUGIN_DEV_ENV_FILE:-$HOME/.config/hugin-dev/env}"
-SERVICE_LABEL="${HUGIN_DEV_SERVICE_LABEL:-com.jnku.hugin.repo-server}"
-SERVICE_PLIST="${HUGIN_DEV_SERVICE_PLIST:-$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist}"
-UPDATE_LOG_DIR="${HUGIN_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
-DEV_HOME="${HUGIN_DEV_HOME:-$HOME/.local/share/hugin-dev}"
-DEPLOY_REPO_DIR="${HUGIN_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
-REPO_URL="${HUGIN_DEV_REPO_URL:-}"
-SANDBOX_IMAGE="${HUGIN_SANDBOX_IMAGE:-hugin-agent-sandbox:latest}"
+ENV_FILE="${BOUW_DEV_ENV_FILE:-$HOME/.config/bouw-dev/env}"
+SERVICE_LABEL="${BOUW_DEV_SERVICE_LABEL:-com.jnku.bouw.repo-server}"
+SERVICE_PLIST="${BOUW_DEV_SERVICE_PLIST:-$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist}"
+UPDATE_LOG_DIR="${BOUW_DEV_LOG_DIR:-$REPO_DIR/.data/logs}"
+DEV_HOME="${BOUW_DEV_HOME:-$HOME/.local/share/bouw-dev}"
+DEPLOY_REPO_DIR="${BOUW_DEV_DEPLOY_REPO_DIR:-$DEV_HOME/repo}"
+REPO_URL="${BOUW_DEV_REPO_URL:-}"
+SANDBOX_IMAGE="${BOUW_SANDBOX_IMAGE:-bouw-agent-sandbox:latest}"
 
-info() { printf '[hugin-update] %s\n' "$*"; }
-warn() { printf '[hugin-update] %s\n' "$*" >&2; }
+info() { printf '[bouw-update] %s\n' "$*"; }
+warn() { printf '[bouw-update] %s\n' "$*" >&2; }
 prepend_path() {
   local dir="$1"
   [[ -n "$dir" && -d "$dir" && ":$PATH:" != *":$dir:"* ]] || return 0
@@ -22,7 +22,7 @@ prepend_path() {
 resolve_docker_bin() {
   local candidate
   for candidate in \
-    "${HUGIN_SANDBOX_DOCKER_BIN:-}" \
+    "${BOUW_SANDBOX_DOCKER_BIN:-}" \
     "$(command -v docker 2>/dev/null || true)" \
     "$HOME/.docker/bin/docker" \
     "/Applications/Docker.app/Contents/Resources/bin/docker"
@@ -36,7 +36,7 @@ resolve_docker_bin() {
 }
 
 stash_deployment_changes() {
-  local stash_name="hugin-deploy-autostash-$(date +%s)"
+  local stash_name="bouw-deploy-autostash-$(date +%s)"
   git stash push --include-untracked --message "$stash_name" >/dev/null
   info "Saved deployment checkout changes to stash '${stash_name}'."
 }
@@ -66,8 +66,8 @@ fi
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:$PATH"
 prepend_path "$HOME/.docker/bin"
 prepend_path "/Applications/Docker.app/Contents/Resources/bin"
-if [[ -n "${HUGIN_SANDBOX_DOCKER_BIN:-}" ]]; then
-  prepend_path "$(dirname "$HUGIN_SANDBOX_DOCKER_BIN")"
+if [[ -n "${BOUW_SANDBOX_DOCKER_BIN:-}" ]]; then
+  prepend_path "$(dirname "$BOUW_SANDBOX_DOCKER_BIN")"
 fi
 if [[ -z "${AGENT_HOME:-}" || "${AGENT_HOME}" == "$REPO_DIR" ]]; then
   export AGENT_HOME="$DEV_HOME"
@@ -116,7 +116,7 @@ local_head="$(git rev-parse HEAD)"
 remote_head="$(git rev-parse origin/main)"
 built_jar=""
 if [[ -d "$DEPLOY_REPO_DIR/backend/target" ]]; then
-  built_jar="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'hugin-backend-*.jar' ! -name '*.original' | head -n 1)"
+  built_jar="$(find "$DEPLOY_REPO_DIR/backend/target" -maxdepth 1 -type f -name 'bouw-backend-*.jar' ! -name '*.original' | head -n 1)"
 fi
 built_sandbox_image=false
 DOCKER_BIN="$(resolve_docker_bin || true)"

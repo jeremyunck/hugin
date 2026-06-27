@@ -34,14 +34,14 @@ COPY --from=frontend /frontend/dist/ backend/src/main/resources/static/
 
 # Package the executable jar (skip the npm-driven frontend profile and tests).
 RUN mvn -B -P-frontend -pl backend -am -DskipTests clean package \
-    && cp backend/target/hugin-backend-*.jar /build/app.jar
+    && cp backend/target/bouw-backend-*.jar /build/app.jar
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 3 — Slim Java 21 runtime image.
 # ──────────────────────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-noble AS runtime
 
-# The Docker CLI client lets Hugin orchestrate per-project sandbox containers through the host's
+# The Docker CLI client lets Bouw orchestrate per-project sandbox containers through the host's
 # Docker socket (mounted via docker-compose.sandbox.yml). Only the client is installed — there is no
 # daemon in this image; it talks to the host daemon over the bind-mounted /var/run/docker.sock.
 RUN apt-get update \
@@ -55,18 +55,18 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Run as a dedicated non-root user. AGENT_HOME defaults under this user's home.
-RUN groupadd --system hugin \
-    && useradd --system --create-home --home-dir /home/hugin --gid hugin hugin \
-    && mkdir -p /home/hugin/.hugin /workspace \
-    && chown -R hugin:hugin /home/hugin /workspace
+RUN groupadd --system bouw \
+    && useradd --system --create-home --home-dir /home/bouw --gid bouw bouw \
+    && mkdir -p /home/bouw/.bouw /workspace \
+    && chown -R bouw:bouw /home/bouw /workspace
 
-WORKDIR /home/hugin
+WORKDIR /home/bouw
 COPY --from=backend /build/app.jar /app/app.jar
 
-ENV AGENT_HOME=/home/hugin/.hugin \
+ENV AGENT_HOME=/home/bouw/.bouw \
     JAVA_OPTS=""
 
-USER hugin
+USER bouw
 EXPOSE 8080
 
 # Allow JAVA_OPTS to be injected (e.g. memory limits) without rebuilding.
