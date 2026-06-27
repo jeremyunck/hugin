@@ -336,9 +336,9 @@ google:
   oauth-token-dir: ${GOOGLE_OAUTH_TOKEN_DIR:~/.bouw/google-oauth}
   oauth-local-server-port: ${GOOGLE_OAUTH_LOCAL_SERVER_PORT:8765}
   # Public callback URL registered in the Google Cloud Console OAuth client. Set this to the
-  # deployed server's callback endpoint (e.g. https://bouw.thecognitivejunction.com/Callback).
+  # deployed server's callback endpoint (e.g. https://takeabouw.com/Callback).
   # When blank a local loopback receiver is used (suitable for local dev only).
-  oauth-callback-url: ${GOOGLE_OAUTH_CALLBACK_URL:https://bouw.thecognitivejunction.com/Callback}
+  oauth-callback-url: ${GOOGLE_OAUTH_CALLBACK_URL:https://takeabouw.com/Callback}
   credentials-file: ${GOOGLE_APPLICATION_CREDENTIALS:}
   # Application name reported to the Google APIs (cosmetic).
   application-name: Bouw

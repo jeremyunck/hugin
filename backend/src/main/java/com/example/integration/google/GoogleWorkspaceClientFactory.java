@@ -578,16 +578,16 @@ public class GoogleWorkspaceClientFactory {
 
     private String normalizeReturnTo(String returnTo) {
         if (returnTo == null || returnTo.isBlank()) {
-            return "https://bouw.thecognitivejunction.com/";
+            return "https://takeabouw.com/";
         }
         try {
             URI uri = URI.create(returnTo.trim());
             if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
-                return "https://bouw.thecognitivejunction.com/";
+                return "https://takeabouw.com/";
             }
             return returnTo.trim();
         } catch (IllegalArgumentException e) {
-            return "https://bouw.thecognitivejunction.com/";
+            return "https://takeabouw.com/";
         }
     }
 
