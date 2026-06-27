@@ -204,7 +204,7 @@ function McpActivityPanel(props: { entries: McpAuditEntry[]; onRefresh: () => vo
                 <span className={`mcp-activity-status mcp-activity-${entry.status}`}>{entry.status}</span>
                 <div className="mcp-activity-info">
                   <div className="mcp-activity-names">
-                    <code className="mcp-tool-hugin">{entry.toolName ?? "(unknown tool)"}</code>
+                    <code className="mcp-tool-name">{entry.toolName ?? "(unknown tool)"}</code>
                     {entry.serverName ? <span className="mcp-tool-original">{entry.serverName}</span> : null}
                     <span className="mcp-activity-time">{formatTimestamp(entry.createdAt)}</span>
                   </div>

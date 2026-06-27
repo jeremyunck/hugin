@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *       initial consent flow on a desktop dev environment.</li>
  *   <li>{@code oauthCallbackUrl} — the public callback URL registered in the Google Cloud Console
  *       as the OAuth redirect URI. Set this to the deployed server's callback endpoint
- *       (e.g. {@code https://bouw.thecognitivejunction.com/Callback}) for server-side OAuth flows.
+ *       (e.g. {@code https://takeabouw.com/Callback}) for server-side OAuth flows.
  *       When blank, a local loopback server ({@code localhost:oauthLocalServerPort}) is used instead,
  *       which is suitable for local development only.</li>
  *   <li>{@code credentialsFile} — optional path to a Google <b>service-account</b> JSON key file for
