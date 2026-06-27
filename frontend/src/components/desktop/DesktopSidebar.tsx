@@ -25,7 +25,6 @@ export function DesktopSidebar(props: {
   onSettings: () => void;
   onThread: (thread: ChatThread) => void;
   openRouterCredits: OpenRouterCredits | null;
-  onManageApiKey: () => void;
 }) {
   const initials = props.username.slice(0, 2).toUpperCase();
   const recentThreads = props.threads.slice(0, 12);
@@ -147,9 +146,14 @@ export function DesktopSidebar(props: {
                   : "Balance unavailable."}
           </p>
         )}
-        <button type="button" className="ds-credit-manage-btn" onClick={props.onManageApiKey}>
-          {credits?.configured ? "Manage API Key" : "Add API Key"}
-        </button>
+        <a
+          href="https://openrouter.ai/settings/credits"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ds-credit-manage-btn"
+        >
+          Manage Credits
+        </a>
       </div>
 
       {/* Profile footer */}

@@ -638,7 +638,6 @@ export default function App() {
           onSettings={openPreferences}
           onThread={openHistory}
           openRouterCredits={openRouterCredits}
-          onManageApiKey={openPreferences}
         />
       ) : null}
       <div className="device-shell">
