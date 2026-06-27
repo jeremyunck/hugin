@@ -1,17 +1,7 @@
 # Agent Workflow
 
 Codex agents working in this repository should always create a pull request when they complete a feature.
-Any UI change must include at least one current screenshot of the changed state in the pull request.
-When a task updates specific screens, agents should capture screenshots of each specific updated screen after the work is complete, not just a generic app shell.
-Screenshots must show the actual functionality changed by the feature so reviewers can verify the behavior or UI delta directly from the pull request.
-
-## Screenshot Login
-
-Use the seeded screenshot test account when verifying authenticated UI flows and capturing screenshots.
-The account is only created when `AUTH_TEST_USER_PASSWORD` is set (there is no default, so the public
-build never ships a known credential). Set `AUTH_TEST_USER_USERNAME` and `AUTH_TEST_USER_PASSWORD` in
-the environment and read the credentials from there before logging in.
-Agents should use that account for post-change UI screenshots unless the task specifically requires a different user state.
+Screenshots of changed UI are captured automatically as part of the pull request checks, so agents do not need to capture or attach them manually.
 
 Agents working in this repository should follow this workflow:
 
