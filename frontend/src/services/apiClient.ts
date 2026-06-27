@@ -99,12 +99,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: 
 
 export function loadAuthSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
-  const raw = window.sessionStorage.getItem(AUTH_STORAGE_KEY);
+  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY) ?? window.sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (!raw) return null;
 
   try {
     const parsed = JSON.parse(raw) as AuthSession;
     if (!parsed.token || !parsed.username) return null;
+    // One-time migration for users who still have the old sessionStorage-backed session.
+    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     return parsed;
   } catch {
     return null;
@@ -114,10 +117,12 @@ export function loadAuthSession(): AuthSession | null {
 export function saveAuthSession(session: AuthSession | null) {
   if (typeof window === "undefined") return;
   if (!session) {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
     window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     return;
   }
-  window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
 type AuthChallengeResponse = {

@@ -117,7 +117,7 @@ For any shared or production deployment, set these environment variables (see `.
 | `AUTH_BOOTSTRAP_ALLOW_INSECURE_PASSWORD` | Leave unset / `false` in production. Set to `true` only for local dev to permit a weak password (a loud warning is logged). |
 | `SPRING_DATASOURCE_*` | PostgreSQL connection. |
 | `OPEN_ROUTER_API_KEY` / `OPENAI_API_KEY` | LLM provider key. |
-| `AUTH_JWT_SECRET_BASE64` | Optional stable HMAC signing key; if blank an ephemeral key is generated per start. |
+| `AUTH_JWT_SECRET_BASE64` | Optional bootstrap HMAC signing key; if set on first boot it is persisted to the database, otherwise Hugin generates and persists one automatically. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Resend API key and verified sender used to email login/registration verification codes. If unset, codes are logged instead of emailed (local dev only). |
 
 ### CI / validation

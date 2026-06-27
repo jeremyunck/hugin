@@ -32,7 +32,7 @@ The production build is also produced as part of the backend Maven build and ser
 ## How it connects to the backend
 
 - **Auth** — `POST /api/auth/login` and `GET /api/auth/me`; the JWT is sent as a bearer token on every
-  request and persisted in `sessionStorage`.
+  request and persisted in `localStorage`.
 - **Chat** — `POST /api/agent/stream` (SSE). Pure chats omit `sandboxId`; sandbox sessions send it so
   the agent gains filesystem/shell tools.
 - **Sandboxes** — `POST /api/sandboxes` to start one and `GET /api/sandboxes/{id}/files` to render the

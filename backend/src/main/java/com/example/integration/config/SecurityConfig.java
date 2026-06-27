@@ -1,6 +1,7 @@
 package com.example.integration.config;
 
 import com.example.integration.auth.AuthJwtProperties;
+import com.example.integration.auth.JwtSigningKeyService;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,20 +22,12 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
-import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.util.Base64;
 import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-
-    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -42,31 +35,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecretKey jwtSigningKey(AuthJwtProperties properties) {
-        String encoded = properties.secretBase64();
-        if (encoded == null || encoded.isBlank()) {
-            log.warn("auth.jwt.secret-base64 not set; generating an ephemeral JWT signing key for this startup");
-            try {
-                KeyGenerator keyGenerator = KeyGenerator.getInstance("HmacSHA256");
-                keyGenerator.init(256);
-                return keyGenerator.generateKey();
-            } catch (Exception ex) {
-                throw new IllegalStateException("Failed to generate an ephemeral JWT signing key", ex);
-            }
-        }
-
-        byte[] decoded;
-        try {
-            decoded = Base64.getDecoder().decode(encoded);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException("auth.jwt.secret-base64 must be valid base64", ex);
-        }
-
-        if (decoded.length < 32) {
-            throw new IllegalStateException("auth.jwt.secret-base64 must decode to at least 32 bytes");
-        }
-
-        return new SecretKeySpec(decoded, "HmacSHA256");
+    public SecretKey jwtSigningKey(AuthJwtProperties properties, JwtSigningKeyService jwtSigningKeyService) {
+        return jwtSigningKeyService.loadOrCreate(properties.secretBase64());
     }
 
     @Bean

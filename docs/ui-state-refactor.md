@@ -53,7 +53,7 @@ There is no `stores/` directory. No Zustand, Redux, or context-based state manag
 |---|---|---|
 | `hugin-minimal-ui-state-v1` | Full `AppState` (all threads, all entries, all activities) | Persist entire UI state across refreshes |
 | `hugin-active-thread-v1` | `{ threadId, screen }` | Restore the last active thread on reload |
-| `hugin-auth-session-v1` (sessionStorage) | Auth token + user info | Login session |
+| `hugin-auth-session-v1` (localStorage) | Auth token + user info | Login session |
 
 ### Tool/Activity Output in Main Chat
 
