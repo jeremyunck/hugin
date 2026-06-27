@@ -47,11 +47,13 @@ export function seedMockStorage(): void {
   // The login screen is the one place we want an unauthenticated shell: clear any seeded session so
   // the sidebar-less login form renders cleanly.
   if (screen === "login") {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
     window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
     return;
   }
 
-  window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(mockSession));
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(mockSession));
+  window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
 
   // Lightweight metadata index — exactly the shape the store persists; transcripts are hydrated from
   // the (mocked) event log on demand, just like production.

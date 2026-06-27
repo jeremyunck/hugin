@@ -263,11 +263,12 @@ auth:
     username: ${AUTH_TEST_USER_USERNAME:screenshot-test}
     password: ${AUTH_TEST_USER_PASSWORD:}
   jwt:
-    # Optional base64-encoded HMAC key used to sign JWTs.
-    # If blank, Hugin generates an ephemeral key on startup.
+    # Optional base64-encoded HMAC key used only to seed the persisted JWT signing key on first boot.
+    # Once Hugin has stored a key in the database, that persisted key is reused across restarts.
     secret-base64: ${AUTH_JWT_SECRET_BASE64:}
     issuer: hugin
-    token-ttl: 12h
+    # Default browser session lifetime. A longer TTL avoids frequent re-login while remaining finite.
+    token-ttl: 30d
   email-verification:
     # Both registration and login email the user a one-time 6-digit code (delivered via Resend, see
     # the resend.* block below) that must be confirmed before a session is issued.
