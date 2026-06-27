@@ -36,6 +36,21 @@ mcp:
     request-timeout-seconds: ${MCP_HTTP_REQUEST_TIMEOUT_SECONDS:30}
     # Hard cap on a single MCP response body to bound memory use (default 2 MiB).
     max-response-bytes: ${MCP_HTTP_MAX_RESPONSE_BYTES:2097152}
+  session:
+    # How long an idle reused MCP session is kept before it is closed and re-opened on next use.
+    idle-timeout-seconds: ${MCP_SESSION_IDLE_TIMEOUT_SECONDS:300}
+  stdio:
+    # SECURITY: enabling this lets users launch local processes on the server. Keep it false on shared
+    # multi-user hosts; enable only for self-hosted / single-user deployments. Optionally restrict the
+    # launchable commands with a comma-separated allow-list.
+    enabled: ${MCP_STDIO_ENABLED:false}
+    request-timeout-seconds: ${MCP_STDIO_REQUEST_TIMEOUT_SECONDS:30}
+    allowed-commands: ${MCP_STDIO_ALLOWED_COMMANDS:}
+  oauth:
+    request-timeout-seconds: ${MCP_OAUTH_REQUEST_TIMEOUT_SECONDS:20}
+    # Optional explicit base URL for the OAuth redirect (e.g. https://hugin.example.com). When blank the
+    # callback URL is derived from the incoming request; set this when behind a proxy/load balancer.
+    redirect-base-url: ${MCP_OAUTH_REDIRECT_BASE_URL:}
 
 openrouter:
   # Base URL used for account-management calls (e.g. fetching remaining credits for a user's key).

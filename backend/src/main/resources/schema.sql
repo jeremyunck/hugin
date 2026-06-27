@@ -161,7 +161,7 @@ create table if not exists mcp_servers (
     name varchar(100) not null,
     display_name varchar(200) not null,
     transport varchar(32) not null default 'STREAMABLE_HTTP',
-    endpoint_url text not null,
+    endpoint_url text,
     auth_type varchar(32) not null default 'NONE',
     access_token_encrypted text,
     enabled boolean not null default true,
@@ -171,6 +171,29 @@ create table if not exists mcp_servers (
 );
 
 create index if not exists idx_mcp_servers_owner on mcp_servers(owner_username);
+
+-- MCP Phase 2 migrations.
+-- endpoint_url is null for stdio servers, so relax the Phase 1 NOT NULL on existing deployments.
+alter table mcp_servers alter column endpoint_url drop not null;
+-- Transport/auth-specific extra configuration as a JSON blob (stdio command/args/env; OAuth client,
+-- endpoints, scope, and individually-encrypted tokens). Keeping it in one column avoids a wide schema
+-- and gives future transports/auth schemes an obvious place to live. Sensitive sub-values are
+-- encrypted individually before serialization; this column is never returned to clients.
+alter table mcp_servers add column if not exists config_json text;
+
+-- Short-lived OAuth authorization requests (Authorization Code + PKCE). A row is created when a user
+-- starts an OAuth connect and consumed (deleted) by the callback; stale rows are expired by the
+-- callback handler.
+create table if not exists mcp_oauth_states (
+    state varchar(64) primary key,
+    server_id varchar(36) not null references mcp_servers(id) on delete cascade,
+    owner_username varchar(100) not null,
+    code_verifier text not null,
+    redirect_uri text not null,
+    created_at timestamp with time zone not null default current_timestamp
+);
+
+create index if not exists idx_mcp_oauth_states_server on mcp_oauth_states(server_id);
 
 -- Tools discovered from an MCP server via tools/list. hugin_tool_name is the collision-free,
 -- sanitized name advertised to the model (mcp_<server>_<tool>) and is globally unique. tool_name is

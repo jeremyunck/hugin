@@ -5,17 +5,15 @@ import java.util.Locale;
 /**
  * Authentication scheme used when calling an MCP server.
  *
- * <p>Phase 1 implements {@link #NONE} and {@link #BEARER_TOKEN}. The enum is the extension point for
- * future schemes (e.g. {@code OAUTH}); add the constant here and the corresponding header/credential
- * handling without touching the rest of the MCP package.
+ * <p>{@link #NONE} and {@link #BEARER_TOKEN} use a static (or absent) credential. {@link #OAUTH} runs
+ * an OAuth 2.1 Authorization Code + PKCE flow (with Dynamic Client Registration when the server
+ * supports it), storing access/refresh tokens encrypted at rest and refreshing them transparently; the
+ * resulting access token is sent as a bearer. See {@link McpOAuthService}.
  */
 public enum McpAuthType {
     NONE,
-    BEARER_TOKEN;
-
-    // TODO(oauth): add an OAUTH constant plus token-exchange / refresh handling and dynamic client
-    // registration support. Stored credentials would move from a single bearer token to an OAuth
-    // token set, still encrypted at rest via McpSecretEncryptionService.
+    BEARER_TOKEN,
+    OAUTH;
 
     public static McpAuthType fromString(String value) {
         if (value == null || value.isBlank()) {
@@ -25,7 +23,7 @@ public enum McpAuthType {
             return McpAuthType.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unsupported MCP auth type: " + value
-                    + " (supported: NONE, BEARER_TOKEN)");
+                    + " (supported: NONE, BEARER_TOKEN, OAUTH)");
         }
     }
 }

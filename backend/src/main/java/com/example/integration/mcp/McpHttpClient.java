@@ -38,10 +38,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Hardening: connect/read timeouts are bounded and the response body is capped at
  * {@link #maxResponseBytes} bytes to avoid unbounded memory use from a hostile or buggy server.
  *
- * <p>TODO(sessions): we do not yet persist {@code Mcp-Session-Id} across operations or open a long-lived
- * GET stream for server-initiated messages. Each operation is self-contained (initialize + call). When
- * persistent sessions are added, store the session id on the server row and reuse it, plus handle
- * session expiry (HTTP 404 → re-initialize).
+ * <p>Sessions: {@link #openSession} performs the handshake once and returns a {@link Connection}
+ * carrying the negotiated {@code Mcp-Session-Id}; {@link #listToolsReusing}/{@link #callToolReusing}
+ * then reuse it without re-initializing. {@link McpSessionManager} caches these across calls. A server
+ * that has forgotten the session answers HTTP 404, which surfaces as {@link McpSessionExpiredException}
+ * so the manager can transparently re-open and retry.
+ *
+ * <p>TODO(sessions): we still do not open a long-lived GET stream for server-initiated messages
+ * (server→client notifications/sampling). That is only needed for servers that push to the client,
+ * which Hugin does not yet consume.
  */
 @Component
 public class McpHttpClient {
@@ -78,6 +83,7 @@ public class McpHttpClient {
         private final String endpointUrl;
         private final String bearerToken;
         private String sessionId;
+        private JsonNode serverInfo;
 
         public Connection(String endpointUrl, String bearerToken) {
             this.endpointUrl = endpointUrl;
@@ -86,6 +92,45 @@ public class McpHttpClient {
 
         public String sessionId() {
             return sessionId;
+        }
+
+        public JsonNode serverInfo() {
+            return serverInfo;
+        }
+    }
+
+    /** Opens a reusable HTTP-backed {@link McpSession} (handshakes once). */
+    public McpSession newSession(String endpointUrl, String bearerToken) throws McpClientException {
+        return new HttpMcpSession(openSession(endpointUrl, bearerToken));
+    }
+
+    /** {@link McpSession} backed by a single HTTP connection with a negotiated session id. */
+    private final class HttpMcpSession implements McpSession {
+        private final Connection connection;
+
+        private HttpMcpSession(Connection connection) {
+            this.connection = connection;
+        }
+
+        @Override
+        public JsonNode serverInfo() {
+            return connection.serverInfo();
+        }
+
+        @Override
+        public List<DiscoveredTool> listTools() throws McpClientException {
+            return listToolsReusing(connection);
+        }
+
+        @Override
+        public String callTool(String name, Map<String, Object> arguments) throws McpClientException {
+            return callToolReusing(connection, name, arguments);
+        }
+
+        @Override
+        public void close() {
+            // Best-effort session termination so well-behaved servers can free resources promptly.
+            terminateSession(connection);
         }
     }
 
@@ -105,6 +150,42 @@ public class McpHttpClient {
     }
 
     /**
+     * Signals that the server no longer recognizes our {@code Mcp-Session-Id} (HTTP 404). The caller
+     * should discard the cached session and re-open before retrying.
+     */
+    public static class McpSessionExpiredException extends McpClientException {
+        public McpSessionExpiredException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Opens a reusable session: runs the {@code initialize} handshake once and returns the
+     * {@link Connection} carrying the negotiated session id. Reuse it with {@link #listToolsReusing} /
+     * {@link #callToolReusing} to avoid re-handshaking on every call.
+     */
+    public Connection openSession(String endpointUrl, String bearerToken) throws McpClientException {
+        Connection connection = new Connection(endpointUrl, bearerToken);
+        initialize(connection);
+        return connection;
+    }
+
+    /** {@link #listTools} on an already-open session (no re-initialize). */
+    public List<DiscoveredTool> listToolsReusing(Connection connection) throws McpClientException {
+        return parseTools(rpc(connection, "tools/list", objectMapper.createObjectNode()));
+    }
+
+    /** {@link #callTool} on an already-open session (no re-initialize). */
+    public String callToolReusing(Connection connection, String toolName, Map<String, Object> arguments)
+            throws McpClientException {
+        ObjectNode params = objectMapper.createObjectNode();
+        params.put("name", toolName);
+        params.set("arguments", objectMapper.valueToTree(arguments == null ? Map.of() : arguments));
+        JsonNode result = rpc(connection, "tools/call", params);
+        return renderToolResult(result);
+    }
+
+    /**
      * Performs the MCP {@code initialize} handshake, returning the server's reported info/capabilities.
      * Establishes the session id on {@code connection} for reuse by a follow-up call.
      */
@@ -118,15 +199,46 @@ public class McpHttpClient {
         params.set("clientInfo", clientInfo);
 
         JsonNode result = rpc(connection, "initialize", params);
+        connection.serverInfo = result;
         // Best-effort "initialized" notification; servers that don't require it simply ignore it.
         sendInitializedNotification(connection);
         return result;
     }
 
+    /**
+     * Best-effort MCP session termination: sends an HTTP DELETE with the {@code Mcp-Session-Id} so the
+     * server can release the session immediately. Never throws — a server that doesn't support it (405)
+     * or is unreachable will expire the session on its own.
+     */
+    private void terminateSession(Connection connection) {
+        if (connection.sessionId == null || connection.sessionId.isBlank()) {
+            return;
+        }
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(connection.endpointUrl))
+                    .timeout(requestTimeout)
+                    .header("MCP-Protocol-Version", PROTOCOL_VERSION)
+                    .header("Mcp-Session-Id", connection.sessionId)
+                    .DELETE();
+            if (connection.bearerToken != null && !connection.bearerToken.isBlank()) {
+                builder.header("Authorization", "Bearer " + connection.bearerToken);
+            }
+            httpClient.send(builder.build(), HttpResponse.BodyHandlers.discarding());
+        } catch (IOException e) {
+            log.debug("MCP session terminate failed (ignored): {}", e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     /** Lists tools via {@code tools/list} (handshakes first). */
     public List<DiscoveredTool> listTools(Connection connection) throws McpClientException {
         initialize(connection);
-        JsonNode result = rpc(connection, "tools/list", objectMapper.createObjectNode());
+        return parseTools(rpc(connection, "tools/list", objectMapper.createObjectNode()));
+    }
+
+    private List<DiscoveredTool> parseTools(JsonNode result) throws McpClientException {
         JsonNode tools = result.path("tools");
         if (!tools.isArray()) {
             throw new McpClientException("Server returned a malformed tools/list response (no 'tools' array).");
@@ -152,47 +264,16 @@ public class McpHttpClient {
     public String callTool(Connection connection, String toolName, Map<String, Object> arguments)
             throws McpClientException {
         initialize(connection);
-        ObjectNode params = objectMapper.createObjectNode();
-        params.put("name", toolName);
-        params.set("arguments", objectMapper.valueToTree(arguments == null ? Map.of() : arguments));
+        return callToolReusing(connection, toolName, arguments);
+    }
 
-        JsonNode result = rpc(connection, "tools/call", params);
-        String text = extractTextContent(result);
+    private String renderToolResult(JsonNode result) {
+        String text = McpResults.extractTextContent(result);
         boolean isError = result.path("isError").asBoolean(false);
         if (isError) {
             return "The MCP tool reported an error: " + (text.isBlank() ? "(no detail provided)" : text);
         }
         return text;
-    }
-
-    /** Concatenates the text of all {@code text} content blocks in a tools/call result. */
-    private String extractTextContent(JsonNode result) {
-        JsonNode content = result.path("content");
-        if (!content.isArray() || content.isEmpty()) {
-            // Some servers put a plain structured result here; fall back to a compact JSON rendering.
-            JsonNode structured = result.path("structuredContent");
-            if (!structured.isMissingNode() && !structured.isNull()) {
-                return structured.toString();
-            }
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (JsonNode block : content) {
-            String type = block.path("type").asText("");
-            if ("text".equals(type)) {
-                if (sb.length() > 0) {
-                    sb.append("\n");
-                }
-                sb.append(block.path("text").asText(""));
-            } else if (!type.isBlank()) {
-                // Non-text content (image, resource, …) — note its presence without dumping bytes.
-                if (sb.length() > 0) {
-                    sb.append("\n");
-                }
-                sb.append("[").append(type).append(" content omitted]");
-            }
-        }
-        return sb.toString();
     }
 
     /** Sends the JSON-RPC request and returns its {@code result} node, mapping errors to exceptions. */
@@ -209,6 +290,10 @@ public class McpHttpClient {
 
         int status = response.statusCode();
         String body = readBoundedBody(response);
+        if (status == 404 && connection.sessionId != null) {
+            // The server has forgotten our session; let the caller re-open and retry.
+            throw new McpSessionExpiredException("MCP session expired (HTTP 404) for " + method + ".");
+        }
         if (status < 200 || status >= 300) {
             throw new McpClientException("MCP server returned HTTP " + status + " for " + method
                     + (body.isBlank() ? "." : ": " + truncate(body, 300)));

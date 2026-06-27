@@ -93,6 +93,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/verify").permitAll()
                         .requestMatchers("/api/auth/password/forgot", "/api/auth/password/forgot/verify").permitAll()
                         .requestMatchers("/api/github/callback", "/api/github/setup").permitAll()
+                        // OAuth redirect target for MCP servers — authenticated by opaque state, not a JWT.
+                        .requestMatchers("/api/mcp/oauth/callback").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())

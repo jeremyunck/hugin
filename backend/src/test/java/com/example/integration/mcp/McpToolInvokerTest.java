@@ -16,15 +16,14 @@ import static org.mockito.Mockito.when;
 /** Tests MCP tool execution: success path, error handling, auditing, and owner isolation. */
 class McpToolInvokerTest extends AbstractMcpDbTest {
 
-    private McpHttpClient httpClient;
+    private McpSessionManager sessionManager;
     private McpToolInvoker invoker;
 
     @BeforeEach
     void setUpInvoker() {
-        httpClient = Mockito.mock(McpHttpClient.class);
-        McpConnectionService connectionService =
-                new McpConnectionService(serverRepository, toolRepository, encryption, httpClient, clock);
-        invoker = new McpToolInvoker(toolRepository, serverRepository, connectionService, httpClient,
+        sessionManager = Mockito.mock(McpSessionManager.class);
+        McpCredentialResolver credentialResolver = Mockito.mock(McpCredentialResolver.class);
+        invoker = new McpToolInvoker(toolRepository, serverRepository, credentialResolver, sessionManager,
                 auditLogRepository, objectMapper, clock);
     }
 
@@ -41,7 +40,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
     void invocationSucceedsAndWritesAuditLog() throws Exception {
         insertUser("alice");
         McpServerToolEntity tool = seedTool("alice", "linear", true);
-        when(httpClient.callTool(any(), eq("create_issue"), any())).thenReturn("Created issue #42");
+        when(sessionManager.callTool(any(), any(), eq("create_issue"), any())).thenReturn("Created issue #42");
 
         String result = invoker.invoke("alice", tool.huginToolName(), Map.of("title", "Bug"),
                 "agent-1", "session-1");
@@ -57,7 +56,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
     void transportFailureReturnsReadableErrorAndAuditsError() throws Exception {
         insertUser("alice");
         McpServerToolEntity tool = seedTool("alice", "linear", true);
-        when(httpClient.callTool(any(), any(), any()))
+        when(sessionManager.callTool(any(), any(), any(), any()))
                 .thenThrow(new McpHttpClient.McpClientException("HTTP 500"));
 
         String result = invoker.invoke("alice", tool.huginToolName(), Map.of(), "agent-1", "session-1");
@@ -77,7 +76,7 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         String result = invoker.invoke("bob", tool.huginToolName(), Map.of(), null, null);
 
         assertThat(result).contains("not available");
-        verify(httpClient, never()).callTool(any(), any(), any());
+        verify(sessionManager, never()).callTool(any(), any(), any(), any());
     }
 
     @Test
@@ -88,6 +87,6 @@ class McpToolInvokerTest extends AbstractMcpDbTest {
         String result = invoker.invoke("alice", tool.huginToolName(), Map.of(), null, null);
 
         assertThat(result).contains("disabled");
-        verify(httpClient, never()).callTool(any(), any(), any());
+        verify(sessionManager, never()).callTool(any(), any(), any(), any());
     }
 }

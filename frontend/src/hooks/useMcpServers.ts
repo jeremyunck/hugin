@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { AuthSession, McpServer, McpTestResult } from "../lib/types";
+import type { AuthSession, McpCatalogEntry, McpServer, McpTestResult } from "../lib/types";
 import type { Screen } from "../lib/screen";
 import {
   createMcpServer,
   deleteMcpServer,
   discoverMcpTools,
+  fetchMcpCatalog,
   fetchMcpServers,
   setMcpToolEnabled,
+  startMcpOAuth,
   testMcpServer,
   updateMcpServer,
   type McpCreatePayload,
@@ -27,6 +29,7 @@ export function useMcpServers(params: {
 }) {
   const { session, screen, onError, onChanged } = params;
   const [servers, setServers] = useState<McpServer[]>([]);
+  const [catalog, setCatalog] = useState<McpCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, McpTestResult>>({});
@@ -46,7 +49,45 @@ export function useMcpServers(params: {
   useEffect(() => {
     if (!session || screen !== "integrations") return;
     void load();
+    // Catalog is static; load it once when the screen opens (best-effort).
+    fetchMcpCatalog(session.token).then(setCatalog).catch(() => setCatalog([]));
   }, [session, screen, load]);
+
+  // Re-poll the server list a few times after an OAuth popup so a card flips to "connected"
+  // once the callback stores tokens, without a manual refresh.
+  const pollAfterOAuth = useCallback(async () => {
+    if (!session) return;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      try {
+        const next = await fetchMcpServers(session.token);
+        setServers(next);
+        if (next.some((s) => s.oauthConnected)) {
+          onChanged?.();
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+    }
+  }, [session, onChanged]);
+
+  const connectOAuth = useCallback(
+    async (id: string): Promise<void> => {
+      if (!session) return;
+      setBusyId(id);
+      try {
+        const url = await startMcpOAuth(session.token, id);
+        window.open(url, "_blank", "noopener,width=600,height=720");
+        void pollAfterOAuth();
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "Could not start OAuth.");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [session, onError, pollAfterOAuth]
+  );
 
   const create = useCallback(
     async (payload: McpCreatePayload, discoverAfter: boolean): Promise<McpServer | null> => {
@@ -184,6 +225,7 @@ export function useMcpServers(params: {
 
   return {
     mcpServers: servers,
+    mcpCatalog: catalog,
     mcpLoading: loading,
     mcpBusyId: busyId,
     mcpTestResults: testResults,
@@ -193,6 +235,7 @@ export function useMcpServers(params: {
     removeMcpServer: remove,
     testMcpServer: test,
     discoverMcpTools: discover,
-    toggleMcpTool: toggleTool
+    toggleMcpTool: toggleTool,
+    connectMcpOAuth: connectOAuth
   };
 }

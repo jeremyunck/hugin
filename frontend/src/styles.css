@@ -3592,3 +3592,29 @@ select {
   opacity: 0.5;
   cursor: default;
 }
+
+/* MCP catalog (Phase 2 marketplace) */
+.mcp-catalog {
+  margin-bottom: 12px;
+}
+
+.mcp-catalog-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mcp-catalog-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e4e5e8;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.mcp-catalog-card-body {
+  min-width: 0;
+}

@@ -19,7 +19,8 @@ import java.util.UUID;
  *   <li>looks up the tool and its owning server,</li>
  *   <li>enforces owner isolation and enabled/stale gating (a tool the caller doesn't own, or that is
  *       disabled/stale/on a disabled server, is treated as simply unavailable),</li>
- *   <li>decrypts the bearer token and performs {@code tools/call},</li>
+ *   <li>resolves the server's credential and performs {@code tools/call} on a reused session (see
+ *       {@link McpSessionManager}), transparently for HTTP, stdio, and OAuth servers,</li>
  *   <li>writes an {@link McpAuditLogEntity} (success or error), and</li>
  *   <li>returns a concise, LLM-readable text result — never a stack trace.</li>
  * </ol>
@@ -33,23 +34,23 @@ public class McpToolInvoker {
 
     private final McpServerToolRepository toolRepository;
     private final McpServerRepository serverRepository;
-    private final McpConnectionService connectionService;
-    private final McpHttpClient httpClient;
+    private final McpCredentialResolver credentialResolver;
+    private final McpSessionManager sessionManager;
     private final McpAuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public McpToolInvoker(McpServerToolRepository toolRepository,
                           McpServerRepository serverRepository,
-                          McpConnectionService connectionService,
-                          McpHttpClient httpClient,
+                          McpCredentialResolver credentialResolver,
+                          McpSessionManager sessionManager,
                           McpAuditLogRepository auditLogRepository,
                           ObjectMapper objectMapper,
                           Clock clock) {
         this.toolRepository = toolRepository;
         this.serverRepository = serverRepository;
-        this.connectionService = connectionService;
-        this.httpClient = httpClient;
+        this.credentialResolver = credentialResolver;
+        this.sessionManager = sessionManager;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -81,8 +82,9 @@ public class McpToolInvoker {
         }
 
         String argsPreview = previewArguments(arguments);
+        String bearerToken = credentialResolver.resolveBearer(server);
         try {
-            String result = httpClient.callTool(connectionService.connectionFor(server), tool.toolName(), arguments);
+            String result = sessionManager.callTool(server, bearerToken, tool.toolName(), arguments);
             recordAudit(owner, agentId, sessionId, server.id(), tool.toolName(), argsPreview,
                     result, McpAuditLogEntity.STATUS_SUCCESS);
             return result == null || result.isBlank() ? "(the tool returned no content)" : result;

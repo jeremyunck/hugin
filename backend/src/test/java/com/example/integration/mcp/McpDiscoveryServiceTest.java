@@ -14,15 +14,17 @@ import static org.mockito.Mockito.when;
 /** Tests discovery upsert/stale reconciliation and collision-free hugin-name generation. */
 class McpDiscoveryServiceTest extends AbstractMcpDbTest {
 
-    private McpHttpClient httpClient;
+    private McpTransports transports;
+    private McpSession session;
     private McpDiscoveryService discovery;
 
     @BeforeEach
-    void setUpDiscovery() {
-        httpClient = Mockito.mock(McpHttpClient.class);
-        McpConnectionService connectionService =
-                new McpConnectionService(serverRepository, toolRepository, encryption, httpClient, clock);
-        discovery = new McpDiscoveryService(toolRepository, connectionService, httpClient, objectMapper, clock);
+    void setUpDiscovery() throws Exception {
+        transports = Mockito.mock(McpTransports.class);
+        session = Mockito.mock(McpSession.class);
+        McpCredentialResolver credentialResolver = Mockito.mock(McpCredentialResolver.class);
+        when(transports.openSession(any(), any())).thenReturn(session);
+        discovery = new McpDiscoveryService(toolRepository, transports, credentialResolver, objectMapper, clock);
     }
 
     private JsonNode schema() {
@@ -34,7 +36,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         insertUser("alice");
         McpServerEntity server = newServer("alice", "linear", McpAuthType.NONE, null);
         serverRepository.insert(server);
-        when(httpClient.listTools(any())).thenReturn(List.of(
+        when(session.listTools()).thenReturn(List.of(
                 new McpHttpClient.DiscoveredTool("create_issue", "Create an issue", schema()),
                 new McpHttpClient.DiscoveredTool("list_issues", "List issues", schema())));
 
@@ -53,14 +55,14 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         insertUser("alice");
         McpServerEntity server = newServer("alice", "linear", McpAuthType.NONE, null);
         serverRepository.insert(server);
-        when(httpClient.listTools(any())).thenReturn(List.of(
+        when(session.listTools()).thenReturn(List.of(
                 new McpHttpClient.DiscoveredTool("create_issue", "v1", schema())));
         discovery.discover(server);
 
         // User disables the tool, then the server re-advertises it with a new description.
         McpServerToolEntity tool = toolRepository.findByServer(server.id()).get(0);
         toolRepository.setEnabled(tool.id(), false);
-        when(httpClient.listTools(any())).thenReturn(List.of(
+        when(session.listTools()).thenReturn(List.of(
                 new McpHttpClient.DiscoveredTool("create_issue", "v2-updated", schema())));
 
         discovery.discover(server);
@@ -77,13 +79,13 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         insertUser("alice");
         McpServerEntity server = newServer("alice", "linear", McpAuthType.NONE, null);
         serverRepository.insert(server);
-        when(httpClient.listTools(any())).thenReturn(List.of(
+        when(session.listTools()).thenReturn(List.of(
                 new McpHttpClient.DiscoveredTool("create_issue", "x", schema()),
                 new McpHttpClient.DiscoveredTool("list_issues", "y", schema())));
         discovery.discover(server);
 
         // Second discovery only returns one of the two tools.
-        when(httpClient.listTools(any())).thenReturn(List.of(
+        when(session.listTools()).thenReturn(List.of(
                 new McpHttpClient.DiscoveredTool("create_issue", "x", schema())));
         discovery.discover(server);
 
@@ -99,7 +101,7 @@ class McpDiscoveryServiceTest extends AbstractMcpDbTest {
         insertUser("alice");
         McpServerEntity server = newServer("alice", "linear", McpAuthType.NONE, null);
         serverRepository.insert(server);
-        when(httpClient.listTools(any()))
+        when(session.listTools())
                 .thenThrow(new McpHttpClient.McpClientException("Could not reach MCP server"));
 
         McpDiscoveryResponse response = discovery.discover(server);

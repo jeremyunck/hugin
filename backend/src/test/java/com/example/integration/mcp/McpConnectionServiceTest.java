@@ -13,8 +13,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class McpConnectionServiceTest extends AbstractMcpDbTest {
 
     private McpConnectionService service() {
-        McpHttpClient httpClient = Mockito.mock(McpHttpClient.class);
-        return new McpConnectionService(serverRepository, toolRepository, encryption, httpClient, clock);
+        McpTransports transports = Mockito.mock(McpTransports.class);
+        McpCredentialResolver credentialResolver = Mockito.mock(McpCredentialResolver.class);
+        McpSessionManager sessionManager = Mockito.mock(McpSessionManager.class);
+        return new McpConnectionService(serverRepository, toolRepository, encryption, transports,
+                credentialResolver, sessionManager, objectMapper, clock);
     }
 
     @Test

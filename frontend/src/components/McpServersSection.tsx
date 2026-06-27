@@ -1,18 +1,28 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Server } from "lucide-react";
 
-import type { AuthSession, McpServer, McpTool } from "../lib/types";
+import type { AuthSession, McpCatalogEntry, McpServer, McpTool } from "../lib/types";
 import type { Screen } from "../lib/screen";
 import { useMcpServers } from "../hooks/useMcpServers";
 import type { McpCreatePayload, McpUpdatePayload } from "../services/mcpApi";
 
-/* Phase 1 supports only Streamable HTTP. The transport <select> is rendered but locked to it; new
- * transports (e.g. stdio) can be added here once the backend supports them. */
-const TRANSPORT_OPTIONS = [{ value: "STREAMABLE_HTTP", label: "Streamable HTTP" }];
+const TRANSPORT_OPTIONS = [
+  { value: "STREAMABLE_HTTP", label: "Streamable HTTP" },
+  { value: "STDIO", label: "Local process (stdio)" }
+];
+
+/** Prefill for the Add dialog, e.g. when adding from the catalog. */
+type AddPrefill = {
+  name?: string;
+  displayName?: string;
+  transport?: string;
+  endpointUrl?: string;
+  authType?: string;
+};
 
 type DialogState =
   | { mode: "closed" }
-  | { mode: "add" }
+  | { mode: "add"; prefill?: AddPrefill }
   | { mode: "edit"; server: McpServer };
 
 export function McpServersSection(props: {
@@ -25,9 +35,12 @@ export function McpServersSection(props: {
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
   const [removeTarget, setRemoveTarget] = useState<McpServer | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const toggleExpand = (id: string) =>
     setExpanded((current) => ({ ...current, [id]: !current[id] }));
+
+  const installedNames = new Set(mcp.mcpServers.map((s) => s.name));
 
   return (
     <div className="integrations-section mcp-section">
@@ -45,6 +58,34 @@ export function McpServersSection(props: {
           Add Server
         </button>
       </div>
+
+      {mcp.mcpCatalog.length > 0 ? (
+        <div className="mcp-catalog">
+          <button type="button" className="integration-link-action mcp-expand-button"
+                  onClick={() => setShowCatalog((v) => !v)}>
+            {showCatalog ? <ChevronDown size={14} strokeWidth={2.2} /> : <ChevronRight size={14} strokeWidth={2.2} />}
+            Browse catalog
+          </button>
+          {showCatalog ? (
+            <div className="mcp-catalog-grid">
+              {mcp.mcpCatalog.map((entry) => (
+                <McpCatalogCard
+                  key={entry.id}
+                  entry={entry}
+                  installed={installedNames.has(entry.suggestedServerName)}
+                  onAdd={() => setDialog({ mode: "add", prefill: {
+                    name: entry.suggestedServerName,
+                    displayName: entry.name,
+                    transport: entry.transport,
+                    endpointUrl: entry.endpointUrl,
+                    authType: entry.authType
+                  } })}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {mcp.mcpLoading && mcp.mcpServers.length === 0 ? (
         <p className="integration-subtitle">Loading MCP servers…</p>
@@ -72,6 +113,7 @@ export function McpServersSection(props: {
             onDiscover={() => mcp.discoverMcpTools(server.id)}
             onEdit={() => setDialog({ mode: "edit", server })}
             onRemove={() => setRemoveTarget(server)}
+            onConnectOAuth={() => mcp.connectMcpOAuth(server.id)}
             onToggleTool={(toolId, enabled) => mcp.toggleMcpTool(server.id, toolId, enabled)}
           />
         ))}
@@ -80,6 +122,7 @@ export function McpServersSection(props: {
       {dialog.mode !== "closed" ? (
         <McpServerDialog
           server={dialog.mode === "edit" ? dialog.server : null}
+          prefill={dialog.mode === "add" ? dialog.prefill : undefined}
           busy={mcp.mcpBusyId === "new" || (dialog.mode === "edit" && mcp.mcpBusyId === dialog.server.id)}
           onCancel={() => setDialog({ mode: "closed" })}
           onCreate={async (payload, discoverAfter) => {
@@ -109,6 +152,25 @@ export function McpServersSection(props: {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Catalog card                                                       */
+/* ------------------------------------------------------------------ */
+
+function McpCatalogCard(props: { entry: McpCatalogEntry; installed: boolean; onAdd: () => void }) {
+  const { entry, installed } = props;
+  return (
+    <div className="mcp-catalog-card">
+      <div className="mcp-catalog-card-body">
+        <span className="integration-card-name">{entry.name}</span>
+        <p className="integration-card-desc">{entry.description}</p>
+      </div>
+      <button type="button" className="mcp-btn-secondary" disabled={installed} onClick={props.onAdd}>
+        {installed ? "Added" : "Add"}
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Server card                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -122,9 +184,11 @@ function McpServerCard(props: {
   onDiscover: () => void;
   onEdit: () => void;
   onRemove: () => void;
+  onConnectOAuth: () => void;
   onToggleTool: (toolId: string, enabled: boolean) => void;
 }) {
   const { server, busy, expanded, testResult } = props;
+  const isOAuth = server.authType === "OAUTH";
 
   return (
     <div className="integration-card mcp-server-card">
@@ -134,13 +198,20 @@ function McpServerCard(props: {
           <span className={`mcp-badge ${server.enabled ? "mcp-badge-on" : "mcp-badge-off"}`}>
             {server.enabled ? "Enabled" : "Disabled"}
           </span>
+          {isOAuth ? (
+            <span className={`mcp-badge ${server.oauthConnected ? "mcp-badge-on" : "mcp-badge-off"}`}>
+              {server.oauthConnected ? "Authorized" : "Not authorized"}
+            </span>
+          ) : null}
         </div>
 
-        <p className="integration-card-desc mcp-endpoint">{server.endpointUrl}</p>
+        <p className="integration-card-desc mcp-endpoint">
+          {server.transport === "STDIO" ? (server.command ?? "(no command)") : server.endpointUrl}
+        </p>
 
         <div className="integration-card-meta">
           <span className="integration-meta-item">{transportLabel(server.transport)}</span>
-          <span className="integration-meta-item">{authLabel(server.authType, server.hasToken)}</span>
+          <span className="integration-meta-item">{authLabel(server)}</span>
           <span className="integration-meta-item">
             {server.enabledToolCount}/{server.toolCount} tool{server.toolCount === 1 ? "" : "s"} enabled
           </span>
@@ -153,6 +224,11 @@ function McpServerCard(props: {
         ) : null}
 
         <div className="integration-card-actions mcp-card-actions">
+          {isOAuth ? (
+            <button type="button" className="integration-link-action" disabled={busy} onClick={props.onConnectOAuth}>
+              {server.oauthConnected ? "Reconnect" : "Connect"}
+            </button>
+          ) : null}
           <button type="button" className="integration-link-action" disabled={busy} onClick={props.onTest}>
             {busy ? "Working…" : "Test"}
           </button>
@@ -227,55 +303,75 @@ function McpToolRow(props: { tool: McpTool; onToggle: (enabled: boolean) => void
 
 function McpServerDialog(props: {
   server: McpServer | null;
+  prefill?: AddPrefill;
   busy: boolean;
   onCancel: () => void;
   onCreate: (payload: McpCreatePayload, discoverAfter: boolean) => void;
   onUpdate: (id: string, payload: McpUpdatePayload) => void;
 }) {
   const editing = props.server !== null;
-  const [displayName, setDisplayName] = useState(props.server?.displayName ?? "");
-  const [name, setName] = useState(props.server?.name ?? "");
-  const [endpointUrl, setEndpointUrl] = useState(props.server?.endpointUrl ?? "");
-  const [authType, setAuthType] = useState(props.server?.authType ?? "NONE");
+  const initial = props.server ?? props.prefill;
+  const [displayName, setDisplayName] = useState(initial?.displayName ?? "");
+  const [name, setName] = useState((props.server?.name ?? props.prefill?.name) ?? "");
+  const [transport, setTransport] = useState(initial?.transport ?? "STREAMABLE_HTTP");
+  const [endpointUrl, setEndpointUrl] = useState(props.server?.endpointUrl ?? props.prefill?.endpointUrl ?? "");
+  const [authType, setAuthType] = useState(initial?.authType ?? "NONE");
   const [bearerToken, setBearerToken] = useState("");
   const [enabled, setEnabled] = useState(props.server?.enabled ?? true);
   const [clearToken, setClearToken] = useState(false);
+  const [command, setCommand] = useState(props.server?.command ?? "");
+  const [argsText, setArgsText] = useState("");
+  const [envText, setEnvText] = useState("");
+  const [oauthScope, setOauthScope] = useState("");
+
+  const isStdio = transport === "STDIO";
 
   const submit = (discoverAfter: boolean) => {
     if (editing && props.server) {
-      const payload: McpUpdatePayload = {
-        displayName: displayName.trim(),
-        endpointUrl: endpointUrl.trim(),
-        enabled,
-        authType
-      };
+      const payload: McpUpdatePayload = { displayName: displayName.trim(), enabled, authType };
+      if (!isStdio) {
+        payload.endpointUrl = endpointUrl.trim();
+      }
+      if (isStdio && command.trim()) {
+        payload.command = command.trim();
+        if (argsText.trim()) payload.args = parseArgs(argsText);
+        if (envText.trim()) payload.env = parseEnv(envText);
+      }
       if (authType === "BEARER_TOKEN" && bearerToken.trim()) {
         payload.bearerToken = bearerToken.trim();
+      }
+      if (authType === "OAUTH" && oauthScope.trim()) {
+        payload.oauthScope = oauthScope.trim();
       }
       if (clearToken) {
         payload.clearToken = true;
       }
       props.onUpdate(props.server.id, payload);
     } else {
-      props.onCreate(
-        {
-          name: name.trim(),
-          displayName: displayName.trim(),
-          transport: "STREAMABLE_HTTP",
-          endpointUrl: endpointUrl.trim(),
-          authType,
-          bearerToken: authType === "BEARER_TOKEN" ? bearerToken.trim() : null
-        },
-        discoverAfter
-      );
+      const payload: McpCreatePayload = {
+        name: name.trim(),
+        displayName: displayName.trim(),
+        transport,
+        authType: isStdio ? "NONE" : authType
+      };
+      if (isStdio) {
+        payload.command = command.trim();
+        if (argsText.trim()) payload.args = parseArgs(argsText);
+        if (envText.trim()) payload.env = parseEnv(envText);
+      } else {
+        payload.endpointUrl = endpointUrl.trim();
+        if (authType === "BEARER_TOKEN") payload.bearerToken = bearerToken.trim();
+        if (authType === "OAUTH" && oauthScope.trim()) payload.oauthScope = oauthScope.trim();
+      }
+      props.onCreate(payload, discoverAfter);
     }
   };
 
   const canSubmit =
     displayName.trim().length > 0 &&
-    endpointUrl.trim().length > 0 &&
     (editing || name.trim().length > 0) &&
-    (authType !== "BEARER_TOKEN" || editing || bearerToken.trim().length > 0);
+    (isStdio ? (editing || command.trim().length > 0) : endpointUrl.trim().length > 0) &&
+    (authType !== "BEARER_TOKEN" || isStdio || editing || bearerToken.trim().length > 0);
 
   return (
     <div className="mcp-dialog-overlay" role="dialog" aria-modal="true">
@@ -284,76 +380,94 @@ function McpServerDialog(props: {
 
         <label className="mcp-field">
           <span className="mcp-field-label">Display Name</span>
-          <input
-            className="mcp-input"
-            value={displayName}
-            placeholder="Linear"
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
+          <input className="mcp-input" value={displayName} placeholder="Linear"
+                 onChange={(e) => setDisplayName(e.target.value)} />
         </label>
 
         {!editing ? (
           <label className="mcp-field">
             <span className="mcp-field-label">Server Name</span>
-            <input
-              className="mcp-input"
-              value={name}
-              placeholder="linear"
-              onChange={(e) => setName(e.target.value)}
-            />
+            <input className="mcp-input" value={name} placeholder="linear"
+                   onChange={(e) => setName(e.target.value)} />
             <span className="mcp-field-hint">Used to build tool names (mcp_&lt;name&gt;_&lt;tool&gt;).</span>
           </label>
         ) : null}
 
         <label className="mcp-field">
           <span className="mcp-field-label">Transport</span>
-          <select className="mcp-input" value="STREAMABLE_HTTP" disabled>
+          <select className="mcp-input" value={transport} disabled={editing}
+                  onChange={(e) => setTransport(e.target.value)}>
             {TRANSPORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          {isStdio ? (
+            <span className="mcp-field-hint">Runs a local process. Must be enabled on the server.</span>
+          ) : null}
         </label>
 
-        <label className="mcp-field">
-          <span className="mcp-field-label">Endpoint URL</span>
-          <input
-            className="mcp-input"
-            value={endpointUrl}
-            placeholder="https://example.com/mcp"
-            onChange={(e) => setEndpointUrl(e.target.value)}
-          />
-        </label>
+        {isStdio ? (
+          <>
+            <label className="mcp-field">
+              <span className="mcp-field-label">Command</span>
+              <input className="mcp-input" value={command} placeholder="npx"
+                     onChange={(e) => setCommand(e.target.value)} />
+            </label>
+            <label className="mcp-field">
+              <span className="mcp-field-label">Arguments</span>
+              <input className="mcp-input" value={argsText} placeholder="-y @modelcontextprotocol/server-foo"
+                     onChange={(e) => setArgsText(e.target.value)} />
+              <span className="mcp-field-hint">Space-separated.</span>
+            </label>
+            <label className="mcp-field">
+              <span className="mcp-field-label">Environment</span>
+              <textarea className="mcp-input" rows={2} value={envText} placeholder={"KEY=value\nOTHER=value"}
+                        onChange={(e) => setEnvText(e.target.value)} />
+              <span className="mcp-field-hint">One KEY=value per line.</span>
+            </label>
+          </>
+        ) : (
+          <label className="mcp-field">
+            <span className="mcp-field-label">Endpoint URL</span>
+            <input className="mcp-input" value={endpointUrl} placeholder="https://example.com/mcp"
+                   onChange={(e) => setEndpointUrl(e.target.value)} />
+          </label>
+        )}
 
-        <label className="mcp-field">
-          <span className="mcp-field-label">Authentication</span>
-          <select className="mcp-input" value={authType} onChange={(e) => setAuthType(e.target.value)}>
-            <option value="NONE">None</option>
-            <option value="BEARER_TOKEN">Bearer Token</option>
-          </select>
-        </label>
+        {!isStdio ? (
+          <label className="mcp-field">
+            <span className="mcp-field-label">Authentication</span>
+            <select className="mcp-input" value={authType} onChange={(e) => setAuthType(e.target.value)}>
+              <option value="NONE">None</option>
+              <option value="BEARER_TOKEN">Bearer Token</option>
+              <option value="OAUTH">OAuth</option>
+            </select>
+          </label>
+        ) : null}
 
-        {authType === "BEARER_TOKEN" ? (
+        {!isStdio && authType === "BEARER_TOKEN" ? (
           <label className="mcp-field">
             <span className="mcp-field-label">Bearer Token</span>
-            <input
-              className="mcp-input"
-              type="password"
-              value={bearerToken}
-              placeholder={editing && props.server?.hasToken ? "•••••• (leave blank to keep)" : "Paste token"}
-              onChange={(e) => setBearerToken(e.target.value)}
-            />
+            <input className="mcp-input" type="password" value={bearerToken}
+                   placeholder={editing && props.server?.hasToken ? "•••••• (leave blank to keep)" : "Paste token"}
+                   onChange={(e) => setBearerToken(e.target.value)} />
             {editing && props.server?.hasToken ? (
               <label className="mcp-checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={clearToken}
-                  onChange={(e) => setClearToken(e.target.checked)}
-                />
+                <input type="checkbox" checked={clearToken} onChange={(e) => setClearToken(e.target.checked)} />
                 <span>Clear stored token</span>
               </label>
             ) : null}
+          </label>
+        ) : null}
+
+        {!isStdio && authType === "OAUTH" ? (
+          <label className="mcp-field">
+            <span className="mcp-field-label">OAuth Scope (optional)</span>
+            <input className="mcp-input" value={oauthScope} placeholder="read write"
+                   onChange={(e) => setOauthScope(e.target.value)} />
+            <span className="mcp-field-hint">
+              After saving, click “Connect” on the server card to authorize.
+            </span>
           </label>
         ) : null}
 
@@ -368,21 +482,13 @@ function McpServerDialog(props: {
           <button type="button" className="mcp-btn-secondary" disabled={props.busy} onClick={props.onCancel}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="mcp-btn-primary"
-            disabled={!canSubmit || props.busy}
-            onClick={() => submit(false)}
-          >
+          <button type="button" className="mcp-btn-primary" disabled={!canSubmit || props.busy}
+                  onClick={() => submit(false)}>
             Save
           </button>
           {!editing ? (
-            <button
-              type="button"
-              className="mcp-btn-primary"
-              disabled={!canSubmit || props.busy}
-              onClick={() => submit(true)}
-            >
+            <button type="button" className="mcp-btn-primary" disabled={!canSubmit || props.busy}
+                    onClick={() => submit(true)}>
               Save &amp; Discover
             </button>
           ) : null}
@@ -427,13 +533,36 @@ function McpRemoveDialog(props: {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function transportLabel(transport: string): string {
-  return transport === "STREAMABLE_HTTP" ? "Streamable HTTP" : transport;
+function parseArgs(text: string): string[] {
+  return text.trim().split(/\s+/).filter((a) => a.length > 0);
 }
 
-function authLabel(authType: string, hasToken: boolean): string {
-  if (authType === "BEARER_TOKEN") {
-    return hasToken ? "Bearer token" : "Bearer token (missing)";
+function parseEnv(text: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq > 0) {
+      env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+    }
   }
-  return "No auth";
+  return env;
+}
+
+function transportLabel(transport: string): string {
+  if (transport === "STREAMABLE_HTTP") return "Streamable HTTP";
+  if (transport === "STDIO") return "Local process (stdio)";
+  return transport;
+}
+
+function authLabel(server: McpServer): string {
+  switch (server.authType) {
+    case "BEARER_TOKEN":
+      return server.hasToken ? "Bearer token" : "Bearer token (missing)";
+    case "OAUTH":
+      return server.oauthConnected ? "OAuth (authorized)" : "OAuth (needs authorization)";
+    default:
+      return "No auth";
+  }
 }

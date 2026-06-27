@@ -27,7 +27,7 @@ public class McpServerRepository {
         return jdbcTemplate.query(
                 """
                         select id, owner_username, name, display_name, transport, endpoint_url, auth_type,
-                               access_token_encrypted, enabled, created_at, updated_at
+                               access_token_encrypted, enabled, created_at, updated_at, config_json
                         from mcp_servers
                         where owner_username = ?
                         order by created_at asc, display_name asc
@@ -41,7 +41,7 @@ public class McpServerRepository {
         return jdbcTemplate.query(
                 """
                         select id, owner_username, name, display_name, transport, endpoint_url, auth_type,
-                               access_token_encrypted, enabled, created_at, updated_at
+                               access_token_encrypted, enabled, created_at, updated_at, config_json
                         from mcp_servers
                         where owner_username = ? and enabled = true
                         order by created_at asc, display_name asc
@@ -54,7 +54,7 @@ public class McpServerRepository {
         return jdbcTemplate.query(
                         """
                                 select id, owner_username, name, display_name, transport, endpoint_url, auth_type,
-                                       access_token_encrypted, enabled, created_at, updated_at
+                                       access_token_encrypted, enabled, created_at, updated_at, config_json
                                 from mcp_servers
                                 where id = ? and owner_username = ?
                                 """,
@@ -69,8 +69,8 @@ public class McpServerRepository {
                 """
                         insert into mcp_servers
                             (id, owner_username, name, display_name, transport, endpoint_url, auth_type,
-                             access_token_encrypted, enabled, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             access_token_encrypted, enabled, created_at, updated_at, config_json)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                 server.id(),
                 server.ownerUsername(),
@@ -82,7 +82,8 @@ public class McpServerRepository {
                 server.accessTokenEncrypted(),
                 server.enabled(),
                 timestamp(server.createdAt()),
-                timestamp(server.updatedAt()));
+                timestamp(server.updatedAt()),
+                server.configJson());
     }
 
     public int update(McpServerEntity server) {
@@ -95,7 +96,8 @@ public class McpServerRepository {
                             auth_type = ?,
                             access_token_encrypted = ?,
                             enabled = ?,
-                            updated_at = ?
+                            updated_at = ?,
+                            config_json = ?
                         where id = ? and owner_username = ?
                         """,
                 server.displayName(),
@@ -105,8 +107,19 @@ public class McpServerRepository {
                 server.accessTokenEncrypted(),
                 server.enabled(),
                 timestamp(server.updatedAt()),
+                server.configJson(),
                 server.id(),
                 server.ownerUsername());
+    }
+
+    /**
+     * Persists only the {@code config_json} (used by OAuth token refresh, which must not disturb other
+     * fields or require the owner on the call path).
+     */
+    public int updateConfigJson(String id, String configJson) {
+        return jdbcTemplate.update(
+                "update mcp_servers set config_json = ? where id = ?",
+                configJson, id);
     }
 
     public boolean delete(String id, String ownerUsername) {
@@ -127,7 +140,8 @@ public class McpServerRepository {
                 rs.getString("access_token_encrypted"),
                 rs.getBoolean("enabled"),
                 toInstant(rs.getTimestamp("created_at")),
-                toInstant(rs.getTimestamp("updated_at")));
+                toInstant(rs.getTimestamp("updated_at")),
+                rs.getString("config_json"));
     }
 
     private static Timestamp timestamp(Instant instant) {

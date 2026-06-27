@@ -1,14 +1,26 @@
-import type { McpDiscoveryResult, McpServer, McpTestResult, McpTool } from "../lib/types";
+import type {
+  McpCatalogEntry,
+  McpDiscoveryResult,
+  McpServer,
+  McpTestResult,
+  McpTool
+} from "../lib/types";
 import { apiFetch } from "./apiClient";
 
-/** Payload for creating an MCP server. The bearer token is write-only and never read back. */
+/** Payload for creating an MCP server. Secrets are write-only and never read back. */
 export type McpCreatePayload = {
   name: string;
   displayName: string;
   transport: string;
-  endpointUrl: string;
+  endpointUrl?: string | null;
   authType: string;
   bearerToken?: string | null;
+  // stdio transport
+  command?: string | null;
+  args?: string[];
+  env?: Record<string, string>;
+  // OAuth (optional; discovered/registered when omitted)
+  oauthScope?: string | null;
 };
 
 /** Partial update; omit a field to leave it unchanged. `clearToken` removes a stored token. */
@@ -19,6 +31,10 @@ export type McpUpdatePayload = {
   authType?: string;
   bearerToken?: string | null;
   clearToken?: boolean;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  oauthScope?: string;
 };
 
 export async function fetchMcpServers(token: string): Promise<McpServer[]> {
@@ -80,4 +96,18 @@ export async function setMcpToolEnabled(
     { method: "PATCH", body: JSON.stringify({ enabled }) },
     token
   );
+}
+
+export async function fetchMcpCatalog(token: string): Promise<McpCatalogEntry[]> {
+  return apiFetch<McpCatalogEntry[]>("/api/mcp/catalog", {}, token);
+}
+
+/** Starts the OAuth flow for a server and returns the authorization URL to open. */
+export async function startMcpOAuth(token: string, id: string): Promise<string> {
+  const response = await apiFetch<{ authorizationUrl: string }>(
+    `/api/mcp/servers/${encodeURIComponent(id)}/oauth/start`,
+    { method: "POST", body: JSON.stringify({}) },
+    token
+  );
+  return response.authorizationUrl;
 }

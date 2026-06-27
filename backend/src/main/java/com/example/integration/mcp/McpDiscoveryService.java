@@ -35,31 +35,32 @@ public class McpDiscoveryService {
     private static final int MAX_HUGIN_NAME_LENGTH = 200;
 
     private final McpServerToolRepository toolRepository;
-    private final McpConnectionService connectionService;
-    private final McpHttpClient httpClient;
+    private final McpTransports transports;
+    private final McpCredentialResolver credentialResolver;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public McpDiscoveryService(McpServerToolRepository toolRepository,
-                               McpConnectionService connectionService,
-                               McpHttpClient httpClient,
+                               McpTransports transports,
+                               McpCredentialResolver credentialResolver,
                                ObjectMapper objectMapper,
                                Clock clock) {
         this.toolRepository = toolRepository;
-        this.connectionService = connectionService;
-        this.httpClient = httpClient;
+        this.transports = transports;
+        this.credentialResolver = credentialResolver;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
 
     /**
      * Discovers and reconciles tools for a server. Never throws for a transport/protocol failure — the
-     * outcome is returned as a readable {@link McpDiscoveryResponse}.
+     * outcome is returned as a readable {@link McpDiscoveryResponse}. Opens a one-shot session (closed
+     * immediately) rather than reusing the cached one, so discovery always reflects fresh state.
      */
     public McpDiscoveryResponse discover(McpServerEntity server) {
         List<McpHttpClient.DiscoveredTool> discovered;
-        try {
-            discovered = httpClient.listTools(connectionService.connectionFor(server));
+        try (McpSession session = transports.openSession(server, credentialResolver.resolveBearer(server))) {
+            discovered = session.listTools();
         } catch (McpHttpClient.McpClientException e) {
             log.info("MCP discovery for server {} failed: {}", server.id(), e.getMessage());
             return McpDiscoveryResponse.failure(e.getMessage());

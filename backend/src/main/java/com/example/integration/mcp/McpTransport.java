@@ -3,15 +3,18 @@ package com.example.integration.mcp;
 /**
  * Transport used to reach an MCP server.
  *
- * <p>Phase 1 implements only {@link #STREAMABLE_HTTP}. The enum is the extension point for future
- * transports (e.g. {@code STDIO}); add the constant here and a matching {@code McpTransportClient}
- * implementation without touching the connection/discovery/invoker services.
+ * <p>{@link #STREAMABLE_HTTP} reaches a remote server over HTTP; {@link #STDIO} runs a local server as
+ * a child process (gated by {@code mcp.stdio.enabled}; see {@link McpStdioClient}). New transports are
+ * added by extending this enum and {@link McpTransports}.
  */
 public enum McpTransport {
-    STREAMABLE_HTTP;
+    STREAMABLE_HTTP,
+    STDIO;
 
-    // TODO(stdio): add a STDIO constant and a process-backed transport client when local MCP servers
-    // are supported. The HTTP-specific fields (endpoint_url, auth) would become optional for it.
+    /** Whether this transport reaches a server over the network (and therefore needs an endpoint URL). */
+    public boolean isNetwork() {
+        return this == STREAMABLE_HTTP;
+    }
 
     public static McpTransport fromString(String value) {
         if (value == null || value.isBlank()) {
@@ -21,7 +24,7 @@ public enum McpTransport {
             return McpTransport.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unsupported MCP transport: " + value
-                    + " (only STREAMABLE_HTTP is supported)");
+                    + " (supported: STREAMABLE_HTTP, STDIO)");
         }
     }
 }

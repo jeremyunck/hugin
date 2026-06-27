@@ -204,21 +204,36 @@ export type McpTool = {
   lastSeenAt: string | null;
 };
 
-/** A user-connected MCP server. Mirrors the backend McpServerDto — never carries the bearer token. */
+/** A user-connected MCP server. Mirrors the backend McpServerDto — never carries any secret. */
 export type McpServer = {
   id: string;
   name: string;
   displayName: string;
   transport: string;
-  endpointUrl: string;
+  endpointUrl: string | null;
   authType: string;
   enabled: boolean;
   hasToken: boolean;
+  oauthConnected: boolean;
+  needsAuthorization: boolean;
+  command: string | null;
   toolCount: number;
   enabledToolCount: number;
   createdAt: string;
   updatedAt: string;
   tools: McpTool[];
+};
+
+/** A curated MCP server users can add with one click. Mirrors the backend McpCatalogEntry. */
+export type McpCatalogEntry = {
+  id: string;
+  name: string;
+  description: string;
+  suggestedServerName: string;
+  transport: string;
+  endpointUrl: string;
+  authType: string;
+  docsUrl: string;
 };
 
 export type McpTestResult = {

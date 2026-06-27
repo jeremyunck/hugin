@@ -105,6 +105,10 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
 
   // --- MCP servers (no servers connected in the mock environment) -----------
   if (route === "GET /api/mcp/servers") return ok([]) as Promise<T>;
+  if (route === "GET /api/mcp/catalog") return ok([]) as Promise<T>;
+  if (method === "POST" && /\/api\/mcp\/servers\/[^/]+\/oauth\/start$/.test(path)) {
+    return ok({ authorizationUrl: "https://example.com/authorize?mock=1" }) as Promise<T>;
+  }
   if (route === "POST /api/mcp/servers") {
     const body = parseBody(init.body) as Record<string, unknown>;
     return ok({
@@ -116,6 +120,9 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
       authType: body.authType ?? "NONE",
       enabled: true,
       hasToken: body.authType === "BEARER_TOKEN",
+      oauthConnected: false,
+      needsAuthorization: body.authType === "OAUTH",
+      command: body.command ?? null,
       toolCount: 0,
       enabledToolCount: 0,
       createdAt: new Date().toISOString(),
@@ -134,7 +141,7 @@ export function mockApiFetch<T>(rawPath: string, init: RequestInit = {}): Promis
     return ok({ id: "mock-tool", toolName: "mock", huginToolName: "mcp_mock", description: null, enabled: Boolean(body.enabled), stale: false, lastSeenAt: null }) as Promise<T>;
   }
   if (method === "PATCH" && /\/api\/mcp\/servers\/[^/]+$/.test(path)) {
-    return ok({ id: "mock-mcp-1", name: "mock", displayName: "Mock", transport: "STREAMABLE_HTTP", endpointUrl: "https://example.com/mcp", authType: "NONE", enabled: true, hasToken: false, toolCount: 0, enabledToolCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), tools: [] }) as Promise<T>;
+    return ok({ id: "mock-mcp-1", name: "mock", displayName: "Mock", transport: "STREAMABLE_HTTP", endpointUrl: "https://example.com/mcp", authType: "NONE", enabled: true, hasToken: false, oauthConnected: false, needsAuthorization: false, command: null, toolCount: 0, enabledToolCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), tools: [] }) as Promise<T>;
   }
   if (method === "DELETE" && /\/api\/mcp\/servers\/[^/]+$/.test(path)) {
     return ok({}) as Promise<T>;
