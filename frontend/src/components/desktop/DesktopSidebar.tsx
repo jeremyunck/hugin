@@ -5,7 +5,7 @@ import type { ChatThread } from "../../lib/types";
 import type { Screen } from "../../lib/screen";
 import type { OpenRouterCredits } from "../../services/apiClient";
 
-const LOGO = "/bouw-bird.jpg";
+const LOGO = "/bouw-logo.png";
 
 /** Formats a credit amount as a compact dollar figure (OpenRouter credits are denominated in USD). */
 function formatCredits(value: number): string {

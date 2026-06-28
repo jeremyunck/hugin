@@ -3,7 +3,7 @@ import { KeyRound, Lock, Mail } from "lucide-react";
 import type { AuthMode } from "../hooks/useAuthBootstrap";
 import { COLORS } from "../lib/theme";
 
-const LOGO = "/bouw-bird.jpg";
+const LOGO = "/bouw-logo.png";
 
 function Field(props: {
   icon: typeof Mail;

@@ -1,6 +1,6 @@
 import { ArrowLeft, Bug, Menu } from "lucide-react";
 
-const LOGO = "/bouw-bird.jpg";
+const LOGO = "/bouw-logo.png";
 
 /**
  * Branded top bar. In primary mode (no backAction) shows the logo and hamburger menu.
