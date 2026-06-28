@@ -41,7 +41,7 @@ class SandboxControllerTest {
     void createGitHubSandboxClonesSelectedBranch() throws Exception {
         SandboxInfo sandbox = new SandboxInfo(
                 "sbx-1", "bouw-sbx-sbx-1", "ubuntu:24.04", SandboxInfo.RUNNING, Instant.now(), "/tmp/sbx-1/workspace");
-        when(github.installationToken()).thenReturn(Optional.of("token-123"));
+        when(github.installationToken("octocat")).thenReturn(Optional.of("token-123"));
         when(github.cloneUrl("octocat/hello-world")).thenReturn("https://github.com/octocat/hello-world.git");
         when(sandboxManager.createGitHubRepoSandbox(
                 eq(null), eq("https://github.com/octocat/hello-world.git"), eq("octocat/hello-world"), eq("develop"), eq("token-123"), eq(null)))
@@ -54,7 +54,7 @@ class SandboxControllerTest {
         assertThat(result.getStatusCodeValue()).isEqualTo(201);
         assertThat(result.getBody()).isEqualTo(sandbox);
 
-        verify(github).installationToken();
+        verify(github).installationToken("octocat");
         verify(github).cloneUrl("octocat/hello-world");
     }
 
@@ -71,7 +71,7 @@ class SandboxControllerTest {
                 "bug-reports/2026-06-18/report.txt",
                 "body",
                 "2026-06-18T14:05:06Z");
-        when(github.installationToken()).thenReturn(Optional.of("token-123"));
+        when(github.installationToken("octocat")).thenReturn(Optional.of("token-123"));
         when(github.cloneUrl("octocat/hello-world")).thenReturn("https://github.com/octocat/hello-world.git");
         when(bugReportCatalogService.find("owner-1", "bug-123")).thenReturn(Optional.of(bugReport));
         when(sandboxManager.createGitHubRepoSandbox(

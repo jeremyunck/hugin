@@ -129,7 +129,7 @@ public class SandboxSessionService {
         if (github.isEmpty()) {
             return;
         }
-        Optional<String> token = github.get().installationToken();
+        Optional<String> token = github.get().installationToken(ownerFromRepositoryUrl(session.repositoryUrl()));
         if (token.isEmpty()) {
             log.debug("No GitHub installation token available; leaving sandbox {} credentials unchanged",
                     session.sandboxId());
@@ -141,6 +141,35 @@ public class SandboxSessionService {
         } catch (RuntimeException e) {
             log.warn("Could not refresh git credentials for sandbox {}: {}", session.sandboxId(), e.getMessage());
         }
+    }
+
+    /**
+     * Extracts the owner (user/org login) from a GitHub clone URL such as
+     * {@code https://github.com/owner/repo.git}, so the refreshed token can be scoped to the
+     * installation that actually owns the repository. Returns null when no owner can be parsed.
+     */
+    static String ownerFromRepositoryUrl(String repositoryUrl) {
+        if (repositoryUrl == null || repositoryUrl.isBlank()) {
+            return null;
+        }
+        String path = repositoryUrl;
+        int scheme = path.indexOf("://");
+        if (scheme >= 0) {
+            int host = path.indexOf('/', scheme + 3);
+            if (host < 0) {
+                return null;
+            }
+            path = path.substring(host + 1);
+        } else if (path.contains("@") && path.contains(":")) {
+            // scp-style: git@github.com:owner/repo.git
+            path = path.substring(path.indexOf(':') + 1);
+        }
+        int slash = path.indexOf('/');
+        if (slash <= 0) {
+            return null;
+        }
+        String owner = path.substring(0, slash);
+        return owner.isBlank() ? null : owner;
     }
 
     /** Refreshes the idle clock for a sandbox that was just used by a request. */

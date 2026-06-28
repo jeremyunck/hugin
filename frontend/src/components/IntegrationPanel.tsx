@@ -320,7 +320,7 @@ function ConnectedCard({
                 disabled={busy}
                 onClick={() => onReconnect(integration)}
               >
-                {busy ? "Working…" : "Reconnect"}
+                {busy ? "Working…" : integration.id === "github" ? "Add account / org" : "Reconnect"}
               </button>
             ) : null}
             <button

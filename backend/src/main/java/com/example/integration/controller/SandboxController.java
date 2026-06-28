@@ -69,7 +69,7 @@ public class SandboxController {
         if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub repository must be in owner/repo format.");
         }
-        String accessToken = github.installationToken()
+        String accessToken = github.installationToken(parts[0])
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "GitHub is not connected."));
         BugReportCatalogService.StoredBugReport bugReport = null;
         if (req.bugReportId() != null && !req.bugReportId().isBlank()) {

@@ -20,8 +20,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Authenticates Bouw to the GitHub REST API as a <b>GitHub App</b> and reports connection status.
@@ -53,13 +58,15 @@ public class GitHubAppService {
 
     private PrivateKey cachedKey;
 
-    // Resolved installation (id + account login), cached after first lookup.
-    private Long resolvedInstallationId;
-    private String installationAccount;
+    // Every installation of this App (id + account login), cached briefly. A GitHub App can be
+    // installed on the user's personal account and on any number of organizations, each its own
+    // installation with its own access token — so this is a list, not a single pinned install.
+    private List<Installation> resolvedInstallations;
+    private Instant resolvedInstallationsAt = Instant.EPOCH;
 
-    // Cached installation access token.
-    private String installationToken;
-    private Instant installationTokenExpiry = Instant.EPOCH;
+    // Per-installation access tokens, keyed by installation id (each minted/refreshed independently).
+    private final Map<Long, String> installationTokens = new HashMap<>();
+    private final Map<Long, Instant> installationTokenExpiries = new HashMap<>();
 
     // Cached status snapshot, to keep the integrations endpoint cheap.
     private GitHubStatus cachedStatus;
@@ -95,19 +102,15 @@ public class GitHubAppService {
         return new GitHubConnectResponse(status(), installUrl(returnTo).orElse(null));
     }
 
-    /** Forgets the cached installation and tokens so the next call re-resolves from scratch. */
+    /** Forgets the cached installations and tokens so the next call re-resolves from scratch. */
     public synchronized GitHubStatus disconnect() {
         invalidate();
-        resolvedInstallationId = null;
-        installationAccount = null;
         return status();
     }
 
     /** Forces the next status read to re-check GitHub after an install/setup redirect. */
     public synchronized void refresh() {
         invalidate();
-        resolvedInstallationId = null;
-        installationAccount = null;
     }
 
     /** Current connection snapshot, cached briefly to keep {@code GET /api/integrations} cheap. */
@@ -131,16 +134,21 @@ public class GitHubAppService {
                             + "github.private-key-path) to enable it.");
         }
         try {
-            String token = currentInstallationToken();
-            if (token == null) {
+            List<Installation> installations = installations();
+            if (installations.isEmpty()) {
                 return new GitHubStatus(false, true, canInstall, "github-app", "",
                         "GitHub App is configured but not installed yet. Click Connect to install it "
                                 + "on your account or organization.");
             }
-            String account = installationAccount == null ? "" : installationAccount;
+            String account = installations.stream()
+                    .map(Installation::account)
+                    .filter(a -> a != null && !a.isBlank())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("");
             String where = account.isBlank() ? "" : " (" + account + ")";
             return new GitHubStatus(true, true, true, "github-app", account,
-                    "Connected to GitHub as a GitHub App" + where + ".");
+                    "Connected to GitHub as a GitHub App" + where + ". Click Connect to add another "
+                            + "account or organization.");
         } catch (Exception e) {
             log.warn("GitHub App status check failed: {}", e.getMessage());
             return new GitHubStatus(false, true, canInstall, "github-app", "",
@@ -150,11 +158,24 @@ public class GitHubAppService {
 
     /** A valid installation access token for the {@code github_*} tools, or empty when not connected. */
     public synchronized Optional<String> installationToken() {
+        return installationToken(null);
+    }
+
+    /**
+     * A valid installation access token scoped to the installation that owns {@code owner} (a user or
+     * org login), falling back to the first installation when {@code owner} is null or unmatched.
+     * Returns empty when the App is unconfigured or no installation can serve the request.
+     */
+    public synchronized Optional<String> installationToken(String owner) {
         if (!properties.configured()) {
             return Optional.empty();
         }
         try {
-            return Optional.ofNullable(currentInstallationToken());
+            Long installationId = installationForOwner(owner);
+            if (installationId == null) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(tokenForInstallation(installationId));
         } catch (Exception e) {
             log.warn("Could not obtain GitHub installation token: {}", e.getMessage());
             return Optional.empty();
@@ -166,32 +187,52 @@ public class GitHubAppService {
         return status().active();
     }
 
+    /**
+     * Lists every repository reachable across <b>all</b> of the App's installations — the user's
+     * personal account plus each organization the App is installed on. Each installation is queried
+     * with its own token and the results are merged, de-duplicated, and sorted by full name.
+     */
     public synchronized List<GitHubRepositoryRef> listRepositories() throws Exception {
-        HttpResponse<String> response = api("GET", "/installation/repositories?per_page=100", null);
-        if (response.statusCode() >= 300) {
-            throw new IllegalStateException("repository listing failed: HTTP " + response.statusCode()
-                    + " " + response.body());
-        }
-        JsonNode repos = objectMapper.readTree(response.body()).path("repositories");
         List<GitHubRepositoryRef> results = new ArrayList<>();
-        if (!repos.isArray()) {
-            return results;
-        }
-        for (JsonNode repo : repos) {
-            String fullName = repo.path("full_name").asText("");
-            String name = repo.path("name").asText("");
-            String owner = repo.path("owner").path("login").asText("");
-            if (fullName.isBlank() || name.isBlank() || owner.isBlank()) {
-                continue;
+        Set<String> seen = new HashSet<>();
+        for (Installation installation : installations()) {
+            int page = 1;
+            while (true) {
+                HttpResponse<String> response = api("GET",
+                        "/installation/repositories?per_page=100&page=" + page, null, installation.id());
+                if (response.statusCode() >= 300) {
+                    throw new IllegalStateException("repository listing failed: HTTP " + response.statusCode()
+                            + " " + response.body());
+                }
+                JsonNode repos = objectMapper.readTree(response.body()).path("repositories");
+                if (!repos.isArray() || repos.isEmpty()) {
+                    break;
+                }
+                for (JsonNode repo : repos) {
+                    String fullName = repo.path("full_name").asText("");
+                    String name = repo.path("name").asText("");
+                    String owner = repo.path("owner").path("login").asText("");
+                    if (fullName.isBlank() || name.isBlank() || owner.isBlank()) {
+                        continue;
+                    }
+                    if (!seen.add(fullName.toLowerCase())) {
+                        continue;
+                    }
+                    results.add(new GitHubRepositoryRef(
+                            fullName,
+                            name,
+                            owner,
+                            repo.path("private").asBoolean(),
+                            repo.path("default_branch").asText(""),
+                            repo.path("description").asText("")));
+                }
+                if (repos.size() < 100) {
+                    break;
+                }
+                page++;
             }
-            results.add(new GitHubRepositoryRef(
-                    fullName,
-                    name,
-                    owner,
-                    repo.path("private").asBoolean(),
-                    repo.path("default_branch").asText(""),
-                    repo.path("description").asText("")));
         }
+        results.sort(Comparator.comparing(r -> r.fullName().toLowerCase()));
         return results;
     }
 
@@ -243,11 +284,22 @@ public class GitHubAppService {
     }
 
     /**
-     * Calls the GitHub REST API with the installation token. {@code path} is API-root-relative
-     * (e.g. {@code /installation/repositories}); {@code jsonBody} may be {@code null} for GET.
+     * Calls the GitHub REST API, routing the request to the installation that should serve it: for
+     * {@code /repos/{owner}/...} paths that's the installation owning {@code owner}, otherwise the
+     * first installation. This keeps per-repo tools (create PR/issue, branches) working across orgs
+     * without each having to know which installation a repository belongs to.
      */
     public synchronized HttpResponse<String> api(String method, String path, String jsonBody) throws Exception {
-        String token = currentInstallationToken();
+        Long installationId = installationForOwner(repoOwner(path));
+        if (installationId == null) {
+            throw new IllegalStateException("GitHub App is not installed; no installation available.");
+        }
+        return api(method, path, jsonBody, installationId);
+    }
+
+    private HttpResponse<String> api(String method, String path, String jsonBody, long installationId)
+            throws Exception {
+        String token = tokenForInstallation(installationId);
         if (token == null) {
             throw new IllegalStateException("GitHub App is not installed; no installation token available.");
         }
@@ -268,15 +320,13 @@ public class GitHubAppService {
 
     // --- token machinery -------------------------------------------------------------------------
 
-    /** Returns a live installation token (minting/refreshing as needed), or null if not installed. */
-    private String currentInstallationToken() throws Exception {
-        if (installationToken != null
-                && Instant.now().isBefore(installationTokenExpiry.minus(TOKEN_REFRESH_SKEW))) {
-            return installationToken;
-        }
-        Long installationId = resolveInstallationId();
-        if (installationId == null) {
-            return null;
+    /** Mints/refreshes the access token for a specific installation, or null if it cannot be obtained. */
+    private String tokenForInstallation(long installationId) throws Exception {
+        String cached = installationTokens.get(installationId);
+        Instant expiry = installationTokenExpiries.get(installationId);
+        if (cached != null && expiry != null
+                && Instant.now().isBefore(expiry.minus(TOKEN_REFRESH_SKEW))) {
+            return cached;
         }
 
         String jwt = buildAppJwt();
@@ -295,47 +345,101 @@ public class GitHubAppService {
                     + " " + response.body());
         }
         JsonNode root = objectMapper.readTree(response.body());
-        installationToken = root.path("token").asText("");
+        String token = root.path("token").asText("");
+        if (token.isBlank()) {
+            return null;
+        }
         String expiresAt = root.path("expires_at").asText("");
-        installationTokenExpiry = expiresAt.isBlank() ? Instant.now().plus(Duration.ofMinutes(55))
+        Instant tokenExpiry = expiresAt.isBlank() ? Instant.now().plus(Duration.ofMinutes(55))
                 : Instant.parse(expiresAt);
-        return installationToken.isBlank() ? null : installationToken;
+        installationTokens.put(installationId, token);
+        installationTokenExpiries.put(installationId, tokenExpiry);
+        return token;
     }
 
-    /** Resolves the installation id to use: the pinned one, or the App's first installation. */
-    private Long resolveInstallationId() throws Exception {
-        if (resolvedInstallationId != null) {
-            return resolvedInstallationId;
+    /** The installation that owns {@code owner} (a user/org login), or the first one as a fallback. */
+    private Long installationForOwner(String owner) throws Exception {
+        List<Installation> installations = installations();
+        if (installations.isEmpty()) {
+            return null;
         }
+        if (owner != null && !owner.isBlank()) {
+            for (Installation installation : installations) {
+                if (owner.equalsIgnoreCase(installation.account())) {
+                    return installation.id();
+                }
+            }
+        }
+        return installations.get(0).id();
+    }
+
+    /** Extracts {@code owner} from a {@code /repos/{owner}/{repo}...} path, or null for other paths. */
+    private static String repoOwner(String path) {
+        if (path == null || !path.startsWith("/repos/")) {
+            return null;
+        }
+        String rest = path.substring("/repos/".length());
+        int slash = rest.indexOf('/');
+        if (slash <= 0) {
+            return null;
+        }
+        return rest.substring(0, slash);
+    }
+
+    /** All installations of the App (the pinned one, or every install), cached briefly. */
+    private List<Installation> installations() throws Exception {
+        if (resolvedInstallations != null
+                && Duration.between(resolvedInstallationsAt, Instant.now()).compareTo(STATUS_CACHE) < 0) {
+            return resolvedInstallations;
+        }
+        List<Installation> resolved = resolveInstallations();
+        resolvedInstallations = resolved;
+        resolvedInstallationsAt = Instant.now();
+        return resolved;
+    }
+
+    /** Resolves every installation of the App: the pinned one when configured, else all of them. */
+    private List<Installation> resolveInstallations() throws Exception {
         if (properties.installationId() != null && properties.installationId() > 0) {
-            resolvedInstallationId = properties.installationId();
-            installationAccount = lookupAccount(resolvedInstallationId);
-            return resolvedInstallationId;
+            long id = properties.installationId();
+            return List.of(new Installation(id, lookupAccount(id)));
         }
 
         String jwt = buildAppJwt();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(properties.apiBaseUrl() + "/app/installations?per_page=1"))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + jwt)
-                .header("X-GitHub-Api-Version", API_VERSION)
-                .GET()
-                .build();
+        List<Installation> result = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(properties.apiBaseUrl() + "/app/installations?per_page=100&page=" + page))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Accept", "application/vnd.github+json")
+                    .header("Authorization", "Bearer " + jwt)
+                    .header("X-GitHub-Api-Version", API_VERSION)
+                    .GET()
+                    .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 300) {
-            throw new IllegalStateException("listing installations failed: HTTP " + response.statusCode()
-                    + " " + response.body());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 300) {
+                throw new IllegalStateException("listing installations failed: HTTP " + response.statusCode()
+                        + " " + response.body());
+            }
+            JsonNode installations = objectMapper.readTree(response.body());
+            if (!installations.isArray() || installations.isEmpty()) {
+                break; // No (more) installations.
+            }
+            for (JsonNode installation : installations) {
+                long id = installation.path("id").asLong();
+                String account = installation.path("account").path("login").asText("");
+                if (id > 0) {
+                    result.add(new Installation(id, account));
+                }
+            }
+            if (installations.size() < 100) {
+                break;
+            }
+            page++;
         }
-        JsonNode installations = objectMapper.readTree(response.body());
-        if (!installations.isArray() || installations.isEmpty()) {
-            return null; // App configured but not installed anywhere yet.
-        }
-        JsonNode first = installations.get(0);
-        resolvedInstallationId = first.path("id").asLong();
-        installationAccount = first.path("account").path("login").asText("");
-        return resolvedInstallationId;
+        return result;
     }
 
     private String lookupAccount(long installationId) throws Exception {
@@ -394,8 +498,14 @@ public class GitHubAppService {
     private void invalidate() {
         cachedStatus = null;
         cachedStatusAt = Instant.EPOCH;
-        installationToken = null;
-        installationTokenExpiry = Instant.EPOCH;
+        resolvedInstallations = null;
+        resolvedInstallationsAt = Instant.EPOCH;
+        installationTokens.clear();
+        installationTokenExpiries.clear();
+    }
+
+    /** One installation of the App: its numeric id and the account (user or org) login it lives on. */
+    private record Installation(long id, String account) {
     }
 
     private static String base64Url(byte[] bytes) {

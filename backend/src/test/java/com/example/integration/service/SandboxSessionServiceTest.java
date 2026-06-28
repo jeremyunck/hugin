@@ -91,7 +91,7 @@ class SandboxSessionServiceTest {
     @Test
     void reconnectRefreshesGitCredentialsWithFreshToken() {
         GitHubAppService github = mock(GitHubAppService.class);
-        when(github.installationToken()).thenReturn(Optional.of("fresh-token"));
+        when(github.installationToken("octo")).thenReturn(Optional.of("fresh-token"));
         service = new SandboxSessionService(runtime, repository, props(true), Optional.of(github));
 
         SandboxSession stored = session(SandboxStatus.READY);
@@ -111,7 +111,7 @@ class SandboxSessionServiceTest {
     @Test
     void reconnectSkipsCredentialRefreshWhenNoTokenAvailable() {
         GitHubAppService github = mock(GitHubAppService.class);
-        when(github.installationToken()).thenReturn(Optional.empty());
+        when(github.installationToken("octo")).thenReturn(Optional.empty());
         service = new SandboxSessionService(runtime, repository, props(true), Optional.of(github));
 
         SandboxSession stored = session(SandboxStatus.READY);
@@ -143,6 +143,19 @@ class SandboxSessionServiceTest {
     void reconnectMissingSessionIsEmpty() {
         when(repository.findById("nope")).thenReturn(Optional.empty());
         assertThat(service.reconnect("nope")).isEmpty();
+    }
+
+    @Test
+    void ownerFromRepositoryUrlParsesHttpsScpAndEdgeCases() {
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl("https://github.com/my-org/repo.git"))
+                .isEqualTo("my-org");
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl("https://x-access-token:tok@github.com/octo/repo.git"))
+                .isEqualTo("octo");
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl("git@github.com:my-org/repo.git"))
+                .isEqualTo("my-org");
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl(null)).isNull();
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl("")).isNull();
+        assertThat(SandboxSessionService.ownerFromRepositoryUrl("https://github.com/")).isNull();
     }
 
     @Test
